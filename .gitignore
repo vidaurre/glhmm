@@ -1,0 +1,9 @@
+.DS_Store
+*.swp
+*.py~
+*~
+*.asv
+
+*.bak
+
+glhmm/test_2.ipynb
