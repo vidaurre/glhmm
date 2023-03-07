@@ -312,6 +312,7 @@ def gamma_kl(shape_q,rate_q,shape_p,rate_p):
     -------
     D : float or numpy.ndarray
         The Kullback-Leibler divergence between the two Gamma distributions.
+        
     """
 
     D = shape_p * np.log(rate_q / rate_p) \
@@ -387,7 +388,9 @@ def dirichlet_kl(alpha_q,alpha_p):
     Returns:
     --------
         float: The Kullback-Leibler divergence between the two Dirichlet distributions.
+
     """
+
     sum_alpha_q = np.sum(alpha_q)
     sum_alpha_p = np.sum(alpha_p)
     t1 = + scipy.special.gammaln(sum_alpha_q) - scipy.special.gammaln(sum_alpha_p) \
@@ -413,7 +416,7 @@ def Gamma_entropy(Gamma,Xi,indices):
         float: The entropy of the Gamma distribution and the sequence of transition probabilities.
 
     """
-    
+
     minreal = sys.float_info.min
     # initial point
     Gamma_0 = Gamma[indices[:,0]]
