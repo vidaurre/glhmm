@@ -53,7 +53,7 @@ def make_indices_from_T(T):
     Returns:
     --------
     indices : array-like of shape (n_sessions, 2)
-        The indices that define the sections of the data to be processed.
+        The start and end indices of each trial/session in the input data.
 
     """
 
@@ -76,7 +76,7 @@ def Gamma_indices_to_Xi_indices(indices):
     Parameters:
     -----------
     indices : array-like of shape (n_sessions, 2)
-        The indices that define the segments of the data to be processed.
+        The start and end indices of each trial/session in the input data.
 
     Returns:
     --------
@@ -104,7 +104,7 @@ def approximate_Xi(Gamma,indices):
     Gamma : array-like of shape (n_samples, n_states)
             The state probability time series.
     indices : array-like of shape (n_sessions, 2)
-        The indices that define the segments of the data to be processed.
+        The start and end indices of each trial/session in the input data.
 
     Returns:
     --------
@@ -312,7 +312,7 @@ def gamma_kl(shape_q,rate_q,shape_p,rate_p):
     -------
     D : float or numpy.ndarray
         The Kullback-Leibler divergence between the two Gamma distributions.
-        
+
     """
 
     D = shape_p * np.log(rate_q / rate_p) \
@@ -409,7 +409,7 @@ def Gamma_entropy(Gamma,Xi,indices):
         Xi : Array-like of shape (n_samples - n_sessions, n_states, n_states)
             The joint probability of past and future states conditioned on data.
         indices : Array-like of shape (n_sessions, 2)
-            The indices of the segments.
+            The start and end indices of each trial/session in the input data.
 
     Returns:
     --------

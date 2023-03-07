@@ -36,13 +36,13 @@ class glhmm():
         Type of covariance matrix. Choose 'shareddiag' to have one diagonal covariance matrix for all states, 
         or 'diag' to have a diagonal full covariance matrix for each state.
     model_mean : str, {'state', 'no'}, default 'state'
-        Model for the mean. If `no` the mean of the time series will not be used to drive the states.
+        Model for the mean. If `no` the mean of the timeseries will not be used to drive the states.
     model_beta : str, {'state', 'no'}, default 'state'
         Model for the beta. If `no` the regression coefficients will not be used to drive the states.
     dirichlet_diag : int, default=10
         The value of the diagonal of the Dirichlet distribution for the transition probabilities. 
         The higher the value, the more persistent the states will be. 
-        Note that this value is relative; the prior competes with the data, so if the time series is very long, 
+        Note that this value is relative; the prior competes with the data, so if the timeseries is very long, 
         the `dirichlet_diag` may have little effect unless it is set to a very large value.  
     connectivity : array_like of shape (n_states, n_states), optional
         Matrix of binary values defining the connectivity of the states. 
@@ -1024,9 +1024,9 @@ class glhmm():
         Parameters
         ----------
         X : array-like of shape (n_samples, n_parcels)
-            The time series for set of variables 1.
+            The timeseries of set of variables 1.
         Y : array-like of shape (n_samples, n_parcels)
-            The time series for set of variables 2.
+            The timeseries of set of variables 2.
 
         Returns
         -------
@@ -1059,11 +1059,11 @@ class glhmm():
         Parameters
         ----------
         X : array-like of shape (n_samples, n_parcels)
-            The time series for set of variables 1.
+            The timeseries of set of variables 1.
         Y : array-like of shape (n_samples, n_parcels)
-            The time series for set of variables 2.
+            The timeseries of set of variables 2.
         indices : array-like of shape (n_sessions, 2), optional, default=None
-            The indices that define the segments of the data to be processed.
+            The start and end indices of each trial/session in the input data.
         files : list of str, optional, default=None
             List of filenames corresponding to the indices.
         viterbi : bool, optional, default=False
@@ -1078,7 +1078,7 @@ class glhmm():
                 The most likely state sequence.
         If viterbi=False:
             Gamma : array of shape (n_samples, n_states)
-                The state probability time series.
+                The state probability timeseries.
             Xi : array of shape (n_samples - n_sessions, n_states, n_states)
                 The joint probabilities of past and future states conditioned on data.
             scale : array-like of shape (n_samples,), optional
@@ -1129,19 +1129,19 @@ class glhmm():
 
 
     def sample_Gamma(self,size):
-        """Generates Gamma, for time series of lengths specified in variable size.
+        """Generates Gamma, for timeseries of lengths specified in variable size.
 
         Parameters
         ----------
         size : array
             Array of shape (n_sessions,) or (n_sessions, 2). If `size` is 1-dimensional,
             each element represents the length of a session. If `size` is 2-dimensional,
-            each row of `size` represents the start and end indices of a session in a time series.
+            each row of `size` represents the start and end indices of a session in a timeseries.
 
         Returns
         -------
         Gamma : array of shape (n_samples, n_states)
-            The state probability time series.    
+            The state probability timeseries.    
         """ 
 
         #if not self.trained: 
@@ -1174,28 +1174,28 @@ class glhmm():
 
 
     def sample(self,size,X=None,Gamma=None):
-        """Generates Gamma and Y for time series of lengths specified in variable size.
+        """Generates Gamma and Y for timeseries of lengths specified in variable size.
 
         Parameters
         ----------
         size : array
             Array of shape (n_sessions,) or (n_sessions, 2). If `size` is 1-dimensional,
             each element represents the length of a session. If `size` is 2-dimensional,
-            each row of `size` represents the start and end indices of a session in a time series.
+            each row of `size` represents the start and end indices of a session in a timeseries.
         X : array of shape (n_samples, n_parcels), default=None
-            The time series data for set 1. 
+            The timeseries of set of variables 1. 
         Gamma : array of shape (n_samples, n_states), default=None
-            The state probability time series.
+            The state probability timeseries.
 
         Returns
         -------
         Gamma : array of shape (n_samples, n_states)
-            The state probability time series.
+            The state probability timeseries.
         Y: array of shape (n_samples,n_parcels)
-            The time series data of set 2.
+            The timeseries of set of variables 2.
         If X=None:
             X : array of shape (n_samples, n_parcels)
-                The time series data for set 1.
+               The timeseries of set of variables 1.
         """
 
 
@@ -1267,9 +1267,9 @@ class glhmm():
         Parameters
         ----------
         X : array of shape (n_samples, n_parcels)
-            time series, set of variables 1.
+            The timeseries of set of variables 1.
         Y : array of shape (n_samples, n_parcels)
-            time series, set of variables 2.
+            The timeseries of set of variables 2.
         Gamma : array of shape (n_samples, n_states), default=None
             The state timeseries probabilities.
         Xi : array-like of shape (n_samples - n_sessions, n_states, n_states)
@@ -1278,7 +1278,7 @@ class glhmm():
             The scaling factors used to compute the free energy of the
             dataset. If None, scaling is automatically computed.
         indices : array-like of shape (n_sessions, 2), optional, default=None
-            The indices that define the segments of the data to be processed.
+            The start and end indices of each trial/session in the input data.
         todo:  bool of shape (n_terms,) or None, default=None
             Whether or not each of the 5 elements (see `fe_terms`) should be computed.
                 
@@ -1554,11 +1554,11 @@ class glhmm():
         Parameters
         ----------
         X : array-like of shape (n_samples, n_parcels)
-            The timeseries of set 1.
+            The timeseries of set of variables 1.
         Y : array-like of shape (n_samples, n_parcels)
-            The timeseries of set 2.
+            The timeseries of set of variables 2.
         indices : array-like of shape (n_sessions, 2), optional
-            The indices of the segments for the estimation. If None, a single
+            The start and end indices of each trial/session in the input data. If None, a single
             segment spanning the entire sequence is used.
         Gamma : array-like of shape (n_samples, n_states), optional
             The state probabilities. If None, it is computed from the input
@@ -1610,11 +1610,11 @@ class glhmm():
         Parameters
         ----------
         X : array-like of shape (n_samples, n_parcels)
-            The timeseries of set 1 variables.
+            The timeseries of set of variables 1.
         Y : array-like of shape (n_samples, n_parcels)
-            The timeseries of set 2 variables.
+            The timeseries of set of variables 2.
         indices : array-like of shape (n_sessions, 2), optional
-            The indices corresponding to the segment boundaries in X and Y.
+            The start and end indices of each trial/session in the input data.
             If None, one big segment with no cuts is assumed.
         files : str or list of str, optional
             The filename(s) containing the data to load. If not None,
