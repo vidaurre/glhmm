@@ -1142,6 +1142,7 @@ class glhmm():
         -------
         Gamma : array of shape (n_samples, n_states)
             The state probability timeseries.    
+
         """ 
 
         #if not self.trained: 
@@ -1178,9 +1179,8 @@ class glhmm():
 
         Parameters
         ----------
-        size : array
-            Array of shape (n_sessions,) or (n_sessions, 2). If `size` is 1-dimensional,
-            each element represents the length of a session. If `size` is 2-dimensional,
+        size : array of shape (n_sessions,) or (n_sessions, 2)
+            If `size` is 1-dimensional, each element represents the length of a session. If `size` is 2-dimensional,
             each row of `size` represents the start and end indices of a session in a timeseries.
         X : array of shape (n_samples, n_parcels), default=None
             The timeseries of set of variables 1. 
@@ -1196,6 +1196,7 @@ class glhmm():
         If X=None:
             X : array of shape (n_samples, n_parcels)
                The timeseries of set of variables 1.
+
         """
 
 
