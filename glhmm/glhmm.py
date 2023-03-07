@@ -1063,7 +1063,7 @@ class glhmm():
         Y : array-like of shape (n_samples, n_parcels)
             The time series for set of variables 2.
         indices : array-like of shape (n_sessions, 2), optional, default=None
-            The indices that define the sections of the data to be processed.
+            The indices that define the segments of the data to be processed.
         files : list of str, optional, default=None
             List of filenames corresponding to the indices.
         viterbi : bool, optional, default=False
@@ -1079,10 +1079,11 @@ class glhmm():
         If viterbi=False:
             Gamma : array of shape (n_samples, n_states)
                 The state probability time series.
-            Xi : array of shape (n_samples-1, n_states, n_states)
-                The state transition matrices.
-            scale : array of shape (n_samples,), default=None
-                Scaling factor for each sample.
+            Xi : array of shape (n_samples - n_sessions, n_states, n_states)
+                The joint probabilities of past and future states conditioned on data.
+            scale : array-like of shape (n_samples,), optional
+                The scaling factors used to compute the free energy of the
+                dataset. If None, scaling is automatically computed.
                 
         Raises
         ------
@@ -1269,16 +1270,17 @@ class glhmm():
             time series, set of variables 1.
         Y : array of shape (n_samples, n_parcels)
             time series, set of variables 2.
-        Gamma : array of shape (n_samples, n_states) 
-            state time series. Default=None.
-        Xi : array of shape TYPE
-            joint probability of past and future states conditioned on data.
-        scale : int
-            likelihood. Default=None.
-        indices : TYPE, optional
-            DESCRIPTION. Default=None.
-        todo:  bool of shape (n_terms,) or None
-            DESCRIPTION. Default=None.
+        Gamma : array of shape (n_samples, n_states), default=None
+            The state timeseries probabilities.
+        Xi : array-like of shape (n_samples - n_sessions, n_states, n_states)
+            The joint probabilities of past and future states conditioned on data.
+        scale : array-like of shape (n_samples,), default=None
+            The scaling factors used to compute the free energy of the
+            dataset. If None, scaling is automatically computed.
+        indices : array-like of shape (n_sessions, 2), optional, default=None
+            The indices that define the segments of the data to be processed.
+        todo:  bool of shape (n_terms,) or None, default=None
+            Whether or not each of the 5 elements (see `fe_terms`) should be computed.
                 
         Returns
         -------
@@ -1555,15 +1557,14 @@ class glhmm():
             The timeseries of set 1.
         Y : array-like of shape (n_samples, n_parcels)
             The timeseries of set 2.
-        indices : array-like of shape (n_chunks, 2), optional
-            The indices of the chunks for the estimation. If None, a single
-            chunk spanning the entire sequence is used.
+        indices : array-like of shape (n_sessions, 2), optional
+            The indices of the segments for the estimation. If None, a single
+            segment spanning the entire sequence is used.
         Gamma : array-like of shape (n_samples, n_states), optional
             The state probabilities. If None, it is computed from the input
             observations.
-        Xi : array-like of shape (n_samples-1, n_states, n_states), optional
-            The pairwise state probabilities. If None, it is computed from the
-            input observations.
+        Xi : array-like of shape (n_samples - n_sessions, n_states, n_states), optional
+            The joint probabilities of past and future states conditioned on data. If None, it is computed from the input observations.
 
         Returns
         -------
@@ -1612,16 +1613,16 @@ class glhmm():
             The timeseries of set 1 variables.
         Y : array-like of shape (n_samples, n_parcels)
             The timeseries of set 2 variables.
-        indices : array-like of shape (n_chunks, 2), optional
-            The indices corresponding to the chunk boundaries in X and Y.
-            If None, one big chunk with no cuts is assumed.
+        indices : array-like of shape (n_sessions, 2), optional
+            The indices corresponding to the segment boundaries in X and Y.
+            If None, one big segment with no cuts is assumed.
         files : str or list of str, optional
             The filename(s) containing the data to load. If not None,
             X, Y, and indices are ignored.
         Gamma : array-like of shape (n_samples, n_states), optional
             The initial values of the state probabilities.
-        Xi : array-like of shape (n_samples - 1, n_states, n_states), optional
-            The initial values of the state transition counts.
+        Xi : array-like of shape (n_samples - n_sessions, n_states, n_states), optional
+            The joint probabilities of past and future states conditioned on data.
         scale : array-like of shape (n_samples,), optional
             The scaling factors used to compute the free energy of the
             dataset. If None, scaling is automatically computed.
@@ -1632,8 +1633,8 @@ class glhmm():
         -------
         Gamma : array-like of shape (n_samples, n_states)
             The state probabilities.
-        Xi : array-like of shape (n_samples - 1, n_states, n_states)
-            The state transition counts.
+        Xi : array-like of shape (n_samples - n_sessions, n_states, n_states)
+            The joint probabilities of past and future states conditioned on data.
         fe : array-like
             The free energy computed at each iteration of the training process.
         """

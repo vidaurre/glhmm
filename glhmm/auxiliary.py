@@ -15,6 +15,21 @@ from numba import njit
 
 
 def slice_matrix(M,indices):
+    """Slices rows of input matrix M based on indices array along axis 0.
+
+    Parameters:
+    -----------
+    M : array-like of shape (n_samples, n_parcels)
+        The input matrix.
+    indices : array-like of shape (n_sessions, 2)
+        The indices that define the sections (i.e., trials/sessions) of the data to be processed.
+
+    Returns:
+    --------
+    M_sliced : array-like of shape (n_total_samples, n_parcels)
+        The sliced matrix.
+
+    """
     N = indices.shape[0]
     T = indices[:,1] - indices[:,0]
     M_sliced = np.empty((np.sum(T),M.shape[1]))
@@ -28,10 +43,21 @@ def slice_matrix(M,indices):
 
 
 def make_indices_from_T(T):
+    """Creates indices array from trials/sessions lengths.
+    
+    Parameters:
+    -----------
+    T : array-like of shape (n_sessions,)
+        Contains the lengths of each trial/session.
+
+    Returns:
+    --------
+    indices : array-like of shape (n_sessions, 2)
+        The indices that define the sections of the data to be processed.
+
     """
-    Make indices array from vector of trial/session lengths
-    (T would be as in the Matlab version)
-    """
+
+    
     N = T.shape[0]
     indices = np.zeros((N,2),dtype=int)
     acc = 0
@@ -43,9 +69,20 @@ def make_indices_from_T(T):
 
 
 def Gamma_indices_to_Xi_indices(indices):
-    """
-    Xi has 1 element less than Gamma per segment; 
-    adapt indices to use on Xi
+    """Converts indices from Gamma array to Xi array format.
+
+    Note Xi has 1 sample less than Gamma per trial/session (i.e., n_samples - n_sessions).
+
+    Parameters:
+    -----------
+    indices : array-like of shape (n_sessions, 2)
+        The indices that define the segments of the data to be processed.
+
+    Returns:
+    --------
+    indices_Xi : array-like of shape (n_sessions, 2)
+        The converted indices in Xi array format.
+
     """
 
     indices_Xi = np.copy(indices)
@@ -55,7 +92,28 @@ def Gamma_indices_to_Xi_indices(indices):
     return indices_Xi
 
 
+def jls_extract_def():
+    return 
+
+
 def approximate_Xi(Gamma,indices):
+    """Approximates Xi array based on Gamma and indices.
+
+    Parameters:
+    -----------
+    Gamma : array-like of shape (n_samples, n_states)
+            The state probability time series.
+    indices : array-like of shape (n_sessions, 2)
+        The indices that define the segments of the data to be processed.
+
+    Returns:
+    --------
+    Xi : array-like of shape (n_samples - n_sessions, n_states, n_states)
+        The joint probabilities of past and future states conditioned on data.
+
+    """
+    jls_extract_def()
+
     K = Gamma.shape[1]
     N = indices.shape[0]
     T = indices[:,1] - indices[:,0]
@@ -74,7 +132,27 @@ def approximate_Xi(Gamma,indices):
 
 @njit
 def compute_alpha_beta(L,Pi,P):
+    """Computes alpha and beta values and scaling factors.
 
+    Parameters:
+    -----------
+    L : array-like of shape (n_samples, n_states)
+        The L matrix.
+    Pi : array-like with shape (n_states,)
+        The initial state probabilities.
+    P : array-like of shape (n_states, n_states)
+        The transition probabilities across states.
+
+    Returns:
+    --------
+    a : array-like of shape (n_samples, n_states)
+        The alpha values.
+    b : array-like of shape (n_samples, n_states)
+        The beta values.
+    sc : array-like of shape (n_samples,)
+        The scaling factors.
+
+    """
     T,K = L.shape
 
     #minreal = sys.float_info.min
@@ -104,7 +182,23 @@ def compute_alpha_beta(L,Pi,P):
 
 
 def compute_qstar(L,Pi,P):
+    """Compute the most probable state sequence.
 
+    Parameters:
+    -----------
+    L : array-like of shape (n_samples, n_states)
+        The L matrix.
+    Pi : array-like with shape (n_states,)
+        The initial state probabilities.
+    P : array-like of shape (n_states, n_states)
+        The transition probabilities across states.
+
+    Returns:
+    --------
+    qstar : array-like of shape (n_samples, n_states)
+        The most probable state sequence.
+
+    """
     T,K = L.shape
 
     delta = np.zeros((T,K))
@@ -135,6 +229,26 @@ def compute_qstar(L,Pi,P):
 ## Mathematical functions related to the free energy
 
 def gauss1d_kl(mu_q, sigma_q, mu_p, sigma_p):
+
+    """Computes the KL divergence between two univariate Gaussian distributions.
+
+    Parameters:
+    -----------
+    mu_q : float of shape (n_parcels,)
+        The mean of the first Gaussian distribution.
+    sigma_q : float of shape (n_parcels, n_parcels)
+        The variance of the first Gaussian distribution.
+    mu_p : float of shape (n_parcels,)
+        The mean of the second Gaussian distribution.
+    sigma_p : float of shape (n_parcels, n_parcels)
+        The variance of the second Gaussian distribution.
+
+    Returns:
+    --------
+    D : float
+        The KL divergence between the two Gaussian distributions.
+
+    """
     D = 0.5 * math.log(sigma_p/sigma_q) + \
         0.5 * ((mu_q - mu_p)**2) / sigma_p + \
         0.5 * sigma_q / sigma_p
@@ -142,6 +256,25 @@ def gauss1d_kl(mu_q, sigma_q, mu_p, sigma_p):
 
 
 def gauss_kl(mu_q, sigma_q, mu_p, sigma_p):
+    """Computes the KL divergence between two multivariate Gaussian distributions.
+
+    Parameters:
+    -----------
+    mu_q : float of shape (n_parcels,)
+        The mean of the first Gaussian distribution.
+    sigma_q : float of shape (n_parcels, n_parcels)
+        The variance of the first Gaussian distribution.
+    mu_p : float of shape (n_parcels,)
+        The mean of the second Gaussian distribution.
+    sigma_p : float of shape (n_parcels, n_parcels)
+        The variance of the second Gaussian distribution.
+
+    Returns:
+    --------
+    D : float
+        The KL divergence between the two Gaussian distributions.
+
+    """
 
     if len(mu_q) == 1:
         D = gauss1d_kl(mu_q[0], sigma_q[0,0], mu_p[0], sigma_p[0,0])
@@ -158,7 +291,28 @@ def gauss_kl(mu_q, sigma_q, mu_p, sigma_p):
 
 
 def gamma_kl(shape_q,rate_q,shape_p,rate_p):
-    # https://statproofbook.github.io/P/gam-kl
+    """Computes the Kullback-Leibler divergence between two Gamma distributions with shape and rate parameters.
+
+    The Kullback-Leibler divergence is a measure of how different two probability distributions are.
+
+    This implementation follows the formula presented here (https://statproofbook.github.io/P/gam-kl) from the book "KL-Divergences of Normal, Gamma, Dirichlet and Wishart densities" by Penny, William D. in 2001.
+
+    Parameters
+    ----------
+    shape_q : float or numpy.ndarray
+        The shape parameter of the first Gamma distribution.
+    rate_q : float or numpy.ndarray
+        The rate parameter of the first Gamma distribution.
+    shape_p : float or numpy.ndarray
+        The shape parameter of the second Gamma distribution.
+    rate_p : float or numpy.ndarray
+        The rate parameter of the second Gamma distribution.
+
+    Returns
+    -------
+    D : float or numpy.ndarray
+        The Kullback-Leibler divergence between the two Gamma distributions.
+    """
 
     D = shape_p * np.log(rate_q / rate_p) \
         + scipy.special.gammaln(shape_p) - scipy.special.gammaln(shape_q) \
@@ -169,6 +323,25 @@ def gamma_kl(shape_q,rate_q,shape_p,rate_p):
 
 
 def wishart_kl(shape_q,C_q,shape_p,C_p):
+    """Computes the Kullback-Leibler (KL) divergence between two Wishart distributions.
+
+    Parameters:
+    -----------
+    shape_q : float
+        Shape parameter of the first Wishart distribution.
+    C_q : ndarray of shape (n_parcels, n_parcels)
+        Scale parameter of the first Wishart distribution.
+    shape_p : float
+        Shape parameter of the second Wishart distribution.
+    C_p : ndarray of shape (n_parcels, n_parcels)
+        Scale parameter of the second Wishart distribution.
+
+    Returns:
+    --------
+    D : float
+        KL divergence from the first to the second Wishart distribution.
+
+    """ 
 
     def L(shape,C):
         N = C.shape[0]
@@ -202,6 +375,19 @@ def wishart_kl(shape_q,C_q,shape_p,C_p):
 
 
 def dirichlet_kl(alpha_q,alpha_p):
+    """Computes the Kullback-Leibler divergence between two Dirichlet distributions with parameters alpha_q and alpha_p.
+
+    Parameters:
+    -----------
+        alpha_q : Array of shape (n_states,)
+            The concentration parameters of the first Dirichlet distribution.
+        alpha_p : Array of shape (n_states,)
+            The concentration parameters of the second Dirichlet distribution.
+
+    Returns:
+    --------
+        float: The Kullback-Leibler divergence between the two Dirichlet distributions.
+    """
     sum_alpha_q = np.sum(alpha_q)
     sum_alpha_p = np.sum(alpha_p)
     t1 = + scipy.special.gammaln(sum_alpha_q) - scipy.special.gammaln(sum_alpha_p) \
@@ -211,6 +397,23 @@ def dirichlet_kl(alpha_q,alpha_p):
 
 
 def Gamma_entropy(Gamma,Xi,indices):
+    """Computes the entropy of a Gamma distribution and a sequence of transition probabilities Xi.
+
+    Parameters:
+    -----------
+        Gamma : Array-like of shape (n_samples, n_states)
+            The posterior probabilities of a hidden variable.
+        Xi : Array-like of shape (n_samples - n_sessions, n_states, n_states)
+            The joint probability of past and future states conditioned on data.
+        indices : Array-like of shape (n_sessions, 2)
+            The indices of the segments.
+
+    Returns:
+    --------
+        float: The entropy of the Gamma distribution and the sequence of transition probabilities.
+
+    """
+    
     minreal = sys.float_info.min
     # initial point
     Gamma_0 = Gamma[indices[:,0]]
