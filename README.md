@@ -6,7 +6,7 @@ Gaussian Linear Hidden Markov Models:
 
 ## Important links
 
-- Official source code repo: https://github.com/vidaurre/glhmm
+- Official source code repo: `https://github.com/vidaurre/glhmm`
 - HTML documentation (stable release): https://
 
 ## Dependencies
