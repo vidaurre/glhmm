@@ -1,0 +1,10 @@
+Metadata-Version: 2.1
+Name: glhmm
+Version: 0.1.1
+Summary: Gaussian Linear Hidden Markov Model
+Home-page: https://github.com/vidaurre/glhmm
+Author: Diego Vidaurre
+Author-email: dvidaurre@cfin.au.dk
+Classifier: Intended Audience :: Science/Research
+Classifier: Programming Language :: Python :: 3
+License-File: LICENSE

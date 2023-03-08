@@ -71,7 +71,7 @@ def load_files(files,I=None,do_only_indices=False):
 
 
 
-def read_flattened_hmm_mat(file,name='hmm'):
+def read_flattened_hmm_mat(file):
     
     hmm_mat = scipy.io.loadmat(file)
 
