@@ -8,8 +8,9 @@ Input/output functions - Gaussian Linear Hidden Markov Model
 import numpy as np
 import scipy.special
 import scipy.io
-import glhmm
-import auxiliary
+
+from . import glhmm
+from . import auxiliary
 
 def load_files(files,I=None,do_only_indices=False):
     """Loads data from files and returns the loaded data, indices, and individual indices for each file.
@@ -72,8 +73,7 @@ def load_files(files,I=None,do_only_indices=False):
     return X,Y,indices,indices_individual
 
 
-
-def read_flattened_hmm_mat(file,name='hmm'):
+def read_flattened_hmm_mat(file):
     """Reads a MATLAB file containing hidden Markov model (HMM) parameters, and initializes a Gaussian linear hidden Markov model (GLHMM) using those parameters.
     """
     
@@ -171,7 +171,7 @@ def read_flattened_hmm_mat(file,name='hmm'):
             else:
                 hmm.beta[k]["Sigma"] = Sigma_W[(j0*q):,(j0*q):]
 
-    hmm._glhmm__init_priors(None,None,prior_Omega_Gam_rate,prior_Omega_Gam_shape,p,q)
+    hmm._glhmm__init_priors_sub(prior_Omega_Gam_rate,prior_Omega_Gam_shape,p,q)
     hmm._glhmm__update_priors()
 
     # covmatrix
