@@ -21,9 +21,9 @@ import time
 # import glhmm.io as io
 # import glhmm.utils as utils
 
-import auxiliary
-import io_glhmm as io
-import utils
+from . import auxiliary
+from . import io_glhmm as io
+from . import utils
 
 class glhmm():
     """
@@ -385,14 +385,28 @@ class glhmm():
                     self.alpha_beta[k]["rate"] += 0.5 * np.reshape(np.diag(self.beta[k]["Sigma"]),(p,q))
                 self.alpha_beta[k]["shape"] = self.priors["alpha_beta"]["shape"] + 0.5
 
-
        
     def __init_priors(self,X=None,Y=None,files=None):
 
-        K = self.hyperparameters["K"]
         if Y is None: X,Y,_,_ = io.load_files(files,0)
-        if X is not None: p = X.shape[1]
+        p = X.shape[1] if X is not None else None
         q = Y.shape[1]
+
+        if files is None:
+            prior_shape,prior_rate = self.__compute_prior_covmat(X,Y)
+            self.priors["Sigma"]["shape"],self.priors["Sigma"]["rate"] = \
+                self.__compute_prior_covmat(X,Y)
+        else:
+            prior_shape,prior_rate = self.__compute_prior_covmat(files=files)
+            self.priors["Sigma"]["shape"],self.priors["Sigma"]["rate"] = \
+                self.__compute_prior_covmat(files=files)         
+
+        self.__init_priors_sub(prior_rate,prior_shape,p,q)
+        
+
+    def __init_priors_sub(self,prior_rate,prior_shape,p,q):
+
+        K = self.hyperparameters["K"]
         shared_beta = self.hyperparameters["model_beta"] == 'shared'
         shared_mean = self.hyperparameters["model_mean"] == 'shared'
         diagonal_covmat = (self.hyperparameters["covtype"] == 'shareddiag') or \
@@ -400,18 +414,14 @@ class glhmm():
         K_mean,K_beta = K,K
         if shared_mean: K_mean = 1
         if shared_beta: K_beta = 1
-
+        
         # priors for dynamics
         self.__init_prior_P_Pi()
 
         # Covariance matrix, use the range of the global error to set the prior
         self.priors["Sigma"] = {}
-        if files is None:
-            self.priors["Sigma"]["shape"],self.priors["Sigma"]["rate"] = \
-                self.__compute_prior_covmat(X,Y)
-        else:
-            self.priors["Sigma"]["shape"],self.priors["Sigma"]["rate"] = \
-                self.__compute_prior_covmat(files=files) 
+        self.priors["Sigma"]["shape"] = prior_shape
+        self.priors["Sigma"]["rate"] = prior_rate
         if diagonal_covmat: 
             self.priors["Sigma"]["irate"] = 1 / self.priors["Sigma"]["rate"]
         else:

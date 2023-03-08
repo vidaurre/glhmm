@@ -8,8 +8,9 @@ Input/output functions - Gaussian Linear Hidden Markov Model
 import numpy as np
 import scipy.special
 import scipy.io
-import glhmm
-import auxiliary
+
+from . import glhmm
+from . import auxiliary
 
 def load_files(files,I=None,do_only_indices=False):        
 
@@ -167,7 +168,7 @@ def read_flattened_hmm_mat(file):
             else:
                 hmm.beta[k]["Sigma"] = Sigma_W[(j0*q):,(j0*q):]
 
-    hmm._glhmm__init_priors(None,None,prior_Omega_Gam_rate,prior_Omega_Gam_shape,p,q)
+    hmm._glhmm__init_priors_sub(prior_Omega_Gam_rate,prior_Omega_Gam_shape,p,q)
     hmm._glhmm__update_priors()
 
     # covmatrix

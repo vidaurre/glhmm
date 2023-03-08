@@ -9,7 +9,8 @@ import numpy as np
 import warnings
 from sklearn.decomposition import PCA
 from scipy import signal
-import auxiliary
+
+from . import auxiliary
 
 def apply_pca(X,d,whitening=False,exact=True):
 
