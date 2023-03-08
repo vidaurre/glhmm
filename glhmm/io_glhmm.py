@@ -12,7 +12,9 @@ import scipy.io
 from . import glhmm
 from . import auxiliary
 
-def load_files(files,I=None,do_only_indices=False):        
+def load_files(files,I=None,do_only_indices=False):
+    """Loads data from files and returns the loaded data, indices, and individual indices for each file.
+    """       
 
     X = []
     Y = []
@@ -71,8 +73,9 @@ def load_files(files,I=None,do_only_indices=False):
     return X,Y,indices,indices_individual
 
 
-
 def read_flattened_hmm_mat(file):
+    """Reads a MATLAB file containing hidden Markov model (HMM) parameters, and initializes a Gaussian linear hidden Markov model (GLHMM) using those parameters.
+    """
     
     hmm_mat = scipy.io.loadmat(file)
 

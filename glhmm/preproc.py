@@ -13,7 +13,29 @@ from scipy import signal
 from . import auxiliary
 
 def apply_pca(X,d,whitening=False,exact=True):
+    """Applies PCA to the input data X.
 
+    Parameters
+    ----------
+    X : array-like of shape (n_samples, n_parcels)
+        The input data to be transformed.
+
+    d : int or float
+        If int, the number of components to keep.
+        If float, the percentage of explained variance to keep.
+        If array-like of shape (n_parcels, n_components), the transformation matrix.
+
+    whitening : bool, default=False
+        Whether to whiten the transformed data.
+
+    exact : bool, default=True
+        Whether to use full SVD solver for PCA.
+
+    Returns
+    -------
+    X_transformed : array-like of shape (n_samples, n_components)
+        The transformed data after applying PCA.
+    """
     if type(d) is np.ndarray:
         X -= np.mean(X,axis=0)
         X = X @ d
@@ -52,7 +74,58 @@ def preprocess_data(data,indices,
         exact_pca=True,
         downsample=None # new frequency, or None
         ):
+    
+    """Preprocess the input data.
 
+    Parameters
+    ----------
+    data : array-like of shape (n_samples, n_parcels)
+        The input data to be preprocessed.
+
+    indices : array-like of shape (n_sessions, 2)
+        The start and end indices of each trial/session in the input data.
+
+    fs : int or float, default=1
+        The frequency of the input data.
+
+    standardise : bool, default=True
+        Whether to standardize the input data.
+
+    filter : tuple of length 2 or None, default=None
+        The low-pass and high-pass thresholds to apply to the input data.
+        If None, no filtering will be applied.
+        If a tuple, the first element is the low-pass threshold and the second is the high-pass threshold.
+
+    detrend : bool, default=True
+        Whether to detrend the input data.
+
+    onpower : bool, default=False
+        Whether to calculate the power of the input data using the Hilbert transform.
+
+    pca : int or float or None, default=None
+        If int, the number of components to keep after applying PCA.
+        If float, the percentage of explained variance to keep after applying PCA.
+        If None, no PCA will be applied.
+
+    whitening : bool, default=False
+        Whether to whiten the input data after applying PCA.
+
+    exact_pca : bool, default=True
+        Whether to use full SVD solver for PCA.
+
+    downsample : int or float or None, default=None
+        The new frequency of the input data after downsampling.
+        If None, no downsampling will be applied.
+
+    Returns
+    -------
+    data_processed : array-like of shape (n_samples_processed, n_parcels)
+        The preprocessed input data.
+
+    indices_processed : array-like of shape (n_sessions_processed, 2)
+        The start and end indices of each trial/session in the preprocessed data.
+
+    """
     p = data.shape[1]
     N = indices.shape[0]
 
@@ -107,11 +180,34 @@ def preprocess_data(data,indices,
 
 def build_data_autoregressive(data,indices,autoregressive_order=1,
         connectivity=None,center_data=True):
-    """
-    Build X and Y for the autoregressive model, 
+    """Builds X and Y for the autoregressive model, 
     as well as an adapted indices array and predefined connectivity 
-    matrix in the right format.
-    X and Y are centered by default. 
+    matrix in the right format. X and Y are centered by default.
+    
+    Parameters:
+    -----------
+    data : array-like of shape (n_samples,n_parcels)
+        The data timeseries.
+    indices : array-like of shape (n_sessions, 2)
+        The start and end indices of each trial/session in the input data.
+    autoregressive_order : int, optional, default=1
+        The number of lags to include in the autoregressive model.
+    connectivity : array-like of shape (n_parcels, n_parcels), optional, default=None
+        The matrix indicating which regressors should be used for each variable.
+    center_data : bool, optional, default=True
+        If True, the data will be centered.
+
+    Returns:
+    --------
+    X : array-like of shape (n_samples - n_sessions*autoregressive_order, n_parcels*autoregressive_order)
+        The timeseries of set of variables 1 (i.e., the regressors).
+    Y : array-like of shape (n_samples - n_sessions*autoregressive_order, n_parcels)
+        The timeseries of set of variables 2 (i.e., variables to predict, targets).
+    indices_new : array-like of shape (n_sessions, 2)
+        The new array of start and end indices for each trial/session.
+    connectivity_new : array-like of shape (n_parcels*autoregressive_order, n_parcels)
+        The new connectivity matrix indicating which regressors should be used for each variable.
+
     """
 
     T,p = data.shape
@@ -173,13 +269,33 @@ def build_data_autoregressive(data,indices,autoregressive_order=1,
 
 
 def build_data_partial_connectivity(X,Y,connectivity=None,center_data=True):
-    """
-    Build X and Y for the partial connectivity model, 
+    """Builds X and Y for the partial connectivity model, 
     essentially regressing out things when indicated in connectivity,
     and getting rid of regressors / regressed variables that are not used;
     it return connectivity with the right dimensions as well. 
-    X and Y are centered by default. 
-    The returned X, Y and connectivity are new copies (not links)
+
+    Parameters:
+    -----------
+    X : np.ndarray of shape (n_samples, n_parcels)
+        The timeseries of set of variables 1 (i.e., the regressors).
+    Y : np.ndarray of shape (n_samples, n_parcels)
+        The timeseries of set of variables 2 (i.e., variables to predict, targets).
+    connectivity : np.ndarray of shape (n_parcels, n_parcels), optional, default=None
+        A binary matrix indicating which regressors affect which targets (i.e., variables to predict). 
+    center_data : bool, default=True
+        Center data to zero mean.
+
+    Returns:
+    --------
+    X_new : np.ndarray of shape (n_samples, n_active_parcels)
+        The timeseries of set of variables 1 (i.e., the regressors) after removing unused predictors and regressing out 
+        the effects indicated in connectivity.
+    Y_new : np.ndarray of shape (n_samples, n_active_parcels)
+        The timeseries of set of variables 2 (i.e., variables to predict, targets) after removing unused targets and regressing out 
+        the effects indicated in connectivity.
+    connectivity_new : np.ndarray of shape (n_active_parcels, n_active_parcels), optional, default=None
+        A binary matrix indicating which regressors affect which targets
+        The matrix has the same structure as `connectivity` after removing unused predictors and targets.
     """
 
     X_new = np.copy(X)
@@ -218,9 +334,29 @@ def build_data_partial_connectivity(X,Y,connectivity=None,center_data=True):
 
 
 def build_data_tde(data,indices,lags,pca=None,standardise_pc=True):
-    """
-    Build X for the temporal delay embedded HMM, as well as an adapted indices array
-    X is centered by default. 
+    """Builds X for the temporal delay embedded HMM, as well as an adapted indices array.
+
+    Parameters:
+    -----------
+    data : numpy array of shape (n_samples, n_parcels)
+        The data matrix.
+    indices : array-like of shape (n_sessions, 2)
+        The start and end indices of each trial/session in the input data.
+    lags : list or array-like
+        The lags to use for the embedding.
+    pca : None or int or float or numpy array, default=None
+        The number of components for PCA, the explained variance for PCA, the precomputed PCA projection matrix, 
+        or None to skip PCA.
+    standardise_pc : bool, default=True
+        Whether or not to standardise the principal components before returning.
+
+    Returns:
+    --------
+    X : numpy array of shape (n_samples - n_sessions*rwindow, n_parcels*n_lags)
+        The delay-embedded timeseries data.
+    indices_new : numpy array of shape (n_sessions, 2)
+        The adapted indices for each segment of delay-embedded data.
+
     PCA can be run optionally: if pca >=1, that is the number of components;
     if pca < 1, that is explained variance;
     if pca is a numpy array, then it is a precomputed PCA projection matrix;
