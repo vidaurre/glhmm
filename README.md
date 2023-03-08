@@ -11,7 +11,7 @@ Gaussian Linear Hidden Markov Models:
 
 ## Dependencies
 
-The required dependencies to use hmmlearn are:
+The required dependencies to use glhmm are:
 
 - Python >= 3.6
 - NumPy >= 1.10
