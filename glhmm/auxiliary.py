@@ -297,8 +297,8 @@ def gamma_kl(shape_q,rate_q,shape_p,rate_p):
 
     This implementation follows the formula presented here (https://statproofbook.github.io/P/gam-kl) from the book "KL-Divergences of Normal, Gamma, Dirichlet and Wishart densities" by Penny, William D. in 2001.
 
-    Parameters
-    ----------
+    Parameters:
+    -----------
     shape_q : float or numpy.ndarray
         The shape parameter of the first Gamma distribution.
     rate_q : float or numpy.ndarray
@@ -308,8 +308,8 @@ def gamma_kl(shape_q,rate_q,shape_p,rate_p):
     rate_p : float or numpy.ndarray
         The rate parameter of the second Gamma distribution.
 
-    Returns
-    -------
+    Returns:
+    --------
     D : float or numpy.ndarray
         The Kullback-Leibler divergence between the two Gamma distributions.
 

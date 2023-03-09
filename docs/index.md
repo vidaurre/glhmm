@@ -1,7 +1,9 @@
-# Glhmm documentation
+#
 
 ```{include} ../README.md
 ```
+
+## Documentation
 
 ```{toctree}
 :caption: 'Contents:'

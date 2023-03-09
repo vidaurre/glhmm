@@ -1031,20 +1031,20 @@ class glhmm():
     def loglikelihood(self,X,Y):
         """Computes the likelihood of the model per state and time point gicven the data X and Y.
 
-        Parameters
-        ----------
+        Parameters:
+        -----------
         X : array-like of shape (n_samples, n_parcels)
             The timeseries of set of variables 1.
         Y : array-like of shape (n_samples, n_parcels)
             The timeseries of set of variables 2.
 
-        Returns
-        -------
+        Returns:
+        --------
         L : array of shape (n_samples, n_states)
             The likelihood of the model per state and time point given the data X and Y.
             
-        Raises
-        ------
+        Raises:
+        --------
         Exception
             If the model has not been trained.
         """
@@ -1066,8 +1066,8 @@ class glhmm():
     def decode(self,X,Y,indices=None,files=None,viterbi=False,set=None):
         """Calculates state time courses for all the data using either parallel or sequential processing.
 
-        Parameters
-        ----------
+        Parameters:
+        -----------
         X : array-like of shape (n_samples, n_parcels)
             The timeseries of set of variables 1.
         Y : array-like of shape (n_samples, n_parcels)
@@ -1081,8 +1081,8 @@ class glhmm():
         set : int, optional, default=None
             Index of the sessions set to decode.
 
-        Returns
-        -------
+        Returns:
+        --------
         If viterbi=True:
             vpath : array of shape (n_samples,)
                 The most likely state sequence.
@@ -1095,8 +1095,8 @@ class glhmm():
                 The scaling factors used to compute the free energy of the
                 dataset. If None, scaling is automatically computed.
                 
-        Raises
-        ------
+        Raises:
+        -------
         Exception
             If the model has not been trained.
         """
@@ -1141,15 +1141,15 @@ class glhmm():
     def sample_Gamma(self,size):
         """Generates Gamma, for timeseries of lengths specified in variable size.
 
-        Parameters
-        ----------
+        Parameters:
+        -----------
         size : array
             Array of shape (n_sessions,) or (n_sessions, 2). If `size` is 1-dimensional,
             each element represents the length of a session. If `size` is 2-dimensional,
             each row of `size` represents the start and end indices of a session in a timeseries.
 
-        Returns
-        -------
+        Returns:
+        --------
         Gamma : array of shape (n_samples, n_states)
             The state probability timeseries.    
 
@@ -1187,8 +1187,8 @@ class glhmm():
     def sample(self,size,X=None,Gamma=None):
         """Generates Gamma and Y for timeseries of lengths specified in variable size.
 
-        Parameters
-        ----------
+        Parameters:
+        -----------
         size : array of shape (n_sessions,) or (n_sessions, 2)
             If `size` is 1-dimensional, each element represents the length of a session. If `size` is 2-dimensional,
             each row of `size` represents the start and end indices of a session in a timeseries.
@@ -1197,8 +1197,8 @@ class glhmm():
         Gamma : array of shape (n_samples, n_states), default=None
             The state probability timeseries.
 
-        Returns
-        -------
+        Returns:
+        --------
         Gamma : array of shape (n_samples, n_states)
             The state probability timeseries.
         Y: array of shape (n_samples,n_parcels)
@@ -1275,8 +1275,8 @@ class glhmm():
     def get_fe(self,X,Y,Gamma,Xi,scale=None,indices=None,todo=None):
         """Computes the Free Energy of an HMM depending on observation model.
         
-        Parameters
-        ----------
+        Parameters:
+        -----------
         X : array of shape (n_samples, n_parcels)
             The timeseries of set of variables 1.
         Y : array of shape (n_samples, n_parcels)
@@ -1293,8 +1293,8 @@ class glhmm():
         todo:  bool of shape (n_terms,) or None, default=None
             Whether or not each of the 5 elements (see `fe_terms`) should be computed.
                 
-        Returns
-        -------
+        Returns:
+        --------
         fe_terms : array of shape (n_terms,)
             The variational free energy, separated into different terms:
         
@@ -1304,17 +1304,17 @@ class glhmm():
             - element 4: KL divergence for initial and transition probabilities
             - element 5: KL divergence for the state parameters
             
-        Raises
-        ------
+        Raises:
+        --------
         Exception
             If the model has not been trained.
             
-        Notes
-        -----
+        Notes:
+        -------
         This function computes the variational free energy using a specific algorithm. For more information on the algorithm, see [1^].
         
-        References
-        ----------
+        References:
+        ------------
         [1^] Smith, J. et al. "A variational approach to Bayesian learning of switching dynamics in dynamical systems." Journal of Machine Learning Research, vol. 18, no. 4, 2017.
         """
 
@@ -1451,18 +1451,18 @@ class glhmm():
     def get_covariance_matrix(self,k=0):
         """Returns the covariance matrix for the specified state.
 
-        Parameters
-        ----------
+        Parameters:
+        -----------
         k : int, optional
             The index of the state. Default=0.
 
-        Returns
-        -------
+        Returns:
+        --------
         array of shape (n_parcels, n_parcels)
             The covariance matrix for the specified state.
 
-        Raises
-        ------
+        Raises:
+        -------
         Exception
             If the model has not been trained.
 
@@ -1476,18 +1476,18 @@ class glhmm():
     def get_inverse_covariance_matrix(self,k=0):
         """Returns the inverse covariance matrix for the specified state.
         
-        Parameters
-        ----------
+        Parameters:
+        -----------
         k : int, optional
             The index of the state. Default=0.
         
-        Returns
-        -------
+        Returns:
+        --------
         array of shape (n_parcels, n_parcels)
             The inverse covariance matrix for the specified state.
         
-        Raises
-        ------
+        Raises:
+        -------
         Exception
             If the model has not been trained.
         
@@ -1501,18 +1501,18 @@ class glhmm():
     def get_beta(self,k=0):
         """Returns the beta of the specified state.
 
-        Parameters
-        ----------
+        Parameters:
+        -----------
         k : int, optional
             The index of the state for which to retrieve the beta value. Default=0.
 
-        Returns
-        -------
+        Returns:
+        --------
         float
             The beta value of the specified state.
 
-        Raises
-        ------
+        Raises:
+        -------
         Exception
             If the model has not yet been trained.
         Exception
@@ -1532,18 +1532,18 @@ class glhmm():
 
         """Returns the mean of the specified state.
 
-        Parameters
-        ----------
+        Parameters:
+        -----------
         k : int, optional
             The index of the state for which to retrieve the mean. Default=0.
 
-        Returns
-        -------
+        Returns:
+        --------
         float
             The mean value of the specified component.
 
-        Raises
-        ------
+        Raises:
+        -------
         Exception
             If the model has not yet been trained.
         Exception
@@ -1562,8 +1562,8 @@ class glhmm():
     def dual_estimate(self,X,Y,indices=None,Gamma=None,Xi=None):
         """Dual estimation of HMM parameters.
 
-        Parameters
-        ----------
+        Parameters:
+        -----------
         X : array-like of shape (n_samples, n_parcels)
             The timeseries of set of variables 1.
         Y : array-like of shape (n_samples, n_parcels)
@@ -1577,12 +1577,13 @@ class glhmm():
         Xi : array-like of shape (n_samples - n_sessions, n_states, n_states), optional
             The joint probabilities of past and future states conditioned on data. If None, it is computed from the input observations.
 
-        Returns
-        -------
+        Returns:
+        ---------
         hmm_dual : object
             A copy of the HMM object with updated dynamics and observation
             distributions.
         """
+        
         if not self.trained: 
             raise Exception("The model has not yet been trained") 
 
@@ -1618,8 +1619,8 @@ class glhmm():
     def train(self,X=None,Y=None,indices=None,files=None,Gamma=None,Xi=None,scale=None,options=None):
         """Train the HMM on input data X and Y.
 
-        Parameters
-        ----------
+        Parameters:
+        -----------
         X : array-like of shape (n_samples, n_parcels)
             The timeseries of set of variables 1.
         Y : array-like of shape (n_samples, n_parcels)
@@ -1640,8 +1641,8 @@ class glhmm():
         options : dict, optional
             A dictionary with options to control the training process.
 
-        Returns
-        -------
+        Returns:
+        --------
         Gamma : array-like of shape (n_samples, n_states)
             The state probabilities.
         Xi : array-like of shape (n_samples - n_sessions, n_states, n_states)

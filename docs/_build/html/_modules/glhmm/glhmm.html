@@ -1,75 +1,202 @@
-<!DOCTYPE html>
-<html class="writer-html5" lang="en" >
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>glhmm.glhmm &mdash; GLHMM 0.0.1 documentation</title>
-      <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
-      <link rel="stylesheet" href="../../_static/css/theme.css" type="text/css" />
-  <!--[if lt IE 9]>
-    <script src="../../_static/js/html5shiv.min.js"></script>
-  <![endif]-->
+<!doctype html>
+<html class="no-js" lang="en">
+  <head><meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width,initial-scale=1"/>
+    <meta name="color-scheme" content="light dark"><link rel="index" title="Index" href="../../genindex.html" /><link rel="search" title="Search" href="../../search.html" />
+
+    <!-- Generated with Sphinx 6.1.3 and Furo 2022.12.07 -->
+        <title>glhmm.glhmm - GLHMM 0.0.1 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css" />
+    <link rel="stylesheet" type="text/css" href="../../_static/styles/furo.css?digest=91d0f0d1c444bdcb17a68e833c7a53903343c195" />
+    <link rel="stylesheet" type="text/css" href="../../_static/styles/furo-extensions.css?digest=30d1aed668e5c3a91c3e3bf6a60b675221979f0e" />
+    
+    
+
+
+<style>
+  body {
+    --color-code-background: #f8f8f8;
+  --color-code-foreground: black;
   
-        <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
-        <script data-url_root="../../" id="documentation_options" src="../../_static/documentation_options.js"></script>
-        <script src="../../_static/doctools.js"></script>
-        <script src="../../_static/sphinx_highlight.js"></script>
-        <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
-    <script src="../../_static/js/theme.js"></script>
-    <link rel="index" title="Index" href="../../genindex.html" />
-    <link rel="search" title="Search" href="../../search.html" /> 
-</head>
+  }
+  @media not print {
+    body[data-theme="dark"] {
+      --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+    }
+    @media (prefers-color-scheme: dark) {
+      body:not([data-theme="light"]) {
+        --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+      }
+    }
+  }
+</style></head>
+  <body>
+    
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+    
 
-<body class="wy-body-for-nav"> 
-  <div class="wy-grid-for-nav">
-    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
-      <div class="wy-side-scroll">
-        <div class="wy-side-nav-search" >
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024">
+      <path d="M408 442h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8zm-8 204c0 4.4 3.6 8 8 8h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56zm504-486H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zm0 632H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zM115.4 518.9L271.7 642c5.8 4.6 14.4.5 14.4-6.9V388.9c0-7.4-8.5-11.5-14.4-6.9L115.4 505.1a8.74 8.74 0 0 0 0 13.8z"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-half" viewBox="0 0 24 24">
+    <title>Auto light/dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-shadow">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M13 12h5" />
+      <path d="M13 15h4" />
+      <path d="M13 18h1" />
+      <path d="M13 9h4" />
+      <path d="M13 6h1" />
+    </svg>
+  </symbol>
+</svg>
 
-          
-          
-          <a href="../../index.html" class="icon icon-home">
-            GLHMM
-          </a>
-<div role="search">
-  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
-    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
-    <input type="hidden" name="check_keywords" value="yes" />
-    <input type="hidden" name="area" value="default" />
-  </form>
-</div>
-        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
-              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
-<ul>
-<li class="toctree-l1"><a class="reference internal" href="../../modules.html">API</a></li>
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc">
+<label class="overlay sidebar-overlay" for="__navigation">
+  <div class="visually-hidden">Hide navigation sidebar</div>
+</label>
+<label class="overlay toc-overlay" for="__toc">
+  <div class="visually-hidden">Hide table of contents sidebar</div>
+</label>
+
+
+
+<div class="page">
+  <header class="mobile-header">
+    <div class="header-left">
+      <label class="nav-overlay-icon" for="__navigation">
+        <div class="visually-hidden">Toggle site navigation sidebar</div>
+        <i class="icon"><svg><use href="#svg-menu"></use></svg></i>
+      </label>
+    </div>
+    <div class="header-center">
+      <a href="../../index.html"><div class="brand">GLHMM 0.0.1 documentation</div></a>
+    </div>
+    <div class="header-right">
+      <div class="theme-toggle-container theme-toggle-header">
+        <button class="theme-toggle">
+          <div class="visually-hidden">Toggle Light / Dark / Auto color theme</div>
+          <svg class="theme-icon-when-auto"><use href="#svg-sun-half"></use></svg>
+          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+        </button>
+      </div>
+      <label class="toc-overlay-icon toc-header-icon no-toc" for="__toc">
+        <div class="visually-hidden">Toggle table of contents sidebar</div>
+        <i class="icon"><svg><use href="#svg-toc"></use></svg></i>
+      </label>
+    </div>
+  </header>
+  <aside class="sidebar-drawer">
+    <div class="sidebar-container">
+      
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="../../index.html">
+  
+  
+  <span class="sidebar-brand-text">GLHMM 0.0.1 documentation</span>
+  
+</a><form class="sidebar-search-container" method="get" action="../../search.html" role="search">
+  <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
+  <input type="hidden" name="check_keywords" value="yes">
+  <input type="hidden" name="area" value="default">
+</form>
+<div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
+  <ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../modules.html"></a><input class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><div class="visually-hidden">Toggle child pages in navigation</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../glhmm.html">glhmm module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../io_glhmm.html">io_glhmm module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../preproc.html">preproc module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../auxiliary.html">auxiliary module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../utils.html">utils module</a></li>
+</ul>
+</li>
 <li class="toctree-l1"><a class="reference internal" href="../../glossary.html">Glossary</a></li>
 </ul>
 
-        </div>
-      </div>
-    </nav>
-
-    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
-          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
-          <a href="../../index.html">GLHMM</a>
-      </nav>
-
-      <div class="wy-nav-content">
-        <div class="rst-content">
-          <div role="navigation" aria-label="Page navigation">
-  <ul class="wy-breadcrumbs">
-      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
-          <li class="breadcrumb-item"><a href="../index.html">Module code</a></li>
-      <li class="breadcrumb-item active">glhmm.glhmm</li>
-      <li class="wy-breadcrumbs-aside">
-      </li>
-  </ul>
-  <hr/>
 </div>
-          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
-           <div itemprop="articleBody">
-             
-  <h1>Source code for glhmm.glhmm</h1><div class="highlight"><pre>
+</div>
+
+      </div>
+      
+    </div>
+  </aside>
+  <div class="main">
+    <div class="content">
+      <div class="article-container">
+        <a href="#" class="back-to-top muted-link">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+          </svg>
+          <span>Back to top</span>
+        </a>
+        <div class="content-icon-container">
+          <div class="theme-toggle-container theme-toggle-content">
+            <button class="theme-toggle">
+              <div class="visually-hidden">Toggle Light / Dark / Auto color theme</div>
+              <svg class="theme-icon-when-auto"><use href="#svg-sun-half"></use></svg>
+              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+            </button>
+          </div>
+          <label class="toc-overlay-icon toc-content-icon no-toc" for="__toc">
+            <div class="visually-hidden">Toggle table of contents sidebar</div>
+            <i class="icon"><svg><use href="#svg-toc"></use></svg></i>
+          </label>
+        </div>
+        <article role="main">
+          <h1>Source code for glhmm.glhmm</h1><div class="highlight"><pre>
 <span></span><span class="ch">#!/usr/bin/env python3</span>
 <span class="c1"># -*- coding: utf-8 -*-</span>
 <span class="sd">&quot;&quot;&quot;</span>
@@ -1103,20 +1230,20 @@
 <div class="viewcode-block" id="glhmm.loglikelihood"><a class="viewcode-back" href="../../glhmm.html#glhmm.glhmm.glhmm.loglikelihood">[docs]</a>    <span class="k">def</span> <span class="nf">loglikelihood</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">X</span><span class="p">,</span><span class="n">Y</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Computes the likelihood of the model per state and time point gicven the data X and Y.</span>
 
-<span class="sd">        Parameters</span>
-<span class="sd">        ----------</span>
+<span class="sd">        Parameters:</span>
+<span class="sd">        -----------</span>
 <span class="sd">        X : array-like of shape (n_samples, n_parcels)</span>
 <span class="sd">            The timeseries of set of variables 1.</span>
 <span class="sd">        Y : array-like of shape (n_samples, n_parcels)</span>
 <span class="sd">            The timeseries of set of variables 2.</span>
 
-<span class="sd">        Returns</span>
-<span class="sd">        -------</span>
+<span class="sd">        Returns:</span>
+<span class="sd">        --------</span>
 <span class="sd">        L : array of shape (n_samples, n_states)</span>
 <span class="sd">            The likelihood of the model per state and time point given the data X and Y.</span>
 <span class="sd">            </span>
-<span class="sd">        Raises</span>
-<span class="sd">        ------</span>
+<span class="sd">        Raises:</span>
+<span class="sd">        --------</span>
 <span class="sd">        Exception</span>
 <span class="sd">            If the model has not been trained.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
@@ -1138,8 +1265,8 @@
 <div class="viewcode-block" id="glhmm.decode"><a class="viewcode-back" href="../../glhmm.html#glhmm.glhmm.glhmm.decode">[docs]</a>    <span class="k">def</span> <span class="nf">decode</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">X</span><span class="p">,</span><span class="n">Y</span><span class="p">,</span><span class="n">indices</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span><span class="n">files</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span><span class="n">viterbi</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span><span class="nb">set</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Calculates state time courses for all the data using either parallel or sequential processing.</span>
 
-<span class="sd">        Parameters</span>
-<span class="sd">        ----------</span>
+<span class="sd">        Parameters:</span>
+<span class="sd">        -----------</span>
 <span class="sd">        X : array-like of shape (n_samples, n_parcels)</span>
 <span class="sd">            The timeseries of set of variables 1.</span>
 <span class="sd">        Y : array-like of shape (n_samples, n_parcels)</span>
@@ -1153,8 +1280,8 @@
 <span class="sd">        set : int, optional, default=None</span>
 <span class="sd">            Index of the sessions set to decode.</span>
 
-<span class="sd">        Returns</span>
-<span class="sd">        -------</span>
+<span class="sd">        Returns:</span>
+<span class="sd">        --------</span>
 <span class="sd">        If viterbi=True:</span>
 <span class="sd">            vpath : array of shape (n_samples,)</span>
 <span class="sd">                The most likely state sequence.</span>
@@ -1167,8 +1294,8 @@
 <span class="sd">                The scaling factors used to compute the free energy of the</span>
 <span class="sd">                dataset. If None, scaling is automatically computed.</span>
 <span class="sd">                </span>
-<span class="sd">        Raises</span>
-<span class="sd">        ------</span>
+<span class="sd">        Raises:</span>
+<span class="sd">        -------</span>
 <span class="sd">        Exception</span>
 <span class="sd">            If the model has not been trained.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
@@ -1213,15 +1340,15 @@
 <div class="viewcode-block" id="glhmm.sample_Gamma"><a class="viewcode-back" href="../../glhmm.html#glhmm.glhmm.glhmm.sample_Gamma">[docs]</a>    <span class="k">def</span> <span class="nf">sample_Gamma</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">size</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Generates Gamma, for timeseries of lengths specified in variable size.</span>
 
-<span class="sd">        Parameters</span>
-<span class="sd">        ----------</span>
+<span class="sd">        Parameters:</span>
+<span class="sd">        -----------</span>
 <span class="sd">        size : array</span>
 <span class="sd">            Array of shape (n_sessions,) or (n_sessions, 2). If `size` is 1-dimensional,</span>
 <span class="sd">            each element represents the length of a session. If `size` is 2-dimensional,</span>
 <span class="sd">            each row of `size` represents the start and end indices of a session in a timeseries.</span>
 
-<span class="sd">        Returns</span>
-<span class="sd">        -------</span>
+<span class="sd">        Returns:</span>
+<span class="sd">        --------</span>
 <span class="sd">        Gamma : array of shape (n_samples, n_states)</span>
 <span class="sd">            The state probability timeseries.    </span>
 
@@ -1259,8 +1386,8 @@
 <div class="viewcode-block" id="glhmm.sample"><a class="viewcode-back" href="../../glhmm.html#glhmm.glhmm.glhmm.sample">[docs]</a>    <span class="k">def</span> <span class="nf">sample</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">size</span><span class="p">,</span><span class="n">X</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span><span class="n">Gamma</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Generates Gamma and Y for timeseries of lengths specified in variable size.</span>
 
-<span class="sd">        Parameters</span>
-<span class="sd">        ----------</span>
+<span class="sd">        Parameters:</span>
+<span class="sd">        -----------</span>
 <span class="sd">        size : array of shape (n_sessions,) or (n_sessions, 2)</span>
 <span class="sd">            If `size` is 1-dimensional, each element represents the length of a session. If `size` is 2-dimensional,</span>
 <span class="sd">            each row of `size` represents the start and end indices of a session in a timeseries.</span>
@@ -1269,8 +1396,8 @@
 <span class="sd">        Gamma : array of shape (n_samples, n_states), default=None</span>
 <span class="sd">            The state probability timeseries.</span>
 
-<span class="sd">        Returns</span>
-<span class="sd">        -------</span>
+<span class="sd">        Returns:</span>
+<span class="sd">        --------</span>
 <span class="sd">        Gamma : array of shape (n_samples, n_states)</span>
 <span class="sd">            The state probability timeseries.</span>
 <span class="sd">        Y: array of shape (n_samples,n_parcels)</span>
@@ -1347,8 +1474,8 @@
 <div class="viewcode-block" id="glhmm.get_fe"><a class="viewcode-back" href="../../glhmm.html#glhmm.glhmm.glhmm.get_fe">[docs]</a>    <span class="k">def</span> <span class="nf">get_fe</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">X</span><span class="p">,</span><span class="n">Y</span><span class="p">,</span><span class="n">Gamma</span><span class="p">,</span><span class="n">Xi</span><span class="p">,</span><span class="n">scale</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span><span class="n">indices</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span><span class="n">todo</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Computes the Free Energy of an HMM depending on observation model.</span>
 <span class="sd">        </span>
-<span class="sd">        Parameters</span>
-<span class="sd">        ----------</span>
+<span class="sd">        Parameters:</span>
+<span class="sd">        -----------</span>
 <span class="sd">        X : array of shape (n_samples, n_parcels)</span>
 <span class="sd">            The timeseries of set of variables 1.</span>
 <span class="sd">        Y : array of shape (n_samples, n_parcels)</span>
@@ -1365,8 +1492,8 @@
 <span class="sd">        todo:  bool of shape (n_terms,) or None, default=None</span>
 <span class="sd">            Whether or not each of the 5 elements (see `fe_terms`) should be computed.</span>
 <span class="sd">                </span>
-<span class="sd">        Returns</span>
-<span class="sd">        -------</span>
+<span class="sd">        Returns:</span>
+<span class="sd">        --------</span>
 <span class="sd">        fe_terms : array of shape (n_terms,)</span>
 <span class="sd">            The variational free energy, separated into different terms:</span>
 <span class="sd">        </span>
@@ -1376,17 +1503,17 @@
 <span class="sd">            - element 4: KL divergence for initial and transition probabilities</span>
 <span class="sd">            - element 5: KL divergence for the state parameters</span>
 <span class="sd">            </span>
-<span class="sd">        Raises</span>
-<span class="sd">        ------</span>
+<span class="sd">        Raises:</span>
+<span class="sd">        --------</span>
 <span class="sd">        Exception</span>
 <span class="sd">            If the model has not been trained.</span>
 <span class="sd">            </span>
-<span class="sd">        Notes</span>
-<span class="sd">        -----</span>
+<span class="sd">        Notes:</span>
+<span class="sd">        -------</span>
 <span class="sd">        This function computes the variational free energy using a specific algorithm. For more information on the algorithm, see [1^].</span>
 <span class="sd">        </span>
-<span class="sd">        References</span>
-<span class="sd">        ----------</span>
+<span class="sd">        References:</span>
+<span class="sd">        ------------</span>
 <span class="sd">        [1^] Smith, J. et al. &quot;A variational approach to Bayesian learning of switching dynamics in dynamical systems.&quot; Journal of Machine Learning Research, vol. 18, no. 4, 2017.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
 
@@ -1523,18 +1650,18 @@
 <div class="viewcode-block" id="glhmm.get_covariance_matrix"><a class="viewcode-back" href="../../glhmm.html#glhmm.glhmm.glhmm.get_covariance_matrix">[docs]</a>    <span class="k">def</span> <span class="nf">get_covariance_matrix</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">k</span><span class="o">=</span><span class="mi">0</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Returns the covariance matrix for the specified state.</span>
 
-<span class="sd">        Parameters</span>
-<span class="sd">        ----------</span>
+<span class="sd">        Parameters:</span>
+<span class="sd">        -----------</span>
 <span class="sd">        k : int, optional</span>
 <span class="sd">            The index of the state. Default=0.</span>
 
-<span class="sd">        Returns</span>
-<span class="sd">        -------</span>
+<span class="sd">        Returns:</span>
+<span class="sd">        --------</span>
 <span class="sd">        array of shape (n_parcels, n_parcels)</span>
 <span class="sd">            The covariance matrix for the specified state.</span>
 
-<span class="sd">        Raises</span>
-<span class="sd">        ------</span>
+<span class="sd">        Raises:</span>
+<span class="sd">        -------</span>
 <span class="sd">        Exception</span>
 <span class="sd">            If the model has not been trained.</span>
 
@@ -1548,18 +1675,18 @@
 <div class="viewcode-block" id="glhmm.get_inverse_covariance_matrix"><a class="viewcode-back" href="../../glhmm.html#glhmm.glhmm.glhmm.get_inverse_covariance_matrix">[docs]</a>    <span class="k">def</span> <span class="nf">get_inverse_covariance_matrix</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">k</span><span class="o">=</span><span class="mi">0</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Returns the inverse covariance matrix for the specified state.</span>
 <span class="sd">        </span>
-<span class="sd">        Parameters</span>
-<span class="sd">        ----------</span>
+<span class="sd">        Parameters:</span>
+<span class="sd">        -----------</span>
 <span class="sd">        k : int, optional</span>
 <span class="sd">            The index of the state. Default=0.</span>
 <span class="sd">        </span>
-<span class="sd">        Returns</span>
-<span class="sd">        -------</span>
+<span class="sd">        Returns:</span>
+<span class="sd">        --------</span>
 <span class="sd">        array of shape (n_parcels, n_parcels)</span>
 <span class="sd">            The inverse covariance matrix for the specified state.</span>
 <span class="sd">        </span>
-<span class="sd">        Raises</span>
-<span class="sd">        ------</span>
+<span class="sd">        Raises:</span>
+<span class="sd">        -------</span>
 <span class="sd">        Exception</span>
 <span class="sd">            If the model has not been trained.</span>
 <span class="sd">        </span>
@@ -1573,18 +1700,18 @@
 <div class="viewcode-block" id="glhmm.get_beta"><a class="viewcode-back" href="../../glhmm.html#glhmm.glhmm.glhmm.get_beta">[docs]</a>    <span class="k">def</span> <span class="nf">get_beta</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">k</span><span class="o">=</span><span class="mi">0</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Returns the beta of the specified state.</span>
 
-<span class="sd">        Parameters</span>
-<span class="sd">        ----------</span>
+<span class="sd">        Parameters:</span>
+<span class="sd">        -----------</span>
 <span class="sd">        k : int, optional</span>
 <span class="sd">            The index of the state for which to retrieve the beta value. Default=0.</span>
 
-<span class="sd">        Returns</span>
-<span class="sd">        -------</span>
+<span class="sd">        Returns:</span>
+<span class="sd">        --------</span>
 <span class="sd">        float</span>
 <span class="sd">            The beta value of the specified state.</span>
 
-<span class="sd">        Raises</span>
-<span class="sd">        ------</span>
+<span class="sd">        Raises:</span>
+<span class="sd">        -------</span>
 <span class="sd">        Exception</span>
 <span class="sd">            If the model has not yet been trained.</span>
 <span class="sd">        Exception</span>
@@ -1604,18 +1731,18 @@
 
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Returns the mean of the specified state.</span>
 
-<span class="sd">        Parameters</span>
-<span class="sd">        ----------</span>
+<span class="sd">        Parameters:</span>
+<span class="sd">        -----------</span>
 <span class="sd">        k : int, optional</span>
 <span class="sd">            The index of the state for which to retrieve the mean. Default=0.</span>
 
-<span class="sd">        Returns</span>
-<span class="sd">        -------</span>
+<span class="sd">        Returns:</span>
+<span class="sd">        --------</span>
 <span class="sd">        float</span>
 <span class="sd">            The mean value of the specified component.</span>
 
-<span class="sd">        Raises</span>
-<span class="sd">        ------</span>
+<span class="sd">        Raises:</span>
+<span class="sd">        -------</span>
 <span class="sd">        Exception</span>
 <span class="sd">            If the model has not yet been trained.</span>
 <span class="sd">        Exception</span>
@@ -1634,8 +1761,8 @@
 <div class="viewcode-block" id="glhmm.dual_estimate"><a class="viewcode-back" href="../../glhmm.html#glhmm.glhmm.glhmm.dual_estimate">[docs]</a>    <span class="k">def</span> <span class="nf">dual_estimate</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">X</span><span class="p">,</span><span class="n">Y</span><span class="p">,</span><span class="n">indices</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span><span class="n">Gamma</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span><span class="n">Xi</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Dual estimation of HMM parameters.</span>
 
-<span class="sd">        Parameters</span>
-<span class="sd">        ----------</span>
+<span class="sd">        Parameters:</span>
+<span class="sd">        -----------</span>
 <span class="sd">        X : array-like of shape (n_samples, n_parcels)</span>
 <span class="sd">            The timeseries of set of variables 1.</span>
 <span class="sd">        Y : array-like of shape (n_samples, n_parcels)</span>
@@ -1649,12 +1776,13 @@
 <span class="sd">        Xi : array-like of shape (n_samples - n_sessions, n_states, n_states), optional</span>
 <span class="sd">            The joint probabilities of past and future states conditioned on data. If None, it is computed from the input observations.</span>
 
-<span class="sd">        Returns</span>
-<span class="sd">        -------</span>
+<span class="sd">        Returns:</span>
+<span class="sd">        ---------</span>
 <span class="sd">        hmm_dual : object</span>
 <span class="sd">            A copy of the HMM object with updated dynamics and observation</span>
 <span class="sd">            distributions.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
+        
         <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">trained</span><span class="p">:</span> 
             <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s2">&quot;The model has not yet been trained&quot;</span><span class="p">)</span> 
 
@@ -1690,8 +1818,8 @@
 <div class="viewcode-block" id="glhmm.train"><a class="viewcode-back" href="../../glhmm.html#glhmm.glhmm.glhmm.train">[docs]</a>    <span class="k">def</span> <span class="nf">train</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">X</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span><span class="n">Y</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span><span class="n">indices</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span><span class="n">files</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span><span class="n">Gamma</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span><span class="n">Xi</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span><span class="n">scale</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span><span class="n">options</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Train the HMM on input data X and Y.</span>
 
-<span class="sd">        Parameters</span>
-<span class="sd">        ----------</span>
+<span class="sd">        Parameters:</span>
+<span class="sd">        -----------</span>
 <span class="sd">        X : array-like of shape (n_samples, n_parcels)</span>
 <span class="sd">            The timeseries of set of variables 1.</span>
 <span class="sd">        Y : array-like of shape (n_samples, n_parcels)</span>
@@ -1712,8 +1840,8 @@
 <span class="sd">        options : dict, optional</span>
 <span class="sd">            A dictionary with options to control the training process.</span>
 
-<span class="sd">        Returns</span>
-<span class="sd">        -------</span>
+<span class="sd">        Returns:</span>
+<span class="sd">        --------</span>
 <span class="sd">        Gamma : array-like of shape (n_samples, n_states)</span>
 <span class="sd">            The state probabilities.</span>
 <span class="sd">        Xi : array-like of shape (n_samples - n_sessions, n_states, n_states)</span>
@@ -1820,32 +1948,41 @@
         <span class="k">return</span> <span class="n">Gamma</span><span class="p">,</span><span class="n">Xi</span><span class="p">,</span><span class="n">fe</span></div></div>
 
 </pre></div>
-
-           </div>
-          </div>
-          <footer>
-
-  <hr/>
-
-  <div role="contentinfo">
-    <p>&#169; Copyright 2023, Diego Vidaurre.</p>
-  </div>
-
-  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
-    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
-    provided by <a href="https://readthedocs.org">Read the Docs</a>.
-   
-
-</footer>
-        </div>
+        </article>
       </div>
-    </section>
+      <footer>
+        
+        <div class="related-pages">
+          
+          
+        </div>
+        <div class="bottom-of-page">
+          <div class="left-details">
+            <div class="copyright">
+                Copyright &#169; 2023, Sonsoles Alonso
+            </div>
+            Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
+            
+            <a href="https://github.com/pradyunsg/furo">Furo</a>
+            
+          </div>
+          <div class="right-details">
+            
+          </div>
+        </div>
+        
+      </footer>
+    </div>
+    <aside class="toc-drawer no-toc">
+      
+      
+      
+    </aside>
   </div>
-  <script>
-      jQuery(function () {
-          SphinxRtdTheme.Navigation.enable(true);
-      });
-  </script> 
-
-</body>
+</div><script data-url_root="../../" id="documentation_options" src="../../_static/documentation_options.js"></script>
+    <script src="../../_static/doctools.js"></script>
+    <script src="../../_static/sphinx_highlight.js"></script>
+    <script src="../../_static/scripts/furo.js"></script>
+    <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
+    </body>
 </html>

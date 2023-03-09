@@ -1,171 +1,260 @@
-<!DOCTYPE html>
-<html class="writer-html5" lang="en" >
-<head>
-  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.19: https://docutils.sourceforge.io/" />
+<!doctype html>
+<html class="no-js" lang="en">
+  <head><meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width,initial-scale=1"/>
+    <meta name="color-scheme" content="light dark"><meta name="generator" content="Docutils 0.19: https://docutils.sourceforge.io/" />
+<link rel="index" title="Index" href="genindex.html" /><link rel="search" title="Search" href="search.html" /><link rel="next" title="Glossary" href="glossary.html" /><link rel="prev" title="auxiliary module" href="auxiliary.html" />
 
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>utils module &mdash; GLHMM 0.0.1 documentation</title>
-      <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
-      <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
-  <!--[if lt IE 9]>
-    <script src="_static/js/html5shiv.min.js"></script>
-  <![endif]-->
+    <!-- Generated with Sphinx 6.1.3 and Furo 2022.12.07 -->
+        <title>utils module - GLHMM 0.0.1 documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css" />
+    <link rel="stylesheet" type="text/css" href="_static/styles/furo.css?digest=91d0f0d1c444bdcb17a68e833c7a53903343c195" />
+    <link rel="stylesheet" type="text/css" href="_static/styles/furo-extensions.css?digest=30d1aed668e5c3a91c3e3bf6a60b675221979f0e" />
+    
+    
+
+
+<style>
+  body {
+    --color-code-background: #f8f8f8;
+  --color-code-foreground: black;
   
-        <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
-        <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js"></script>
-        <script src="_static/doctools.js"></script>
-        <script src="_static/sphinx_highlight.js"></script>
-        <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
-    <script src="_static/js/theme.js"></script>
-    <link rel="index" title="Index" href="genindex.html" />
-    <link rel="search" title="Search" href="search.html" />
-    <link rel="next" title="Glossary" href="glossary.html" />
-    <link rel="prev" title="auxiliary module" href="auxiliary.html" /> 
-</head>
+  }
+  @media not print {
+    body[data-theme="dark"] {
+      --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+    }
+    @media (prefers-color-scheme: dark) {
+      body:not([data-theme="light"]) {
+        --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+      }
+    }
+  }
+</style></head>
+  <body>
+    
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+    
 
-<body class="wy-body-for-nav"> 
-  <div class="wy-grid-for-nav">
-    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
-      <div class="wy-side-scroll">
-        <div class="wy-side-nav-search" >
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024">
+      <path d="M408 442h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8zm-8 204c0 4.4 3.6 8 8 8h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56zm504-486H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zm0 632H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zM115.4 518.9L271.7 642c5.8 4.6 14.4.5 14.4-6.9V388.9c0-7.4-8.5-11.5-14.4-6.9L115.4 505.1a8.74 8.74 0 0 0 0 13.8z"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-half" viewBox="0 0 24 24">
+    <title>Auto light/dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-shadow">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M13 12h5" />
+      <path d="M13 15h4" />
+      <path d="M13 18h1" />
+      <path d="M13 9h4" />
+      <path d="M13 6h1" />
+    </svg>
+  </symbol>
+</svg>
 
-          
-          
-          <a href="index.html" class="icon icon-home">
-            GLHMM
-          </a>
-<div role="search">
-  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
-    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
-    <input type="hidden" name="check_keywords" value="yes" />
-    <input type="hidden" name="area" value="default" />
-  </form>
-</div>
-        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
-              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc">
+<label class="overlay sidebar-overlay" for="__navigation">
+  <div class="visually-hidden">Hide navigation sidebar</div>
+</label>
+<label class="overlay toc-overlay" for="__toc">
+  <div class="visually-hidden">Hide table of contents sidebar</div>
+</label>
+
+
+
+<div class="page">
+  <header class="mobile-header">
+    <div class="header-left">
+      <label class="nav-overlay-icon" for="__navigation">
+        <div class="visually-hidden">Toggle site navigation sidebar</div>
+        <i class="icon"><svg><use href="#svg-menu"></use></svg></i>
+      </label>
+    </div>
+    <div class="header-center">
+      <a href="index.html"><div class="brand">GLHMM 0.0.1 documentation</div></a>
+    </div>
+    <div class="header-right">
+      <div class="theme-toggle-container theme-toggle-header">
+        <button class="theme-toggle">
+          <div class="visually-hidden">Toggle Light / Dark / Auto color theme</div>
+          <svg class="theme-icon-when-auto"><use href="#svg-sun-half"></use></svg>
+          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+        </button>
+      </div>
+      <label class="toc-overlay-icon toc-header-icon" for="__toc">
+        <div class="visually-hidden">Toggle table of contents sidebar</div>
+        <i class="icon"><svg><use href="#svg-toc"></use></svg></i>
+      </label>
+    </div>
+  </header>
+  <aside class="sidebar-drawer">
+    <div class="sidebar-container">
+      
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="index.html">
+  
+  
+  <span class="sidebar-brand-text">GLHMM 0.0.1 documentation</span>
+  
+</a><form class="sidebar-search-container" method="get" action="search.html" role="search">
+  <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
+  <input type="hidden" name="check_keywords" value="yes">
+  <input type="hidden" name="area" value="default">
+</form>
+<div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
+  <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
 <ul class="current">
-<li class="toctree-l1 current"><a class="reference internal" href="modules.html">API</a><ul class="current">
+<li class="toctree-l1 current has-children"><a class="reference internal" href="modules.html">API</a><input checked="" class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><div class="visually-hidden">Toggle child pages in navigation</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul class="current">
 <li class="toctree-l2"><a class="reference internal" href="glhmm.html">glhmm module</a></li>
 <li class="toctree-l2"><a class="reference internal" href="io_glhmm.html">io_glhmm module</a></li>
 <li class="toctree-l2"><a class="reference internal" href="preproc.html">preproc module</a></li>
 <li class="toctree-l2"><a class="reference internal" href="auxiliary.html">auxiliary module</a></li>
-<li class="toctree-l2 current"><a class="current reference internal" href="#">utils module</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="#glhmm.utils.get_FO"><code class="docutils literal notranslate"><span class="pre">get_FO()</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="#glhmm.utils.get_FO_entropy"><code class="docutils literal notranslate"><span class="pre">get_FO_entropy()</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="#glhmm.utils.get_life_times"><code class="docutils literal notranslate"><span class="pre">get_life_times()</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="#glhmm.utils.get_maxFO"><code class="docutils literal notranslate"><span class="pre">get_maxFO()</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="#glhmm.utils.get_state_evoked_response"><code class="docutils literal notranslate"><span class="pre">get_state_evoked_response()</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="#glhmm.utils.get_state_evoked_response_entropy"><code class="docutils literal notranslate"><span class="pre">get_state_evoked_response_entropy()</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="#glhmm.utils.get_state_onsets"><code class="docutils literal notranslate"><span class="pre">get_state_onsets()</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="#glhmm.utils.get_switching_rate"><code class="docutils literal notranslate"><span class="pre">get_switching_rate()</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="#glhmm.utils.get_visits"><code class="docutils literal notranslate"><span class="pre">get_visits()</span></code></a></li>
-</ul>
-</li>
+<li class="toctree-l2 current current-page"><a class="current reference internal" href="#">utils module</a></li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="glossary.html">Glossary</a></li>
 </ul>
 
-        </div>
-      </div>
-    </nav>
-
-    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
-          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
-          <a href="index.html">GLHMM</a>
-      </nav>
-
-      <div class="wy-nav-content">
-        <div class="rst-content">
-          <div role="navigation" aria-label="Page navigation">
-  <ul class="wy-breadcrumbs">
-      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
-          <li class="breadcrumb-item"><a href="modules.html">API</a></li>
-      <li class="breadcrumb-item active">utils module</li>
-      <li class="wy-breadcrumbs-aside">
-            <a href="_sources/utils.md.txt" rel="nofollow"> View page source</a>
-      </li>
-  </ul>
-  <hr/>
 </div>
-          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
-           <div itemprop="articleBody">
-             
-  
-<style>
-/* CSS overrides for sphinx_rtd_theme */
+</div>
 
-/* 24px margin */
-.nbinput.nblast.container,
-.nboutput.nblast.container {
-    margin-bottom: 19px;  /* padding has already 5px */
-}
-
-/* ... except between code cells! */
-.nblast.container + .nbinput.container {
-    margin-top: -19px;
-}
-
-.admonition > p:before {
-    margin-right: 4px;  /* make room for the exclamation icon */
-}
-
-/* Fix math alignment, see https://github.com/rtfd/sphinx_rtd_theme/pull/686 */
-.math {
-    text-align: unset;
-}
-</style>
-<section id="module-glhmm.utils">
-<span id="utils-module"></span><h1>utils module<a class="headerlink" href="#module-glhmm.utils" title="Permalink to this heading"></a></h1>
+      </div>
+      
+    </div>
+  </aside>
+  <div class="main">
+    <div class="content">
+      <div class="article-container">
+        <a href="#" class="back-to-top muted-link">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+          </svg>
+          <span>Back to top</span>
+        </a>
+        <div class="content-icon-container">
+          
+<div class="theme-toggle-container theme-toggle-content">
+            <button class="theme-toggle">
+              <div class="visually-hidden">Toggle Light / Dark / Auto color theme</div>
+              <svg class="theme-icon-when-auto"><use href="#svg-sun-half"></use></svg>
+              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+            </button>
+          </div>
+          <label class="toc-overlay-icon toc-content-icon" for="__toc">
+            <div class="visually-hidden">Toggle table of contents sidebar</div>
+            <i class="icon"><svg><use href="#svg-toc"></use></svg></i>
+          </label>
+        </div>
+        <article role="main">
+          <section id="module-glhmm.utils">
+<span id="utils-module"></span><h1>utils module<a class="headerlink" href="#module-glhmm.utils" title="Permalink to this heading">#</a></h1>
 <p>Some public useful functions - Gaussian Linear Hidden Markov Model
 &#64;author: Diego Vidaurre 2023</p>
 <dl class="py function">
 <dt class="sig sig-object py" id="glhmm.utils.get_FO">
-<span class="sig-prename descclassname"><span class="pre">glhmm.utils.</span></span><span class="sig-name descname"><span class="pre">get_FO</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">Gamma</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">indices</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">summation</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/glhmm/utils.html#get_FO"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#glhmm.utils.get_FO" title="Permalink to this definition"></a></dt>
+<span class="sig-prename descclassname"><span class="pre">glhmm.utils.</span></span><span class="sig-name descname"><span class="pre">get_FO</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">Gamma</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">indices</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">summation</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/glhmm/utils.html#get_FO"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#glhmm.utils.get_FO" title="Permalink to this definition">#</a></dt>
 <dd><p>Calculates the fractional occupancy of each state.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>Gamma</strong> (<em>array-like</em><em>, </em><em>shape</em><em> (</em><em>n_samples</em><em>, </em><em>n_states</em><em>)</em>) – The state probability time series.</p></li>
-<li><p><strong>indices</strong> (<em>array-like</em><em>, </em><em>shape</em><em> (</em><em>n_sessions</em><em>, </em><em>2</em><em>)</em>) – The start and end indices of each trial/session in the input data.</p></li>
-<li><p><strong>summation</strong> (<em>bool</em><em>, </em><em>optional</em><em>, </em><em>default=False</em>) – If True, the sum of each row is not normalized, otherwise it is.</p></li>
-</ul>
+<section id="parameters">
+<h2>Parameters:<a class="headerlink" href="#parameters" title="Permalink to this heading">#</a></h2>
+<dl class="simple">
+<dt>Gamma<span class="classifier">array-like, shape (n_samples, n_states)</span></dt><dd><p>The state probability time series.</p>
 </dd>
-<dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p><strong>FO</strong> – The fractional occupancy of each state per session.</p>
+<dt>indices<span class="classifier">array-like, shape (n_sessions, 2)</span></dt><dd><p>The start and end indices of each trial/session in the input data.</p>
 </dd>
-<dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>array-like, shape (n_sessions, n_states)</p>
+<dt>summation<span class="classifier">bool, optional, default=False</span></dt><dd><p>If True, the sum of each row is not normalized, otherwise it is.</p>
 </dd>
 </dl>
+</section>
+<section id="returns">
+<h2>Returns:<a class="headerlink" href="#returns" title="Permalink to this heading">#</a></h2>
+<dl class="simple">
+<dt>FO<span class="classifier">array-like, shape (n_sessions, n_states)</span></dt><dd><p>The fractional occupancy of each state per session.</p>
+</dd>
+</dl>
+</section>
 </dd></dl>
 
 <dl class="py function">
 <dt class="sig sig-object py" id="glhmm.utils.get_FO_entropy">
-<span class="sig-prename descclassname"><span class="pre">glhmm.utils.</span></span><span class="sig-name descname"><span class="pre">get_FO_entropy</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">Gamma</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">indices</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/glhmm/utils.html#get_FO_entropy"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#glhmm.utils.get_FO_entropy" title="Permalink to this definition"></a></dt>
+<span class="sig-prename descclassname"><span class="pre">glhmm.utils.</span></span><span class="sig-name descname"><span class="pre">get_FO_entropy</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">Gamma</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">indices</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/glhmm/utils.html#get_FO_entropy"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#glhmm.utils.get_FO_entropy" title="Permalink to this definition">#</a></dt>
 <dd><p>Calculates the entropy of each session, if we understand fractional occupancies as probabilities.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>Gamma</strong> (<em>array-like</em><em> of </em><em>shape</em><em> (</em><em>n_samples</em><em>, </em><em>n_states</em><em>)</em>) – The Gamma represents the state probability timeseries.</p></li>
-<li><p><strong>indices</strong> (<em>array-like</em><em> of </em><em>shape</em><em> (</em><em>n_sessions</em><em>, </em><em>2</em><em>)</em>) – The start and end indices of each trial/session in the input data.</p></li>
-</ul>
+<section id="id1">
+<h2>Parameters:<a class="headerlink" href="#id1" title="Permalink to this heading">#</a></h2>
+<dl class="simple">
+<dt>Gamma<span class="classifier">array-like of shape (n_samples, n_states)</span></dt><dd><p>The Gamma represents the state probability timeseries.</p>
 </dd>
-<dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p><strong>entropy</strong> – The entropy of each session.</p>
-</dd>
-<dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>array-like of shape (n_sessions,)</p>
+<dt>indices<span class="classifier">array-like of shape (n_sessions, 2)</span></dt><dd><p>The start and end indices of each trial/session in the input data.</p>
 </dd>
 </dl>
+</section>
+<section id="id2">
+<h2>Returns:<a class="headerlink" href="#id2" title="Permalink to this heading">#</a></h2>
+<dl class="simple">
+<dt>entropy<span class="classifier">array-like of shape (n_sessions,)</span></dt><dd><p>The entropy of each session.</p>
+</dd>
+</dl>
+</section>
 </dd></dl>
 
 <dl class="py function">
 <dt class="sig sig-object py" id="glhmm.utils.get_life_times">
-<span class="sig-prename descclassname"><span class="pre">glhmm.utils.</span></span><span class="sig-name descname"><span class="pre">get_life_times</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">vpath</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">indices</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">threshold</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/glhmm/utils.html#get_life_times"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#glhmm.utils.get_life_times" title="Permalink to this definition"></a></dt>
+<span class="sig-prename descclassname"><span class="pre">glhmm.utils.</span></span><span class="sig-name descname"><span class="pre">get_life_times</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">vpath</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">indices</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">threshold</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/glhmm/utils.html#get_life_times"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#glhmm.utils.get_life_times" title="Permalink to this definition">#</a></dt>
 <dd><p>Calculates the average, median and maximum life times for each state.</p>
-<section id="parameters">
-<h2>Parameters:<a class="headerlink" href="#parameters" title="Permalink to this heading"></a></h2>
+<section id="id3">
+<h2>Parameters:<a class="headerlink" href="#id3" title="Permalink to this heading">#</a></h2>
 <dl class="simple">
 <dt>vpath<span class="classifier">array-like of shape (n_samples,)</span></dt><dd><p>The viterbi path represents the most likely state sequence.</p>
 </dd>
@@ -175,8 +264,8 @@
 </dd>
 </dl>
 </section>
-<section id="returns">
-<h2>Returns:<a class="headerlink" href="#returns" title="Permalink to this heading"></a></h2>
+<section id="id4">
+<h2>Returns:<a class="headerlink" href="#id4" title="Permalink to this heading">#</a></h2>
 <dl class="simple">
 <dt>meanLF<span class="classifier">array-like of shape (n_sessions, n_states)</span></dt><dd><p>The average visit duration for each state in each trial/session.</p>
 </dd>
@@ -187,7 +276,7 @@
 </dl>
 </section>
 <section id="notes">
-<h2>Notes:<a class="headerlink" href="#notes" title="Permalink to this heading"></a></h2>
+<h2>Notes:<a class="headerlink" href="#notes" title="Permalink to this heading">#</a></h2>
 <p>A visit to a state is defined as a contiguous sequence of time points in which the state is active.
 The duration of a visit is the number of time points in the sequence.
 This function uses the <cite>get_visits</cite> function to compute the visits and exclude those below the threshold.</p>
@@ -196,11 +285,11 @@ This function uses the <cite>get_visits</cite> function to compute the visits an
 
 <dl class="py function">
 <dt class="sig sig-object py" id="glhmm.utils.get_maxFO">
-<span class="sig-prename descclassname"><span class="pre">glhmm.utils.</span></span><span class="sig-name descname"><span class="pre">get_maxFO</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">Gamma</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">indices</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/glhmm/utils.html#get_maxFO"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#glhmm.utils.get_maxFO" title="Permalink to this definition"></a></dt>
+<span class="sig-prename descclassname"><span class="pre">glhmm.utils.</span></span><span class="sig-name descname"><span class="pre">get_maxFO</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">Gamma</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">indices</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/glhmm/utils.html#get_maxFO"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#glhmm.utils.get_maxFO" title="Permalink to this definition">#</a></dt>
 <dd><p>Calculates the maximum fractional occupancy per session.</p>
 <p>The first argument can also be a viterbi path (vpath).</p>
-<section id="id1">
-<h2>Parameters:<a class="headerlink" href="#id1" title="Permalink to this heading"></a></h2>
+<section id="id5">
+<h2>Parameters:<a class="headerlink" href="#id5" title="Permalink to this heading">#</a></h2>
 <dl class="simple">
 <dt>Gamma<span class="classifier">array-like of shape (n_samples, n_states); or a vpath, array of shape (n_samples,)</span></dt><dd><p>The Gamma represents the state probability timeseries and the vpath represents the most likely state sequence.</p>
 </dd>
@@ -208,19 +297,19 @@ This function uses the <cite>get_visits</cite> function to compute the visits an
 </dd>
 </dl>
 </section>
-<section id="id2">
-<h2>Returns:<a class="headerlink" href="#id2" title="Permalink to this heading"></a></h2>
+<section id="id6">
+<h2>Returns:<a class="headerlink" href="#id6" title="Permalink to this heading">#</a></h2>
 <dl class="simple">
 <dt>maxFO: array-like of shape (n_sessions,)</dt><dd><p>The maximum fractional occupancy across states for each trial/session</p>
 </dd>
 </dl>
 </section>
-<section id="id3">
-<h2>Notes:<a class="headerlink" href="#id3" title="Permalink to this heading"></a></h2>
+<section id="id7">
+<h2>Notes:<a class="headerlink" href="#id7" title="Permalink to this heading">#</a></h2>
 <p>The maxFO is useful to assess the amount of <cite>state mixing</cite>. For more information, see [^1].</p>
 </section>
 <section id="references">
-<h2>References:<a class="headerlink" href="#references" title="Permalink to this heading"></a></h2>
+<h2>References:<a class="headerlink" href="#references" title="Permalink to this heading">#</a></h2>
 <dl class="simple">
 <dt>[^1]: Ahrends, R., et al. (2022). Data and model considerations for estimating time-varying functional connectivity in fMRI. NeuroImage 252, 119026.</dt><dd><p><a class="reference external" href="https://pubmed.ncbi.nlm.nih.gov/35217207/">https://pubmed.ncbi.nlm.nih.gov/35217207/</a>)</p>
 </dd>
@@ -230,11 +319,11 @@ This function uses the <cite>get_visits</cite> function to compute the visits an
 
 <dl class="py function">
 <dt class="sig sig-object py" id="glhmm.utils.get_state_evoked_response">
-<span class="sig-prename descclassname"><span class="pre">glhmm.utils.</span></span><span class="sig-name descname"><span class="pre">get_state_evoked_response</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">Gamma</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">indices</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/glhmm/utils.html#get_state_evoked_response"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#glhmm.utils.get_state_evoked_response" title="Permalink to this definition"></a></dt>
+<span class="sig-prename descclassname"><span class="pre">glhmm.utils.</span></span><span class="sig-name descname"><span class="pre">get_state_evoked_response</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">Gamma</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">indices</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/glhmm/utils.html#get_state_evoked_response"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#glhmm.utils.get_state_evoked_response" title="Permalink to this definition">#</a></dt>
 <dd><p>Calculates the state evoked response</p>
 <p>The first argument can also be a viterbi path (vpath).</p>
-<section id="id4">
-<h2>Parameters:<a class="headerlink" href="#id4" title="Permalink to this heading"></a></h2>
+<section id="id8">
+<h2>Parameters:<a class="headerlink" href="#id8" title="Permalink to this heading">#</a></h2>
 <dl class="simple">
 <dt>Gamma<span class="classifier">array-like of shape (n_samples, n_states), or a vpath array of shape (n_samples,)</span></dt><dd><p>The Gamma represents the state probability timeseries and the vpath represents the most likely state sequence.</p>
 </dd>
@@ -242,15 +331,15 @@ This function uses the <cite>get_visits</cite> function to compute the visits an
 </dd>
 </dl>
 </section>
-<section id="id5">
-<h2>Returns:<a class="headerlink" href="#id5" title="Permalink to this heading"></a></h2>
+<section id="id9">
+<h2>Returns:<a class="headerlink" href="#id9" title="Permalink to this heading">#</a></h2>
 <dl class="simple">
 <dt>ser<span class="classifier">array-like of shape (n_samples, n_states)</span></dt><dd><p>The state evoked response matrix.</p>
 </dd>
 </dl>
 </section>
 <section id="raises">
-<h2>Raises:<a class="headerlink" href="#raises" title="Permalink to this heading"></a></h2>
+<h2>Raises:<a class="headerlink" href="#raises" title="Permalink to this heading">#</a></h2>
 <dl class="simple">
 <dt>Exception</dt><dd><p>If the input data violates any of the following conditions:
 - There is only one trial/session
@@ -262,10 +351,10 @@ This function uses the <cite>get_visits</cite> function to compute the visits an
 
 <dl class="py function">
 <dt class="sig sig-object py" id="glhmm.utils.get_state_evoked_response_entropy">
-<span class="sig-prename descclassname"><span class="pre">glhmm.utils.</span></span><span class="sig-name descname"><span class="pre">get_state_evoked_response_entropy</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">Gamma</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">indices</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/glhmm/utils.html#get_state_evoked_response_entropy"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#glhmm.utils.get_state_evoked_response_entropy" title="Permalink to this definition"></a></dt>
+<span class="sig-prename descclassname"><span class="pre">glhmm.utils.</span></span><span class="sig-name descname"><span class="pre">get_state_evoked_response_entropy</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">Gamma</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">indices</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/glhmm/utils.html#get_state_evoked_response_entropy"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#glhmm.utils.get_state_evoked_response_entropy" title="Permalink to this definition">#</a></dt>
 <dd><p>Calculates the entropy of each time point, if we understand state evoked responses as probabilities.</p>
-<section id="id6">
-<h2>Parameters:<a class="headerlink" href="#id6" title="Permalink to this heading"></a></h2>
+<section id="id10">
+<h2>Parameters:<a class="headerlink" href="#id10" title="Permalink to this heading">#</a></h2>
 <dl class="simple">
 <dt>Gamma: array-like of shape (n_samples, n_states)</dt><dd><p>The Gamma represents the state probability timeseries.</p>
 </dd>
@@ -273,8 +362,8 @@ This function uses the <cite>get_visits</cite> function to compute the visits an
 </dd>
 </dl>
 </section>
-<section id="id7">
-<h2>Returns:<a class="headerlink" href="#id7" title="Permalink to this heading"></a></h2>
+<section id="id11">
+<h2>Returns:<a class="headerlink" href="#id11" title="Permalink to this heading">#</a></h2>
 <dl class="simple">
 <dt>entropy: array-like of shape (n_samples,)</dt><dd><p>The entropy of each time point.</p>
 </dd>
@@ -284,10 +373,10 @@ This function uses the <cite>get_visits</cite> function to compute the visits an
 
 <dl class="py function">
 <dt class="sig sig-object py" id="glhmm.utils.get_state_onsets">
-<span class="sig-prename descclassname"><span class="pre">glhmm.utils.</span></span><span class="sig-name descname"><span class="pre">get_state_onsets</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">vpath</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">indices</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">threshold</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/glhmm/utils.html#get_state_onsets"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#glhmm.utils.get_state_onsets" title="Permalink to this definition"></a></dt>
+<span class="sig-prename descclassname"><span class="pre">glhmm.utils.</span></span><span class="sig-name descname"><span class="pre">get_state_onsets</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">vpath</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">indices</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">threshold</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/glhmm/utils.html#get_state_onsets"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#glhmm.utils.get_state_onsets" title="Permalink to this definition">#</a></dt>
 <dd><p>Calculates the state onsets, i.e., the time points when each state activates.</p>
-<section id="id8">
-<h2>Parameters:<a class="headerlink" href="#id8" title="Permalink to this heading"></a></h2>
+<section id="id12">
+<h2>Parameters:<a class="headerlink" href="#id12" title="Permalink to this heading">#</a></h2>
 <dl class="simple">
 <dt>vpath<span class="classifier">array-like of shape (n_samples, n_states)</span></dt><dd><p>The viterbi path represents the most likely state sequence.</p>
 </dd>
@@ -297,15 +386,15 @@ This function uses the <cite>get_visits</cite> function to compute the visits an
 </dd>
 </dl>
 </section>
-<section id="id9">
-<h2>Returns:<a class="headerlink" href="#id9" title="Permalink to this heading"></a></h2>
+<section id="id13">
+<h2>Returns:<a class="headerlink" href="#id13" title="Permalink to this heading">#</a></h2>
 <dl class="simple">
 <dt>onsets<span class="classifier">list of lists of ints</span></dt><dd><p>A list of the time points when each state activates for each trial/session.</p>
 </dd>
 </dl>
 </section>
-<section id="id10">
-<h2>Notes:<a class="headerlink" href="#id10" title="Permalink to this heading"></a></h2>
+<section id="id14">
+<h2>Notes:<a class="headerlink" href="#id14" title="Permalink to this heading">#</a></h2>
 <p>A visit to a state is defined as a contiguous sequence of time points in which the state is active.
 This function uses the <cite>get_visits</cite> function to compute the visits and exclude those below the threshold.</p>
 </section>
@@ -313,11 +402,11 @@ This function uses the <cite>get_visits</cite> function to compute the visits an
 
 <dl class="py function">
 <dt class="sig sig-object py" id="glhmm.utils.get_switching_rate">
-<span class="sig-prename descclassname"><span class="pre">glhmm.utils.</span></span><span class="sig-name descname"><span class="pre">get_switching_rate</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">Gamma</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">indices</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/glhmm/utils.html#get_switching_rate"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#glhmm.utils.get_switching_rate" title="Permalink to this definition"></a></dt>
+<span class="sig-prename descclassname"><span class="pre">glhmm.utils.</span></span><span class="sig-name descname"><span class="pre">get_switching_rate</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">Gamma</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">indices</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/glhmm/utils.html#get_switching_rate"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#glhmm.utils.get_switching_rate" title="Permalink to this definition">#</a></dt>
 <dd><p>Calculates the switching rate.</p>
 <p>The first argument can also be a viterbi path (vpath).</p>
-<section id="id11">
-<h2>Parameters:<a class="headerlink" href="#id11" title="Permalink to this heading"></a></h2>
+<section id="id15">
+<h2>Parameters:<a class="headerlink" href="#id15" title="Permalink to this heading">#</a></h2>
 <dl class="simple">
 <dt>Gamma<span class="classifier">array-like of shape (n_samples, n_states), or a vpath array of shape (n_samples,)</span></dt><dd><p>The Gamma represents the state probability timeseries and the vpath represents the most likely state sequence.</p>
 </dd>
@@ -325,8 +414,8 @@ This function uses the <cite>get_visits</cite> function to compute the visits an
 </dd>
 </dl>
 </section>
-<section id="id12">
-<h2>Returns:<a class="headerlink" href="#id12" title="Permalink to this heading"></a></h2>
+<section id="id16">
+<h2>Returns:<a class="headerlink" href="#id16" title="Permalink to this heading">#</a></h2>
 <dl class="simple">
 <dt>SR<span class="classifier">array-like of shape (n_sessions, n_states)</span></dt><dd><p>The switching rate matrix.</p>
 </dd>
@@ -336,10 +425,10 @@ This function uses the <cite>get_visits</cite> function to compute the visits an
 
 <dl class="py function">
 <dt class="sig sig-object py" id="glhmm.utils.get_visits">
-<span class="sig-prename descclassname"><span class="pre">glhmm.utils.</span></span><span class="sig-name descname"><span class="pre">get_visits</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">vpath</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">k</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">threshold</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/glhmm/utils.html#get_visits"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#glhmm.utils.get_visits" title="Permalink to this definition"></a></dt>
+<span class="sig-prename descclassname"><span class="pre">glhmm.utils.</span></span><span class="sig-name descname"><span class="pre">get_visits</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">vpath</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">k</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">threshold</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/glhmm/utils.html#get_visits"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#glhmm.utils.get_visits" title="Permalink to this definition">#</a></dt>
 <dd><p>Computes a list of visits for state k, given a viterbi path (vpath).</p>
-<section id="id13">
-<h2>Parameters:<a class="headerlink" href="#id13" title="Permalink to this heading"></a></h2>
+<section id="id17">
+<h2>Parameters:<a class="headerlink" href="#id17" title="Permalink to this heading">#</a></h2>
 <dl class="simple">
 <dt>vpath<span class="classifier">array-like of shape (n_samples,)</span></dt><dd><p>The viterbi path represents the most likely state sequence.</p>
 </dd>
@@ -349,8 +438,8 @@ This function uses the <cite>get_visits</cite> function to compute the visits an
 </dd>
 </dl>
 </section>
-<section id="id14">
-<h2>Returns:<a class="headerlink" href="#id14" title="Permalink to this heading"></a></h2>
+<section id="id18">
+<h2>Returns:<a class="headerlink" href="#id18" title="Permalink to this heading">#</a></h2>
 <dl class="simple">
 <dt>lengths<span class="classifier">list of floats</span></dt><dd><p>A list of visit durations for state k, where each duration is greater than the threshold.</p>
 </dd>
@@ -358,43 +447,94 @@ This function uses the <cite>get_visits</cite> function to compute the visits an
 </dd>
 </dl>
 </section>
-<section id="id15">
-<h2>Notes:<a class="headerlink" href="#id15" title="Permalink to this heading"></a></h2>
+<section id="id19">
+<h2>Notes:<a class="headerlink" href="#id19" title="Permalink to this heading">#</a></h2>
 <p>A visit to state k is defined as a contiguous sequence of time points in which state k is active.</p>
 </section>
 </dd></dl>
 
 </section>
 
-
-           </div>
+        </article>
+      </div>
+      <footer>
+        
+        <div class="related-pages">
+          <a class="next-page" href="glossary.html">
+              <div class="page-info">
+                <div class="context">
+                  <span>Next</span>
+                </div>
+                <div class="title">Glossary</div>
+              </div>
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+            </a>
+          <a class="prev-page" href="auxiliary.html">
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+              <div class="page-info">
+                <div class="context">
+                  <span>Previous</span>
+                </div>
+                
+                <div class="title">auxiliary module</div>
+                
+              </div>
+            </a>
+        </div>
+        <div class="bottom-of-page">
+          <div class="left-details">
+            <div class="copyright">
+                Copyright &#169; 2023, Sonsoles Alonso
+            </div>
+            Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
+            
+            <a href="https://github.com/pradyunsg/furo">Furo</a>
+            
           </div>
-          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
-        <a href="auxiliary.html" class="btn btn-neutral float-left" title="auxiliary module" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
-        <a href="glossary.html" class="btn btn-neutral float-right" title="Glossary" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+          <div class="right-details">
+            
+          </div>
+        </div>
+        
+      </footer>
     </div>
+    <aside class="toc-drawer">
+      
+      
+      <div class="toc-sticky toc-scroll">
+        <div class="toc-title-container">
+          <span class="toc-title">
+            On this page
+          </span>
+        </div>
+        <div class="toc-tree-container">
+          <div class="toc-tree">
+            <ul>
+<li><a class="reference internal" href="#">utils module</a><ul>
+<li><a class="reference internal" href="#glhmm.utils.get_FO"><code class="docutils literal notranslate"><span class="pre">get_FO()</span></code></a></li>
+<li><a class="reference internal" href="#glhmm.utils.get_FO_entropy"><code class="docutils literal notranslate"><span class="pre">get_FO_entropy()</span></code></a></li>
+<li><a class="reference internal" href="#glhmm.utils.get_life_times"><code class="docutils literal notranslate"><span class="pre">get_life_times()</span></code></a></li>
+<li><a class="reference internal" href="#glhmm.utils.get_maxFO"><code class="docutils literal notranslate"><span class="pre">get_maxFO()</span></code></a></li>
+<li><a class="reference internal" href="#glhmm.utils.get_state_evoked_response"><code class="docutils literal notranslate"><span class="pre">get_state_evoked_response()</span></code></a></li>
+<li><a class="reference internal" href="#glhmm.utils.get_state_evoked_response_entropy"><code class="docutils literal notranslate"><span class="pre">get_state_evoked_response_entropy()</span></code></a></li>
+<li><a class="reference internal" href="#glhmm.utils.get_state_onsets"><code class="docutils literal notranslate"><span class="pre">get_state_onsets()</span></code></a></li>
+<li><a class="reference internal" href="#glhmm.utils.get_switching_rate"><code class="docutils literal notranslate"><span class="pre">get_switching_rate()</span></code></a></li>
+<li><a class="reference internal" href="#glhmm.utils.get_visits"><code class="docutils literal notranslate"><span class="pre">get_visits()</span></code></a></li>
+</ul>
+</li>
+</ul>
 
-  <hr/>
-
-  <div role="contentinfo">
-    <p>&#169; Copyright 2023, Diego Vidaurre.</p>
-  </div>
-
-  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
-    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
-    provided by <a href="https://readthedocs.org">Read the Docs</a>.
-   
-
-</footer>
+          </div>
         </div>
       </div>
-    </section>
+      
+      
+    </aside>
   </div>
-  <script>
-      jQuery(function () {
-          SphinxRtdTheme.Navigation.enable(true);
-      });
-  </script> 
-
-</body>
+</div><script data-url_root="./" id="documentation_options" src="_static/documentation_options.js"></script>
+    <script src="_static/doctools.js"></script>
+    <script src="_static/sphinx_highlight.js"></script>
+    <script src="_static/scripts/furo.js"></script>
+    <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
+    </body>
 </html>

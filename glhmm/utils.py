@@ -12,8 +12,8 @@ import math
 def get_FO(Gamma,indices,summation=False):
     """Calculates the fractional occupancy of each state.
     
-    Parameters
-    ----------
+    Parameters:
+    -----------
     Gamma : array-like, shape (n_samples, n_states)
         The state probability time series.
     indices : array-like, shape (n_sessions, 2)
@@ -21,8 +21,8 @@ def get_FO(Gamma,indices,summation=False):
     summation : bool, optional, default=False
         If True, the sum of each row is not normalized, otherwise it is.
 
-    Returns
-    -------
+    Returns:
+    --------
     FO : array-like, shape (n_sessions, n_states)
         The fractional occupancy of each state per session.
 
@@ -52,7 +52,7 @@ def get_maxFO(Gamma,indices):
         The start and end indices of each trial/session in the input data.
 
     Returns:
-    -------
+    --------
     maxFO: array-like of shape (n_sessions,)
         The maximum fractional occupancy across states for each trial/session
 
@@ -76,14 +76,14 @@ def get_state_evoked_response(Gamma,indices):
     The first argument can also be a viterbi path (vpath).
 
     Parameters:
-    -----------
+    ---------------
     Gamma : array-like of shape (n_samples, n_states), or a vpath array of shape (n_samples,)
         The Gamma represents the state probability timeseries and the vpath represents the most likely state sequence.
     indices : array-like of shape (n_sessions, 2)
         The start and end indices of each trial/session in the input data.
 
     Returns:
-    -------
+    ------------
     ser : array-like of shape (n_samples, n_states)
         The state evoked response matrix.
 
@@ -114,14 +114,14 @@ def get_switching_rate(Gamma,indices):
     The first argument can also be a viterbi path (vpath).
 
     Parameters:
-    -----------
+    ---------------
     Gamma : array-like of shape (n_samples, n_states), or a vpath array of shape (n_samples,)
         The Gamma represents the state probability timeseries and the vpath represents the most likely state sequence.
     indices : array-like of shape (n_sessions, 2)
         The start and end indices of each trial/session in the input data.
 
     Returns:
-    -------
+    ------------
     SR : array-like of shape (n_sessions, n_states)
         The switching rate matrix.
 
@@ -139,7 +139,7 @@ def get_visits(vpath,k,threshold=0):
     """Computes a list of visits for state k, given a viterbi path (vpath).
 
     Parameters:
-    -----------
+    ---------------
     vpath : array-like of shape (n_samples,)
         The viterbi path represents the most likely state sequence.
     k : int
@@ -148,7 +148,7 @@ def get_visits(vpath,k,threshold=0):
         A threshold value used to exclude visits with a duration below this value.
 
     Returns:
-    -------
+    ------------
     lengths : list of floats
         A list of visit durations for state k, where each duration is greater than the threshold.
     onsets : list of ints
@@ -196,7 +196,7 @@ def get_life_times(vpath,indices,threshold=0):
         A threshold value used to exclude visits with a duration below this value.
 
     Returns:
-    -------
+    --------
     meanLF : array-like of shape (n_sessions, n_states)
         The average visit duration for each state in each trial/session.
     medianLF : array-like of shape (n_sessions, n_states)
@@ -231,7 +231,7 @@ def get_state_onsets(vpath,indices,threshold=0):
     """Calculates the state onsets, i.e., the time points when each state activates.
 
     Parameters:
-    -----------
+    ---------------
     vpath : array-like of shape (n_samples, n_states)
         The viterbi path represents the most likely state sequence.
     indices : array-like of shape (n_sessions, 2)
@@ -240,7 +240,7 @@ def get_state_onsets(vpath,indices,threshold=0):
         A threshold value used to exclude visits with a duration below this value.
 
     Returns:
-    -------
+    --------
     onsets : list of lists of ints
         A list of the time points when each state activates for each trial/session.
 
@@ -267,15 +267,15 @@ def get_state_onsets(vpath,indices,threshold=0):
 def get_FO_entropy(Gamma,indices):
     """Calculates the entropy of each session, if we understand fractional occupancies as probabilities.
 
-    Parameters
-    ----------
+    Parameters:
+    --------------
     Gamma : array-like of shape (n_samples, n_states)
         The Gamma represents the state probability timeseries.
     indices : array-like of shape (n_sessions, 2)
         The start and end indices of each trial/session in the input data.
 
-    Returns
-    -------
+    Returns:
+    --------
     entropy : array-like of shape (n_sessions,)
         The entropy of each session.
 
@@ -294,14 +294,14 @@ def get_state_evoked_response_entropy(Gamma,indices):
     """Calculates the entropy of each time point, if we understand state evoked responses as probabilities.
 
     Parameters:
-    -----------
+    ---------------
     Gamma: array-like of shape (n_samples, n_states)
         The Gamma represents the state probability timeseries.
     indices : array-like of shape (n_sessions, 2)
         The start and end indices of each trial/session in the input data.
 
     Returns:
-    --------
+    ------------
     entropy: array-like of shape (n_samples,)
         The entropy of each time point.
 
