@@ -2,12 +2,13 @@
 
 Gaussian Linear Hidden Markov Models:
 
+## Documentation
+
+> **Note**
+> Visit our GLHMM documentation [here](https://glhmm.readthedocs.io/en/latest/index.html)
+
 > **Warning**
 > The documentation of this library is under development
-
-## Documentation
-> **Note**
-> Glhmm documentation [click here](https://glhmm.readthedocs.io/en/latest/index.html)
 
 ## Dependencies
 
