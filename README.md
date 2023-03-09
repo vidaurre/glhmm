@@ -2,11 +2,10 @@
 
 Gaussian Linear Hidden Markov Models:
 
-> **Warning:** The documentation of this library is under heavy development
+> **Warning:** The documentation of this library is under development
 
-## Important links
+## Documentation
 
-- Official source code repo: <https://github.com/vidaurre/glhmm>
 - HTML documentation (stable release): <https://glhmm.readthedocs.io/en/latest/index.html>
 
 ## Dependencies
@@ -22,7 +21,8 @@ The required dependencies to use glhmm are:
 
 ## Installation
 
-To install from the repo, use the following command:
+- Official source code repo: <https://github.com/vidaurre/glhmm>
+- To install from the repo, use the following command:
 
 ```bash
 pip install --user git+https://github.com/vidaurre/glhmm
