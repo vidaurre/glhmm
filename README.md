@@ -14,10 +14,11 @@ Gaussian Linear Hidden Markov Models:
 The required dependencies to use glhmm are:
 
 - Python >= 3.6
-- NumPy >= 1.10
-- scikit-learn >= 0.16
-
-You also need Matplotlib >= 1.1.1 to run the examples in the tutorial.
+- NumPy
+- scikit-learn
+- scipy
+- matplotlib
+- numba
 
 ## Installation
 
