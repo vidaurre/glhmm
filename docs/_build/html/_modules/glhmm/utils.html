@@ -83,21 +83,23 @@
 
 <div class="viewcode-block" id="get_FO"><a class="viewcode-back" href="../../utils.html#glhmm.utils.get_FO">[docs]</a><span class="k">def</span> <span class="nf">get_FO</span><span class="p">(</span><span class="n">Gamma</span><span class="p">,</span><span class="n">indices</span><span class="p">,</span><span class="n">summation</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Calculates the fractional occupancy of each state.</span>
-
-<span class="sd">    Parameters:</span>
-<span class="sd">    -----------</span>
-<span class="sd">    Gamma: array-like of shape (n_samples, n_states)</span>
-<span class="sd">        The state probability timeseries.</span>
-<span class="sd">    indices : array-like of shape (n_sessions, 2)</span>
+<span class="sd">    </span>
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    Gamma : array-like, shape (n_samples, n_states)</span>
+<span class="sd">        The state probability time series.</span>
+<span class="sd">    indices : array-like, shape (n_sessions, 2)</span>
 <span class="sd">        The start and end indices of each trial/session in the input data.</span>
-<span class="sd">    summation: bool, default=False</span>
+<span class="sd">    summation : bool, optional, default=False</span>
 <span class="sd">        If True, the sum of each row is not normalized, otherwise it is.</span>
 
-<span class="sd">    Returns:</span>
+<span class="sd">    Returns</span>
 <span class="sd">    -------</span>
-<span class="sd">    FO : array-like of shape (n_sessions, n_states)</span>
+<span class="sd">    FO : array-like, shape (n_sessions, n_states)</span>
 <span class="sd">        The fractional occupancy of each state per session.</span>
+
 <span class="sd">    &quot;&quot;&quot;</span>
+
     <span class="n">N</span> <span class="o">=</span> <span class="n">indices</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
     <span class="n">K</span> <span class="o">=</span> <span class="n">Gamma</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
     <span class="n">FO</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">N</span><span class="p">,</span><span class="n">K</span><span class="p">))</span>
@@ -116,7 +118,7 @@
 
 <span class="sd">    Parameters:</span>
 <span class="sd">    -----------</span>
-<span class="sd">    Gamma: array-like of shape (n_samples, n_states); or a vpath, array of shape (n_samples,)</span>
+<span class="sd">    Gamma : array-like of shape (n_samples, n_states); or a vpath, array of shape (n_samples,)</span>
 <span class="sd">        The Gamma represents the state probability timeseries and the vpath represents the most likely state sequence.</span>
 <span class="sd">    indices : array-like of shape (n_sessions, 2)</span>
 <span class="sd">        The start and end indices of each trial/session in the input data.</span>
@@ -147,14 +149,14 @@
 
 <span class="sd">    Parameters:</span>
 <span class="sd">    -----------</span>
-<span class="sd">    Gamma: array-like of shape (n_samples, n_states), or a vpath array of shape (n_samples,)</span>
+<span class="sd">    Gamma : array-like of shape (n_samples, n_states), or a vpath array of shape (n_samples,)</span>
 <span class="sd">        The Gamma represents the state probability timeseries and the vpath represents the most likely state sequence.</span>
 <span class="sd">    indices : array-like of shape (n_sessions, 2)</span>
 <span class="sd">        The start and end indices of each trial/session in the input data.</span>
 
 <span class="sd">    Returns:</span>
 <span class="sd">    -------</span>
-<span class="sd">    ser: array-like of shape (n_samples, n_states)</span>
+<span class="sd">    ser : array-like of shape (n_samples, n_states)</span>
 <span class="sd">        The state evoked response matrix.</span>
 
 <span class="sd">    Raises:</span>
@@ -185,7 +187,7 @@
 
 <span class="sd">    Parameters:</span>
 <span class="sd">    -----------</span>
-<span class="sd">    Gamma: array-like of shape (n_samples, n_states), or a vpath array of shape (n_samples,)</span>
+<span class="sd">    Gamma : array-like of shape (n_samples, n_states), or a vpath array of shape (n_samples,)</span>
 <span class="sd">        The Gamma represents the state probability timeseries and the vpath represents the most likely state sequence.</span>
 <span class="sd">    indices : array-like of shape (n_sessions, 2)</span>
 <span class="sd">        The start and end indices of each trial/session in the input data.</span>
@@ -337,16 +339,16 @@
 <div class="viewcode-block" id="get_FO_entropy"><a class="viewcode-back" href="../../utils.html#glhmm.utils.get_FO_entropy">[docs]</a><span class="k">def</span> <span class="nf">get_FO_entropy</span><span class="p">(</span><span class="n">Gamma</span><span class="p">,</span><span class="n">indices</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Calculates the entropy of each session, if we understand fractional occupancies as probabilities.</span>
 
-<span class="sd">    Parameters:</span>
-<span class="sd">    -----------</span>
-<span class="sd">    Gamma: array-like of shape (n_samples, n_states)</span>
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    Gamma : array-like of shape (n_samples, n_states)</span>
 <span class="sd">        The Gamma represents the state probability timeseries.</span>
 <span class="sd">    indices : array-like of shape (n_sessions, 2)</span>
 <span class="sd">        The start and end indices of each trial/session in the input data.</span>
 
-<span class="sd">    Returns:</span>
-<span class="sd">    --------</span>
-<span class="sd">    entropy: array-like of shape (n_sessions,)</span>
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    entropy : array-like of shape (n_sessions,)</span>
 <span class="sd">        The entropy of each session.</span>
 
 <span class="sd">    &quot;&quot;&quot;</span>  

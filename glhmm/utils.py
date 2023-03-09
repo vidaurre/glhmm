@@ -11,21 +11,23 @@ import math
 
 def get_FO(Gamma,indices,summation=False):
     """Calculates the fractional occupancy of each state.
-
-    Parameters:
-    -----------
-    Gamma: array-like of shape (n_samples, n_states)
-        The state probability timeseries.
-    indices : array-like of shape (n_sessions, 2)
+    
+    Parameters
+    ----------
+    Gamma : array-like, shape (n_samples, n_states)
+        The state probability time series.
+    indices : array-like, shape (n_sessions, 2)
         The start and end indices of each trial/session in the input data.
-    summation: bool, default=False
+    summation : bool, optional, default=False
         If True, the sum of each row is not normalized, otherwise it is.
 
-    Returns:
+    Returns
     -------
-    FO : array-like of shape (n_sessions, n_states)
+    FO : array-like, shape (n_sessions, n_states)
         The fractional occupancy of each state per session.
+
     """
+
     N = indices.shape[0]
     K = Gamma.shape[1]
     FO = np.zeros((N,K))
@@ -44,7 +46,7 @@ def get_maxFO(Gamma,indices):
 
     Parameters:
     -----------
-    Gamma: array-like of shape (n_samples, n_states); or a vpath, array of shape (n_samples,)
+    Gamma : array-like of shape (n_samples, n_states); or a vpath, array of shape (n_samples,)
         The Gamma represents the state probability timeseries and the vpath represents the most likely state sequence.
     indices : array-like of shape (n_sessions, 2)
         The start and end indices of each trial/session in the input data.
@@ -75,14 +77,14 @@ def get_state_evoked_response(Gamma,indices):
 
     Parameters:
     -----------
-    Gamma: array-like of shape (n_samples, n_states), or a vpath array of shape (n_samples,)
+    Gamma : array-like of shape (n_samples, n_states), or a vpath array of shape (n_samples,)
         The Gamma represents the state probability timeseries and the vpath represents the most likely state sequence.
     indices : array-like of shape (n_sessions, 2)
         The start and end indices of each trial/session in the input data.
 
     Returns:
     -------
-    ser: array-like of shape (n_samples, n_states)
+    ser : array-like of shape (n_samples, n_states)
         The state evoked response matrix.
 
     Raises:
@@ -113,7 +115,7 @@ def get_switching_rate(Gamma,indices):
 
     Parameters:
     -----------
-    Gamma: array-like of shape (n_samples, n_states), or a vpath array of shape (n_samples,)
+    Gamma : array-like of shape (n_samples, n_states), or a vpath array of shape (n_samples,)
         The Gamma represents the state probability timeseries and the vpath represents the most likely state sequence.
     indices : array-like of shape (n_sessions, 2)
         The start and end indices of each trial/session in the input data.
@@ -265,16 +267,16 @@ def get_state_onsets(vpath,indices,threshold=0):
 def get_FO_entropy(Gamma,indices):
     """Calculates the entropy of each session, if we understand fractional occupancies as probabilities.
 
-    Parameters:
-    -----------
-    Gamma: array-like of shape (n_samples, n_states)
+    Parameters
+    ----------
+    Gamma : array-like of shape (n_samples, n_states)
         The Gamma represents the state probability timeseries.
     indices : array-like of shape (n_sessions, 2)
         The start and end indices of each trial/session in the input data.
 
-    Returns:
-    --------
-    entropy: array-like of shape (n_sessions,)
+    Returns
+    -------
+    entropy : array-like of shape (n_sessions,)
         The entropy of each session.
 
     """  
