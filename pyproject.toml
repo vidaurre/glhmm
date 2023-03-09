@@ -4,7 +4,7 @@ build-backend = 'setuptools.build_meta'
 
 [project]
 name = "glhmm"
-authors: = [{name = "Diego Vidaurre", email = "dvidaurre@cfin.au.dk"}]
+authors = [{name = "Diego Vidaurre", email = "dvidaurre@cfin.au.dk"}]
 dynamic = ["version", "description"]
 
 [project.optional-dependencies]
