@@ -20,8 +20,6 @@ The required dependencies to use glhmm are:
 - matplotlib
 - numba
 
-You also need Matplotlib >= 1.1.1 to run the examples in the tutorial.
-
 ## Installation
 
 To install from the repo, use the following command:
