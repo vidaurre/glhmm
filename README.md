@@ -7,7 +7,7 @@ Gaussian Linear Hidden Markov Models:
 
 ## Documentation
 > **Note**
-> HTML documentation (stable release): <https://glhmm.readthedocs.io/en/latest/index.html>
+> Glhmm documentation [click here](https://glhmm.readthedocs.io/en/latest/index.html)
 
 ## Dependencies
 
