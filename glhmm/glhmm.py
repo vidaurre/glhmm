@@ -1311,11 +1311,11 @@ class glhmm():
             
         Notes:
         -------
-        This function computes the variational free energy using a specific algorithm. For more information on the algorithm, see [1^].
+        This function computes the variational free energy using a specific algorithm. For more information on the algorithm, see [^1].
         
         References:
         ------------
-        [1^] Smith, J. et al. "A variational approach to Bayesian learning of switching dynamics in dynamical systems." Journal of Machine Learning Research, vol. 18, no. 4, 2017.
+        [^1] Smith, J. et al. "A variational approach to Bayesian learning of switching dynamics in dynamical systems." Journal of Machine Learning Research, vol. 18, no. 4, 2017.
         """
 
         if not self.trained: 
