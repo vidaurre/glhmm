@@ -15,24 +15,21 @@ from . import auxiliary
 def apply_pca(X,d,whitening=False,exact=True):
     """Applies PCA to the input data X.
 
-    Parameters
-    ----------
+    Parameters:
+    -----------
     X : array-like of shape (n_samples, n_parcels)
         The input data to be transformed.
-
     d : int or float
         If int, the number of components to keep.
         If float, the percentage of explained variance to keep.
         If array-like of shape (n_parcels, n_components), the transformation matrix.
-
     whitening : bool, default=False
         Whether to whiten the transformed data.
-
     exact : bool, default=True
         Whether to use full SVD solver for PCA.
 
-    Returns
-    -------
+    Returns:
+    --------
     X_transformed : array-like of shape (n_samples, n_components)
         The transformed data after applying PCA.
     """
@@ -77,8 +74,8 @@ def preprocess_data(data,indices,
     
     """Preprocess the input data.
 
-    Parameters
-    ----------
+    Parameters:
+    -----------
     data : array-like of shape (n_samples, n_parcels)
         The input data to be preprocessed.
 
@@ -117,8 +114,8 @@ def preprocess_data(data,indices,
         The new frequency of the input data after downsampling.
         If None, no downsampling will be applied.
 
-    Returns
-    -------
+    Returns:
+    --------
     data_processed : array-like of shape (n_samples_processed, n_parcels)
         The preprocessed input data.
 
