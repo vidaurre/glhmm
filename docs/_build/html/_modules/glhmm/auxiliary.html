@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>glhmm.auxiliary &mdash; GLHMM 0.0.1 documentation</title>
+      <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="../../_static/css/theme.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+        <script data-url_root="../../" id="documentation_options" src="../../_static/documentation_options.js"></script>
+        <script src="../../_static/doctools.js"></script>
+        <script src="../../_static/sphinx_highlight.js"></script>
+        <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            GLHMM
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../modules.html">API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../glossary.html">Glossary</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">GLHMM</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">glhmm.auxiliary</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for glhmm.auxiliary</h1><div class="highlight"><pre>
+<span></span><span class="ch">#!/usr/bin/env python3</span>
+<span class="c1"># -*- coding: utf-8 -*-</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">Auxiliary functions - Gaussian Linear Hidden Markov Model</span>
+<span class="sd">@author: Diego Vidaurre 2022</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="kn">import</span> <span class="nn">sys</span>
+<span class="kn">import</span> <span class="nn">scipy.special</span>
+<span class="kn">import</span> <span class="nn">scipy.io</span>
+<span class="kn">import</span> <span class="nn">math</span>
+
+<span class="kn">from</span> <span class="nn">numba</span> <span class="kn">import</span> <span class="n">njit</span>
+
+
+<div class="viewcode-block" id="slice_matrix"><a class="viewcode-back" href="../../auxiliary.html#glhmm.auxiliary.slice_matrix">[docs]</a><span class="k">def</span> <span class="nf">slice_matrix</span><span class="p">(</span><span class="n">M</span><span class="p">,</span><span class="n">indices</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Slices rows of input matrix M based on indices array along axis 0.</span>
+
+<span class="sd">    Parameters:</span>
+<span class="sd">    -----------</span>
+<span class="sd">    M : array-like of shape (n_samples, n_parcels)</span>
+<span class="sd">        The input matrix.</span>
+<span class="sd">    indices : array-like of shape (n_sessions, 2)</span>
+<span class="sd">        The indices that define the sections (i.e., trials/sessions) of the data to be processed.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">    --------</span>
+<span class="sd">    M_sliced : array-like of shape (n_total_samples, n_parcels)</span>
+<span class="sd">        The sliced matrix.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">N</span> <span class="o">=</span> <span class="n">indices</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+    <span class="n">T</span> <span class="o">=</span> <span class="n">indices</span><span class="p">[:,</span><span class="mi">1</span><span class="p">]</span> <span class="o">-</span> <span class="n">indices</span><span class="p">[:,</span><span class="mi">0</span><span class="p">]</span>
+    <span class="n">M_sliced</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">empty</span><span class="p">((</span><span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">T</span><span class="p">),</span><span class="n">M</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]))</span>
+    <span class="n">acc</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">N</span><span class="p">):</span>
+        <span class="n">ind_1</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">indices</span><span class="p">[</span><span class="n">j</span><span class="p">,</span><span class="mi">0</span><span class="p">],</span><span class="n">indices</span><span class="p">[</span><span class="n">j</span><span class="p">,</span><span class="mi">1</span><span class="p">])</span>
+        <span class="n">ind_2</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="n">T</span><span class="p">[</span><span class="n">j</span><span class="p">])</span> <span class="o">+</span> <span class="n">acc</span>
+        <span class="n">acc</span> <span class="o">+=</span> <span class="n">T</span><span class="p">[</span><span class="n">j</span><span class="p">]</span>
+        <span class="n">M_sliced</span><span class="p">[</span><span class="n">ind_2</span><span class="p">,:]</span> <span class="o">=</span> <span class="n">M</span><span class="p">[</span><span class="n">ind_1</span><span class="p">,:]</span>
+    <span class="k">return</span> <span class="n">M_sliced</span></div>
+
+
+<div class="viewcode-block" id="make_indices_from_T"><a class="viewcode-back" href="../../auxiliary.html#glhmm.auxiliary.make_indices_from_T">[docs]</a><span class="k">def</span> <span class="nf">make_indices_from_T</span><span class="p">(</span><span class="n">T</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Creates indices array from trials/sessions lengths.</span>
+<span class="sd">    </span>
+<span class="sd">    Parameters:</span>
+<span class="sd">    -----------</span>
+<span class="sd">    T : array-like of shape (n_sessions,)</span>
+<span class="sd">        Contains the lengths of each trial/session.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">    --------</span>
+<span class="sd">    indices : array-like of shape (n_sessions, 2)</span>
+<span class="sd">        The start and end indices of each trial/session in the input data.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    
+    <span class="n">N</span> <span class="o">=</span> <span class="n">T</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+    <span class="n">indices</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">N</span><span class="p">,</span><span class="mi">2</span><span class="p">),</span><span class="n">dtype</span><span class="o">=</span><span class="nb">int</span><span class="p">)</span>
+    <span class="n">acc</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">N</span><span class="p">):</span>
+        <span class="n">indices</span><span class="p">[</span><span class="n">j</span><span class="p">,</span><span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="n">acc</span>
+        <span class="n">indices</span><span class="p">[</span><span class="n">j</span><span class="p">,</span><span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="n">acc</span> <span class="o">+</span> <span class="n">T</span><span class="p">[</span><span class="n">j</span><span class="p">]</span>
+        <span class="n">acc</span> <span class="o">+=</span> <span class="n">T</span><span class="p">[</span><span class="n">j</span><span class="p">]</span>
+    <span class="k">return</span> <span class="n">indices</span></div>
+
+
+<div class="viewcode-block" id="Gamma_indices_to_Xi_indices"><a class="viewcode-back" href="../../auxiliary.html#glhmm.auxiliary.Gamma_indices_to_Xi_indices">[docs]</a><span class="k">def</span> <span class="nf">Gamma_indices_to_Xi_indices</span><span class="p">(</span><span class="n">indices</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Converts indices from Gamma array to Xi array format.</span>
+
+<span class="sd">    Note Xi has 1 sample less than Gamma per trial/session (i.e., n_samples - n_sessions).</span>
+
+<span class="sd">    Parameters:</span>
+<span class="sd">    -----------</span>
+<span class="sd">    indices : array-like of shape (n_sessions, 2)</span>
+<span class="sd">        The start and end indices of each trial/session in the input data.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">    --------</span>
+<span class="sd">    indices_Xi : array-like of shape (n_sessions, 2)</span>
+<span class="sd">        The converted indices in Xi array format.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">indices_Xi</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">copy</span><span class="p">(</span><span class="n">indices</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">indices</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
+        <span class="n">indices_Xi</span><span class="p">[</span><span class="n">j</span><span class="p">,</span><span class="mi">0</span><span class="p">]</span> <span class="o">-=</span> <span class="n">j</span>
+        <span class="n">indices_Xi</span><span class="p">[</span><span class="n">j</span><span class="p">,</span><span class="mi">1</span><span class="p">]</span> <span class="o">-=</span> <span class="p">(</span><span class="n">j</span><span class="o">+</span><span class="mi">1</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">indices_Xi</span></div>
+
+
+<div class="viewcode-block" id="jls_extract_def"><a class="viewcode-back" href="../../auxiliary.html#glhmm.auxiliary.jls_extract_def">[docs]</a><span class="k">def</span> <span class="nf">jls_extract_def</span><span class="p">():</span>
+    <span class="k">return</span> </div>
+
+
+<div class="viewcode-block" id="approximate_Xi"><a class="viewcode-back" href="../../auxiliary.html#glhmm.auxiliary.approximate_Xi">[docs]</a><span class="k">def</span> <span class="nf">approximate_Xi</span><span class="p">(</span><span class="n">Gamma</span><span class="p">,</span><span class="n">indices</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Approximates Xi array based on Gamma and indices.</span>
+
+<span class="sd">    Parameters:</span>
+<span class="sd">    -----------</span>
+<span class="sd">    Gamma : array-like of shape (n_samples, n_states)</span>
+<span class="sd">            The state probability time series.</span>
+<span class="sd">    indices : array-like of shape (n_sessions, 2)</span>
+<span class="sd">        The start and end indices of each trial/session in the input data.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">    --------</span>
+<span class="sd">    Xi : array-like of shape (n_samples - n_sessions, n_states, n_states)</span>
+<span class="sd">        The joint probabilities of past and future states conditioned on data.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">jls_extract_def</span><span class="p">()</span>
+
+    <span class="n">K</span> <span class="o">=</span> <span class="n">Gamma</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+    <span class="n">N</span> <span class="o">=</span> <span class="n">indices</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+    <span class="n">T</span> <span class="o">=</span> <span class="n">indices</span><span class="p">[:,</span><span class="mi">1</span><span class="p">]</span> <span class="o">-</span> <span class="n">indices</span><span class="p">[:,</span><span class="mi">0</span><span class="p">]</span>
+    <span class="n">Xi</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">empty</span><span class="p">((</span><span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">T</span><span class="p">)</span><span class="o">-</span><span class="n">N</span><span class="p">,</span><span class="n">K</span><span class="p">,</span><span class="n">K</span><span class="p">))</span>
+    <span class="n">acc</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">N</span><span class="p">):</span>
+        <span class="n">ind_1_1</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">indices</span><span class="p">[</span><span class="n">j</span><span class="p">,</span><span class="mi">0</span><span class="p">],</span><span class="n">indices</span><span class="p">[</span><span class="n">j</span><span class="p">,</span><span class="mi">1</span><span class="p">]</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+        <span class="n">ind_1_2</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">indices</span><span class="p">[</span><span class="n">j</span><span class="p">,</span><span class="mi">0</span><span class="p">]</span><span class="o">+</span><span class="mi">1</span><span class="p">,</span><span class="n">indices</span><span class="p">[</span><span class="n">j</span><span class="p">,</span><span class="mi">1</span><span class="p">])</span>
+        <span class="n">ind_2</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="n">T</span><span class="p">[</span><span class="n">j</span><span class="p">]</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span> <span class="o">+</span> <span class="n">acc</span>
+        <span class="n">acc</span> <span class="o">+=</span> <span class="p">(</span><span class="n">T</span><span class="p">[</span><span class="n">j</span><span class="p">]</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+        <span class="n">xi</span> <span class="o">=</span> <span class="n">Gamma</span><span class="p">[</span><span class="n">ind_1_1</span><span class="p">,:]</span><span class="o">.</span><span class="n">T</span> <span class="o">@</span> <span class="n">Gamma</span><span class="p">[</span><span class="n">ind_1_2</span><span class="p">,:]</span>
+        <span class="n">xi</span> <span class="o">=</span> <span class="n">xi</span> <span class="o">/</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">xi</span><span class="p">)</span>
+        <span class="n">Xi</span><span class="p">[</span><span class="n">ind_2</span><span class="p">,:,:]</span> <span class="o">=</span> <span class="n">xi</span>
+    <span class="k">return</span> <span class="n">Xi</span>    </div>
+
+
+<div class="viewcode-block" id="compute_alpha_beta"><a class="viewcode-back" href="../../auxiliary.html#glhmm.auxiliary.compute_alpha_beta">[docs]</a><span class="nd">@njit</span>
+<span class="k">def</span> <span class="nf">compute_alpha_beta</span><span class="p">(</span><span class="n">L</span><span class="p">,</span><span class="n">Pi</span><span class="p">,</span><span class="n">P</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Computes alpha and beta values and scaling factors.</span>
+
+<span class="sd">    Parameters:</span>
+<span class="sd">    -----------</span>
+<span class="sd">    L : array-like of shape (n_samples, n_states)</span>
+<span class="sd">        The L matrix.</span>
+<span class="sd">    Pi : array-like with shape (n_states,)</span>
+<span class="sd">        The initial state probabilities.</span>
+<span class="sd">    P : array-like of shape (n_states, n_states)</span>
+<span class="sd">        The transition probabilities across states.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">    --------</span>
+<span class="sd">    a : array-like of shape (n_samples, n_states)</span>
+<span class="sd">        The alpha values.</span>
+<span class="sd">    b : array-like of shape (n_samples, n_states)</span>
+<span class="sd">        The beta values.</span>
+<span class="sd">    sc : array-like of shape (n_samples,)</span>
+<span class="sd">        The scaling factors.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">T</span><span class="p">,</span><span class="n">K</span> <span class="o">=</span> <span class="n">L</span><span class="o">.</span><span class="n">shape</span>
+
+    <span class="c1">#minreal = sys.float_info.min</span>
+    <span class="c1">#maxreal = sys.float_info.max</span>
+
+    <span class="n">a</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">T</span><span class="p">,</span><span class="n">K</span><span class="p">))</span>
+    <span class="n">b</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">T</span><span class="p">,</span><span class="n">K</span><span class="p">))</span>
+    <span class="n">sc</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">T</span><span class="p">)</span>
+
+    <span class="n">a</span><span class="p">[</span><span class="mi">0</span><span class="p">,:]</span> <span class="o">=</span> <span class="n">Pi</span> <span class="o">*</span> <span class="n">L</span><span class="p">[</span><span class="mi">0</span><span class="p">,:]</span>
+    <span class="n">sc</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">a</span><span class="p">[</span><span class="mi">0</span><span class="p">,:])</span>
+    <span class="n">a</span><span class="p">[</span><span class="mi">0</span><span class="p">,:]</span> <span class="o">=</span> <span class="n">a</span><span class="p">[</span><span class="mi">0</span><span class="p">,:]</span> <span class="o">/</span> <span class="n">sc</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+
+    <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="n">T</span><span class="p">):</span>
+        <span class="n">a</span><span class="p">[</span><span class="n">t</span><span class="p">,:]</span> <span class="o">=</span> <span class="p">(</span><span class="n">a</span><span class="p">[</span><span class="n">t</span><span class="o">-</span><span class="mi">1</span><span class="p">,:]</span> <span class="o">@</span> <span class="n">P</span><span class="p">)</span> <span class="o">*</span> <span class="n">L</span><span class="p">[</span><span class="n">t</span><span class="p">,:]</span>
+        <span class="n">sc</span><span class="p">[</span><span class="n">t</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">a</span><span class="p">[</span><span class="n">t</span><span class="p">,:])</span>
+        <span class="c1">#if sc[t]&lt;minreal: sc[t] = minreal</span>
+        <span class="n">a</span><span class="p">[</span><span class="n">t</span><span class="p">,:]</span> <span class="o">=</span> <span class="n">a</span><span class="p">[</span><span class="n">t</span><span class="p">,:]</span> <span class="o">/</span> <span class="n">sc</span><span class="p">[</span><span class="n">t</span><span class="p">]</span>
+
+    <span class="n">b</span><span class="p">[</span><span class="n">T</span><span class="o">-</span><span class="mi">1</span><span class="p">,:]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">((</span><span class="mi">1</span><span class="p">,</span><span class="n">K</span><span class="p">))</span> <span class="o">/</span> <span class="n">sc</span><span class="p">[</span><span class="n">T</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+    <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">T</span><span class="o">-</span><span class="mi">2</span><span class="p">,</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span><span class="o">-</span><span class="mi">1</span><span class="p">):</span>
+        <span class="n">b</span><span class="p">[</span><span class="n">t</span><span class="p">,:]</span> <span class="o">=</span> <span class="p">(</span> <span class="p">(</span><span class="n">b</span><span class="p">[</span><span class="n">t</span><span class="o">+</span><span class="mi">1</span><span class="p">,:]</span> <span class="o">*</span> <span class="n">L</span><span class="p">[</span><span class="n">t</span><span class="o">+</span><span class="mi">1</span><span class="p">,:])</span> <span class="o">@</span> <span class="n">P</span><span class="o">.</span><span class="n">T</span> <span class="p">)</span> <span class="o">/</span> <span class="n">sc</span><span class="p">[</span><span class="n">t</span><span class="p">]</span>
+        <span class="c1">#bad = b[t,:]&gt;maxreal</span>
+        <span class="c1">#if bad.sum()&gt;0: b[t,bad] = maxreal</span>
+
+    <span class="k">return</span> <span class="n">a</span><span class="p">,</span><span class="n">b</span><span class="p">,</span><span class="n">sc</span></div>
+
+
+<div class="viewcode-block" id="compute_qstar"><a class="viewcode-back" href="../../auxiliary.html#glhmm.auxiliary.compute_qstar">[docs]</a><span class="k">def</span> <span class="nf">compute_qstar</span><span class="p">(</span><span class="n">L</span><span class="p">,</span><span class="n">Pi</span><span class="p">,</span><span class="n">P</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Compute the most probable state sequence.</span>
+
+<span class="sd">    Parameters:</span>
+<span class="sd">    -----------</span>
+<span class="sd">    L : array-like of shape (n_samples, n_states)</span>
+<span class="sd">        The L matrix.</span>
+<span class="sd">    Pi : array-like with shape (n_states,)</span>
+<span class="sd">        The initial state probabilities.</span>
+<span class="sd">    P : array-like of shape (n_states, n_states)</span>
+<span class="sd">        The transition probabilities across states.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">    --------</span>
+<span class="sd">    qstar : array-like of shape (n_samples, n_states)</span>
+<span class="sd">        The most probable state sequence.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">T</span><span class="p">,</span><span class="n">K</span> <span class="o">=</span> <span class="n">L</span><span class="o">.</span><span class="n">shape</span>
+
+    <span class="n">delta</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">T</span><span class="p">,</span><span class="n">K</span><span class="p">))</span>
+    <span class="n">psi</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">T</span><span class="p">,</span><span class="n">K</span><span class="p">))</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">int</span><span class="p">)</span>
+    <span class="n">qstar</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">T</span><span class="p">,</span><span class="n">K</span><span class="p">))</span>
+
+    <span class="n">delta</span><span class="p">[</span><span class="mi">0</span><span class="p">,:]</span> <span class="o">=</span> <span class="n">Pi</span> <span class="o">*</span> <span class="n">L</span><span class="p">[</span><span class="mi">0</span><span class="p">,:]</span>
+    <span class="n">delta</span><span class="p">[</span><span class="mi">0</span><span class="p">,:]</span> <span class="o">=</span> <span class="n">delta</span><span class="p">[</span><span class="mi">0</span><span class="p">,:]</span> <span class="o">/</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">delta</span><span class="p">[</span><span class="mi">0</span><span class="p">,:])</span>
+
+    <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="n">T</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">K</span><span class="p">):</span>
+            <span class="n">v</span> <span class="o">=</span> <span class="n">delta</span><span class="p">[</span><span class="n">t</span><span class="o">-</span><span class="mi">1</span><span class="p">,:]</span> <span class="o">*</span> <span class="n">P</span><span class="p">[:,</span><span class="n">k</span><span class="p">]</span>
+            <span class="n">mv</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">amax</span><span class="p">(</span><span class="n">v</span><span class="p">)</span>
+            <span class="n">delta</span><span class="p">[</span><span class="n">t</span><span class="p">,</span><span class="n">k</span><span class="p">]</span> <span class="o">=</span> <span class="n">mv</span> <span class="o">*</span> <span class="n">L</span><span class="p">[</span><span class="n">t</span><span class="p">,</span><span class="n">k</span><span class="p">]</span>
+            <span class="n">psi</span><span class="p">[</span><span class="n">t</span><span class="p">,</span><span class="n">k</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">mv</span><span class="o">==</span><span class="n">v</span><span class="p">)[</span><span class="mi">0</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span>
+        <span class="n">delta</span><span class="p">[</span><span class="n">t</span><span class="p">,:]</span> <span class="o">=</span> <span class="n">delta</span><span class="p">[</span><span class="n">t</span><span class="p">,:]</span> <span class="o">/</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">delta</span><span class="p">[</span><span class="n">t</span><span class="p">,:])</span>
+
+    <span class="nb">id</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">delta</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">,:]</span><span class="o">==</span><span class="n">np</span><span class="o">.</span><span class="n">amax</span><span class="p">(</span><span class="n">delta</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">,:]))[</span><span class="mi">0</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span>
+    <span class="n">qstar</span><span class="p">[</span><span class="n">T</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span><span class="nb">id</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span>
+
+    <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">T</span><span class="o">-</span><span class="mi">2</span><span class="p">,</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span><span class="o">-</span><span class="mi">1</span><span class="p">):</span>
+        <span class="n">id0</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">qstar</span><span class="p">[</span><span class="n">t</span><span class="o">+</span><span class="mi">1</span><span class="p">,:]</span><span class="o">==</span><span class="mi">1</span><span class="p">)[</span><span class="mi">0</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span>
+        <span class="nb">id</span> <span class="o">=</span> <span class="n">psi</span><span class="p">[</span><span class="n">t</span><span class="o">+</span><span class="mi">1</span><span class="p">,</span><span class="n">id0</span><span class="p">]</span>
+        <span class="n">qstar</span><span class="p">[</span><span class="n">t</span><span class="p">,</span><span class="nb">id</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span>
+
+    <span class="k">return</span> <span class="n">qstar</span></div>
+
+<span class="c1">## Mathematical functions related to the free energy</span>
+
+<div class="viewcode-block" id="gauss1d_kl"><a class="viewcode-back" href="../../auxiliary.html#glhmm.auxiliary.gauss1d_kl">[docs]</a><span class="k">def</span> <span class="nf">gauss1d_kl</span><span class="p">(</span><span class="n">mu_q</span><span class="p">,</span> <span class="n">sigma_q</span><span class="p">,</span> <span class="n">mu_p</span><span class="p">,</span> <span class="n">sigma_p</span><span class="p">):</span>
+
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Computes the KL divergence between two univariate Gaussian distributions.</span>
+
+<span class="sd">    Parameters:</span>
+<span class="sd">    -----------</span>
+<span class="sd">    mu_q : float of shape (n_parcels,)</span>
+<span class="sd">        The mean of the first Gaussian distribution.</span>
+<span class="sd">    sigma_q : float of shape (n_parcels, n_parcels)</span>
+<span class="sd">        The variance of the first Gaussian distribution.</span>
+<span class="sd">    mu_p : float of shape (n_parcels,)</span>
+<span class="sd">        The mean of the second Gaussian distribution.</span>
+<span class="sd">    sigma_p : float of shape (n_parcels, n_parcels)</span>
+<span class="sd">        The variance of the second Gaussian distribution.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">    --------</span>
+<span class="sd">    D : float</span>
+<span class="sd">        The KL divergence between the two Gaussian distributions.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">D</span> <span class="o">=</span> <span class="mf">0.5</span> <span class="o">*</span> <span class="n">math</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">sigma_p</span><span class="o">/</span><span class="n">sigma_q</span><span class="p">)</span> <span class="o">+</span> \
+        <span class="mf">0.5</span> <span class="o">*</span> <span class="p">((</span><span class="n">mu_q</span> <span class="o">-</span> <span class="n">mu_p</span><span class="p">)</span><span class="o">**</span><span class="mi">2</span><span class="p">)</span> <span class="o">/</span> <span class="n">sigma_p</span> <span class="o">+</span> \
+        <span class="mf">0.5</span> <span class="o">*</span> <span class="n">sigma_q</span> <span class="o">/</span> <span class="n">sigma_p</span>
+    <span class="k">return</span> <span class="n">D</span></div>
+
+
+<div class="viewcode-block" id="gauss_kl"><a class="viewcode-back" href="../../auxiliary.html#glhmm.auxiliary.gauss_kl">[docs]</a><span class="k">def</span> <span class="nf">gauss_kl</span><span class="p">(</span><span class="n">mu_q</span><span class="p">,</span> <span class="n">sigma_q</span><span class="p">,</span> <span class="n">mu_p</span><span class="p">,</span> <span class="n">sigma_p</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Computes the KL divergence between two multivariate Gaussian distributions.</span>
+
+<span class="sd">    Parameters:</span>
+<span class="sd">    -----------</span>
+<span class="sd">    mu_q : float of shape (n_parcels,)</span>
+<span class="sd">        The mean of the first Gaussian distribution.</span>
+<span class="sd">    sigma_q : float of shape (n_parcels, n_parcels)</span>
+<span class="sd">        The variance of the first Gaussian distribution.</span>
+<span class="sd">    mu_p : float of shape (n_parcels,)</span>
+<span class="sd">        The mean of the second Gaussian distribution.</span>
+<span class="sd">    sigma_p : float of shape (n_parcels, n_parcels)</span>
+<span class="sd">        The variance of the second Gaussian distribution.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">    --------</span>
+<span class="sd">    D : float</span>
+<span class="sd">        The KL divergence between the two Gaussian distributions.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">mu_q</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+        <span class="n">D</span> <span class="o">=</span> <span class="n">gauss1d_kl</span><span class="p">(</span><span class="n">mu_q</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">sigma_q</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">],</span> <span class="n">mu_p</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">sigma_p</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">])</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">N</span> <span class="o">=</span> <span class="n">mu_q</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="n">isigma_p</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">inv</span><span class="p">(</span><span class="n">sigma_p</span><span class="p">)</span>
+        <span class="p">(</span><span class="n">sign</span><span class="p">,</span> <span class="n">logdet</span><span class="p">)</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">slogdet</span><span class="p">(</span><span class="n">sigma_p</span><span class="p">)</span>
+        <span class="n">t1</span> <span class="o">=</span> <span class="n">sign</span> <span class="o">*</span> <span class="n">logdet</span>
+        <span class="p">(</span><span class="n">sign</span><span class="p">,</span> <span class="n">logdet</span><span class="p">)</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">slogdet</span><span class="p">(</span><span class="n">sigma_q</span><span class="p">)</span>
+        <span class="n">t2</span> <span class="o">=</span> <span class="n">sign</span> <span class="o">*</span> <span class="n">logdet</span>        
+        <span class="n">d</span> <span class="o">=</span> <span class="n">mu_q</span> <span class="o">-</span> <span class="n">mu_p</span>
+        <span class="n">D</span> <span class="o">=</span> <span class="mf">0.5</span> <span class="o">*</span> <span class="p">(</span><span class="n">t1</span> <span class="o">-</span> <span class="n">t2</span> <span class="o">-</span> <span class="n">N</span> <span class="o">+</span> <span class="n">np</span><span class="o">.</span><span class="n">trace</span><span class="p">(</span><span class="n">isigma_p</span> <span class="o">@</span> <span class="n">sigma_q</span><span class="p">)</span> <span class="o">+</span> <span class="p">((</span><span class="n">d</span><span class="o">.</span><span class="n">T</span> <span class="o">@</span> <span class="n">isigma_p</span><span class="p">)</span> <span class="o">@</span> <span class="n">d</span><span class="p">))</span>
+    <span class="k">return</span> <span class="n">D</span></div>
+
+
+<div class="viewcode-block" id="gamma_kl"><a class="viewcode-back" href="../../auxiliary.html#glhmm.auxiliary.gamma_kl">[docs]</a><span class="k">def</span> <span class="nf">gamma_kl</span><span class="p">(</span><span class="n">shape_q</span><span class="p">,</span><span class="n">rate_q</span><span class="p">,</span><span class="n">shape_p</span><span class="p">,</span><span class="n">rate_p</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Computes the Kullback-Leibler divergence between two Gamma distributions with shape and rate parameters.</span>
+
+<span class="sd">    The Kullback-Leibler divergence is a measure of how different two probability distributions are.</span>
+
+<span class="sd">    This implementation follows the formula presented here (https://statproofbook.github.io/P/gam-kl) from the book &quot;KL-Divergences of Normal, Gamma, Dirichlet and Wishart densities&quot; by Penny, William D. in 2001.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    shape_q : float or numpy.ndarray</span>
+<span class="sd">        The shape parameter of the first Gamma distribution.</span>
+<span class="sd">    rate_q : float or numpy.ndarray</span>
+<span class="sd">        The rate parameter of the first Gamma distribution.</span>
+<span class="sd">    shape_p : float or numpy.ndarray</span>
+<span class="sd">        The shape parameter of the second Gamma distribution.</span>
+<span class="sd">    rate_p : float or numpy.ndarray</span>
+<span class="sd">        The rate parameter of the second Gamma distribution.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    D : float or numpy.ndarray</span>
+<span class="sd">        The Kullback-Leibler divergence between the two Gamma distributions.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">D</span> <span class="o">=</span> <span class="n">shape_p</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">rate_q</span> <span class="o">/</span> <span class="n">rate_p</span><span class="p">)</span> \
+        <span class="o">+</span> <span class="n">scipy</span><span class="o">.</span><span class="n">special</span><span class="o">.</span><span class="n">gammaln</span><span class="p">(</span><span class="n">shape_p</span><span class="p">)</span> <span class="o">-</span> <span class="n">scipy</span><span class="o">.</span><span class="n">special</span><span class="o">.</span><span class="n">gammaln</span><span class="p">(</span><span class="n">shape_q</span><span class="p">)</span> \
+        <span class="o">+</span> <span class="p">(</span><span class="n">shape_q</span> <span class="o">-</span> <span class="n">shape_p</span><span class="p">)</span> <span class="o">*</span> <span class="n">scipy</span><span class="o">.</span><span class="n">special</span><span class="o">.</span><span class="n">psi</span><span class="p">(</span><span class="n">shape_q</span><span class="p">)</span> \
+        <span class="o">-</span> <span class="p">(</span><span class="n">rate_q</span> <span class="o">-</span> <span class="n">rate_p</span><span class="p">)</span> <span class="o">*</span> <span class="n">shape_q</span> <span class="o">/</span> <span class="n">rate_q</span>
+
+    <span class="k">return</span> <span class="n">D</span></div>
+
+
+<div class="viewcode-block" id="wishart_kl"><a class="viewcode-back" href="../../auxiliary.html#glhmm.auxiliary.wishart_kl">[docs]</a><span class="k">def</span> <span class="nf">wishart_kl</span><span class="p">(</span><span class="n">shape_q</span><span class="p">,</span><span class="n">C_q</span><span class="p">,</span><span class="n">shape_p</span><span class="p">,</span><span class="n">C_p</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Computes the Kullback-Leibler (KL) divergence between two Wishart distributions.</span>
+
+<span class="sd">    Parameters:</span>
+<span class="sd">    -----------</span>
+<span class="sd">    shape_q : float</span>
+<span class="sd">        Shape parameter of the first Wishart distribution.</span>
+<span class="sd">    C_q : ndarray of shape (n_parcels, n_parcels)</span>
+<span class="sd">        Scale parameter of the first Wishart distribution.</span>
+<span class="sd">    shape_p : float</span>
+<span class="sd">        Shape parameter of the second Wishart distribution.</span>
+<span class="sd">    C_p : ndarray of shape (n_parcels, n_parcels)</span>
+<span class="sd">        Scale parameter of the second Wishart distribution.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">    --------</span>
+<span class="sd">    D : float</span>
+<span class="sd">        KL divergence from the first to the second Wishart distribution.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span> 
+
+    <span class="k">def</span> <span class="nf">L</span><span class="p">(</span><span class="n">shape</span><span class="p">,</span><span class="n">C</span><span class="p">):</span>
+        <span class="n">N</span> <span class="o">=</span> <span class="n">C</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="n">PsiWish_alphasum</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="n">N</span><span class="o">+</span><span class="mi">1</span><span class="p">):</span> 
+            <span class="n">PsiWish_alphasum</span> <span class="o">+=</span> <span class="n">scipy</span><span class="o">.</span><span class="n">special</span><span class="o">.</span><span class="n">psi</span><span class="p">(</span><span class="mf">0.5</span> <span class="o">*</span> <span class="p">(</span><span class="n">shape</span> <span class="o">+</span> <span class="mi">1</span> <span class="o">-</span> <span class="n">j</span><span class="p">))</span>
+        <span class="p">(</span><span class="n">s</span><span class="p">,</span> <span class="n">logdet</span><span class="p">)</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">slogdet</span><span class="p">(</span><span class="n">C</span><span class="p">)</span>
+        <span class="n">ldetWishB</span> <span class="o">=</span> <span class="n">s</span> <span class="o">*</span> <span class="n">logdet</span>
+        <span class="k">return</span> <span class="p">(</span><span class="n">PsiWish_alphasum</span> <span class="o">-</span> <span class="n">ldetWishB</span> <span class="o">+</span> <span class="n">N</span> <span class="o">*</span> <span class="n">math</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="mi">2</span><span class="p">))</span>
+
+    <span class="k">def</span> <span class="nf">logZ</span><span class="p">(</span><span class="n">shape</span><span class="p">,</span><span class="n">C</span><span class="p">):</span>
+        <span class="n">N</span> <span class="o">=</span> <span class="n">C</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="n">t1</span> <span class="o">=</span> <span class="n">shape</span> <span class="o">*</span> <span class="n">N</span> <span class="o">/</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">math</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
+        <span class="p">(</span><span class="n">s</span><span class="p">,</span> <span class="n">logdet</span><span class="p">)</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">slogdet</span><span class="p">(</span><span class="n">C</span><span class="p">)</span>
+        <span class="n">t2</span> <span class="o">=</span> <span class="o">-</span> <span class="p">(</span><span class="n">shape</span><span class="o">/</span><span class="mi">2</span><span class="p">)</span> <span class="o">*</span> <span class="n">s</span> <span class="o">*</span> <span class="n">logdet</span>
+        <span class="n">t3</span> <span class="o">=</span> <span class="p">(</span><span class="n">N</span><span class="o">*</span><span class="p">(</span><span class="n">N</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span><span class="o">/</span><span class="mi">4</span><span class="p">)</span> <span class="o">*</span> <span class="n">math</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">math</span><span class="o">.</span><span class="n">pi</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="n">N</span><span class="o">+</span><span class="mi">1</span><span class="p">):</span>  
+            <span class="n">t3</span> <span class="o">+=</span> <span class="n">scipy</span><span class="o">.</span><span class="n">special</span><span class="o">.</span><span class="n">gammaln</span><span class="p">(</span><span class="mf">0.5</span> <span class="o">*</span> <span class="p">(</span><span class="n">shape</span> <span class="o">+</span> <span class="mi">1</span> <span class="o">-</span> <span class="n">j</span><span class="p">))</span>
+        <span class="k">return</span> <span class="p">(</span><span class="n">t1</span> <span class="o">+</span> <span class="n">t2</span> <span class="o">+</span> <span class="n">t3</span><span class="p">)</span>
+        
+    <span class="n">N</span> <span class="o">=</span> <span class="n">C_q</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+    <span class="n">iC_q</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">inv</span><span class="p">(</span><span class="n">C_q</span><span class="p">)</span>
+
+    <span class="n">t1</span> <span class="o">=</span> <span class="p">((</span><span class="n">shape_q</span> <span class="o">-</span> <span class="n">N</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span><span class="o">/</span><span class="mi">2</span><span class="p">)</span> <span class="o">*</span> <span class="n">L</span><span class="p">(</span><span class="n">shape_q</span><span class="p">,</span><span class="n">C_q</span><span class="p">)</span> <span class="o">-</span> \
+            <span class="p">((</span><span class="n">shape_p</span> <span class="o">-</span> <span class="n">N</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span><span class="o">/</span><span class="mi">2</span><span class="p">)</span> <span class="o">*</span> <span class="n">L</span><span class="p">(</span><span class="n">shape_p</span><span class="p">,</span><span class="n">C_p</span><span class="p">)</span>
+    <span class="n">t2</span> <span class="o">=</span> <span class="o">-</span> <span class="n">N</span> <span class="o">*</span> <span class="n">shape_q</span> <span class="o">/</span> <span class="mi">2</span>
+    <span class="n">t3</span> <span class="o">=</span> <span class="n">shape_q</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">trace</span><span class="p">(</span><span class="n">C_p</span> <span class="o">@</span> <span class="n">iC_q</span><span class="p">)</span> <span class="o">/</span> <span class="mi">2</span>
+    <span class="n">t4</span> <span class="o">=</span> <span class="n">logZ</span><span class="p">(</span><span class="n">shape_p</span><span class="p">,</span><span class="n">C_p</span><span class="p">)</span> <span class="o">-</span> <span class="n">logZ</span><span class="p">(</span><span class="n">shape_q</span><span class="p">,</span><span class="n">C_q</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="p">(</span><span class="n">t1</span> <span class="o">+</span> <span class="n">t2</span> <span class="o">+</span> <span class="n">t3</span> <span class="o">+</span> <span class="n">t4</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="dirichlet_kl"><a class="viewcode-back" href="../../auxiliary.html#glhmm.auxiliary.dirichlet_kl">[docs]</a><span class="k">def</span> <span class="nf">dirichlet_kl</span><span class="p">(</span><span class="n">alpha_q</span><span class="p">,</span><span class="n">alpha_p</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Computes the Kullback-Leibler divergence between two Dirichlet distributions with parameters alpha_q and alpha_p.</span>
+
+<span class="sd">    Parameters:</span>
+<span class="sd">    -----------</span>
+<span class="sd">        alpha_q : Array of shape (n_states,)</span>
+<span class="sd">            The concentration parameters of the first Dirichlet distribution.</span>
+<span class="sd">        alpha_p : Array of shape (n_states,)</span>
+<span class="sd">            The concentration parameters of the second Dirichlet distribution.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">    --------</span>
+<span class="sd">        float: The Kullback-Leibler divergence between the two Dirichlet distributions.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">sum_alpha_q</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">alpha_q</span><span class="p">)</span>
+    <span class="n">sum_alpha_p</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">alpha_p</span><span class="p">)</span>
+    <span class="n">t1</span> <span class="o">=</span> <span class="o">+</span> <span class="n">scipy</span><span class="o">.</span><span class="n">special</span><span class="o">.</span><span class="n">gammaln</span><span class="p">(</span><span class="n">sum_alpha_q</span><span class="p">)</span> <span class="o">-</span> <span class="n">scipy</span><span class="o">.</span><span class="n">special</span><span class="o">.</span><span class="n">gammaln</span><span class="p">(</span><span class="n">sum_alpha_p</span><span class="p">)</span> \
+        <span class="o">+</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">scipy</span><span class="o">.</span><span class="n">special</span><span class="o">.</span><span class="n">gammaln</span><span class="p">(</span><span class="n">alpha_p</span><span class="p">))</span> <span class="o">-</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">scipy</span><span class="o">.</span><span class="n">special</span><span class="o">.</span><span class="n">gammaln</span><span class="p">(</span><span class="n">alpha_q</span><span class="p">))</span>
+    <span class="n">t2</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span> <span class="p">(</span><span class="n">alpha_q</span> <span class="o">-</span> <span class="n">alpha_p</span><span class="p">)</span> <span class="o">*</span> <span class="p">(</span><span class="n">scipy</span><span class="o">.</span><span class="n">special</span><span class="o">.</span><span class="n">psi</span><span class="p">(</span><span class="n">alpha_q</span><span class="p">)</span> <span class="o">-</span> <span class="n">scipy</span><span class="o">.</span><span class="n">special</span><span class="o">.</span><span class="n">psi</span><span class="p">(</span><span class="n">sum_alpha_q</span><span class="p">))</span> <span class="p">)</span>
+    <span class="k">return</span> <span class="p">(</span> <span class="n">t1</span> <span class="o">+</span> <span class="n">t2</span> <span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="Gamma_entropy"><a class="viewcode-back" href="../../auxiliary.html#glhmm.auxiliary.Gamma_entropy">[docs]</a><span class="k">def</span> <span class="nf">Gamma_entropy</span><span class="p">(</span><span class="n">Gamma</span><span class="p">,</span><span class="n">Xi</span><span class="p">,</span><span class="n">indices</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Computes the entropy of a Gamma distribution and a sequence of transition probabilities Xi.</span>
+
+<span class="sd">    Parameters:</span>
+<span class="sd">    -----------</span>
+<span class="sd">        Gamma : Array-like of shape (n_samples, n_states)</span>
+<span class="sd">            The posterior probabilities of a hidden variable.</span>
+<span class="sd">        Xi : Array-like of shape (n_samples - n_sessions, n_states, n_states)</span>
+<span class="sd">            The joint probability of past and future states conditioned on data.</span>
+<span class="sd">        indices : Array-like of shape (n_sessions, 2)</span>
+<span class="sd">            The start and end indices of each trial/session in the input data.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">    --------</span>
+<span class="sd">        float: The entropy of the Gamma distribution and the sequence of transition probabilities.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">minreal</span> <span class="o">=</span> <span class="n">sys</span><span class="o">.</span><span class="n">float_info</span><span class="o">.</span><span class="n">min</span>
+    <span class="c1"># initial point</span>
+    <span class="n">Gamma_0</span> <span class="o">=</span> <span class="n">Gamma</span><span class="p">[</span><span class="n">indices</span><span class="p">[:,</span><span class="mi">0</span><span class="p">]]</span>
+    <span class="n">Gamma_0</span><span class="p">[</span><span class="n">Gamma_0</span> <span class="o">&lt;</span> <span class="n">minreal</span><span class="p">]</span> <span class="o">=</span> <span class="n">minreal</span>
+    <span class="n">Entr</span> <span class="o">=</span> <span class="o">-</span><span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">Gamma_0</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">Gamma_0</span><span class="p">))</span>
+    <span class="c1"># transitions</span>
+    <span class="n">Xi</span><span class="p">[</span><span class="n">Xi</span> <span class="o">&lt;</span> <span class="n">minreal</span><span class="p">]</span> <span class="o">=</span> <span class="n">minreal</span>
+    <span class="n">Xi_norm</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">Xi</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">Gamma</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]):</span>
+        <span class="n">Xi_norm</span><span class="p">[:,</span><span class="n">k</span><span class="p">,:]</span> <span class="o">=</span> <span class="n">Xi</span><span class="p">[:,</span><span class="n">k</span><span class="p">,:]</span> <span class="o">/</span> <span class="n">np</span><span class="o">.</span><span class="n">expand_dims</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">Xi</span><span class="p">[:,</span><span class="n">k</span><span class="p">,:],</span><span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">),</span><span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+    <span class="n">Entr</span> <span class="o">-=</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">Xi</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">Xi_norm</span><span class="p">))</span>
+    <span class="k">return</span> <span class="n">Entr</span></div>
+    
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2023, Diego Vidaurre.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

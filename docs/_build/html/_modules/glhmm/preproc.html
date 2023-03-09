@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>glhmm.preproc &mdash; GLHMM 0.0.1 documentation</title>
+      <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="../../_static/css/theme.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+        <script data-url_root="../../" id="documentation_options" src="../../_static/documentation_options.js"></script>
+        <script src="../../_static/doctools.js"></script>
+        <script src="../../_static/sphinx_highlight.js"></script>
+        <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            GLHMM
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../modules.html">API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../glossary.html">Glossary</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">GLHMM</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">glhmm.preproc</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for glhmm.preproc</h1><div class="highlight"><pre>
+<span></span><span class="ch">#!/usr/bin/env python3</span>
+<span class="c1"># -*- coding: utf-8 -*-</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">Preprocessing functions - General/Gaussian Linear Hidden Markov Model</span>
+<span class="sd">@author: Diego Vidaurre 2023</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="kn">import</span> <span class="nn">warnings</span>
+<span class="kn">from</span> <span class="nn">sklearn.decomposition</span> <span class="kn">import</span> <span class="n">PCA</span>
+<span class="kn">from</span> <span class="nn">scipy</span> <span class="kn">import</span> <span class="n">signal</span>
+
+<span class="kn">from</span> <span class="nn">.</span> <span class="kn">import</span> <span class="n">auxiliary</span>
+
+<div class="viewcode-block" id="apply_pca"><a class="viewcode-back" href="../../preproc.html#glhmm.preproc.apply_pca">[docs]</a><span class="k">def</span> <span class="nf">apply_pca</span><span class="p">(</span><span class="n">X</span><span class="p">,</span><span class="n">d</span><span class="p">,</span><span class="n">whitening</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span><span class="n">exact</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Applies PCA to the input data X.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    X : array-like of shape (n_samples, n_parcels)</span>
+<span class="sd">        The input data to be transformed.</span>
+
+<span class="sd">    d : int or float</span>
+<span class="sd">        If int, the number of components to keep.</span>
+<span class="sd">        If float, the percentage of explained variance to keep.</span>
+<span class="sd">        If array-like of shape (n_parcels, n_components), the transformation matrix.</span>
+
+<span class="sd">    whitening : bool, default=False</span>
+<span class="sd">        Whether to whiten the transformed data.</span>
+
+<span class="sd">    exact : bool, default=True</span>
+<span class="sd">        Whether to use full SVD solver for PCA.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    X_transformed : array-like of shape (n_samples, n_components)</span>
+<span class="sd">        The transformed data after applying PCA.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="nb">type</span><span class="p">(</span><span class="n">d</span><span class="p">)</span> <span class="ow">is</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+        <span class="n">X</span> <span class="o">-=</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">X</span><span class="p">,</span><span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+        <span class="n">X</span> <span class="o">=</span> <span class="n">X</span> <span class="o">@</span> <span class="n">d</span>
+        <span class="k">if</span> <span class="n">whitening</span><span class="p">:</span> <span class="n">X</span> <span class="o">/=</span> <span class="n">np</span><span class="o">.</span><span class="n">std</span><span class="p">(</span><span class="n">X</span><span class="p">,</span><span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">X</span>
+
+    <span class="k">if</span> <span class="n">exact</span><span class="p">:</span> <span class="n">svd_solver</span> <span class="o">=</span> <span class="s1">&#39;full&#39;</span>
+    <span class="k">if</span> <span class="n">d</span> <span class="o">&gt;=</span> <span class="mi">1</span><span class="p">:</span> 
+        <span class="n">pcamodel</span> <span class="o">=</span> <span class="n">PCA</span><span class="p">(</span><span class="n">n_components</span><span class="o">=</span><span class="n">d</span><span class="p">,</span><span class="n">whiten</span><span class="o">=</span><span class="n">whitening</span><span class="p">,</span><span class="n">svd_solver</span><span class="o">=</span><span class="n">svd_solver</span><span class="p">)</span>
+        <span class="n">pcamodel</span><span class="o">.</span><span class="n">fit</span><span class="p">(</span><span class="n">X</span><span class="p">)</span>
+        <span class="n">X</span> <span class="o">=</span> <span class="n">pcamodel</span><span class="o">.</span><span class="n">transform</span><span class="p">(</span><span class="n">X</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span> 
+        <span class="n">pcamodel</span> <span class="o">=</span> <span class="n">PCA</span><span class="p">(</span><span class="n">whiten</span><span class="o">=</span><span class="n">whitening</span><span class="p">,</span><span class="n">svd_solver</span><span class="o">=</span><span class="n">svd_solver</span><span class="p">)</span>
+        <span class="n">pcamodel</span><span class="o">.</span><span class="n">fit</span><span class="p">(</span><span class="n">X</span><span class="p">)</span>
+        <span class="n">ncomp</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">cumsum</span><span class="p">(</span><span class="n">pcamodel</span><span class="o">.</span><span class="n">explained_variance_ratio_</span><span class="p">)</span><span class="o">&gt;=</span><span class="n">d</span><span class="p">)[</span><span class="mi">0</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="mi">1</span>
+        <span class="n">X</span> <span class="o">=</span> <span class="n">pcamodel</span><span class="o">.</span><span class="n">transform</span><span class="p">(</span><span class="n">X</span><span class="p">)</span>
+        <span class="n">X</span> <span class="o">=</span> <span class="n">X</span><span class="p">[:,</span><span class="mi">0</span><span class="p">:</span><span class="n">ncomp</span><span class="p">]</span>
+        <span class="n">d</span> <span class="o">=</span> <span class="n">ncomp</span>
+
+    <span class="c1"># sign convention equal to Matlab&#39;s</span>
+    <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">d</span><span class="p">):</span>
+        <span class="n">jj</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">X</span><span class="p">[:,</span><span class="n">j</span><span class="p">])</span> <span class="o">==</span> <span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">X</span><span class="p">[:,</span><span class="n">j</span><span class="p">]))</span> <span class="p">)[</span><span class="mi">0</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span>
+        <span class="k">if</span> <span class="n">X</span><span class="p">[</span><span class="n">jj</span><span class="p">,</span><span class="n">j</span><span class="p">]</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">:</span> <span class="n">X</span><span class="p">[:,</span><span class="n">j</span><span class="p">]</span> <span class="o">*=</span> <span class="o">-</span><span class="mi">1</span>
+
+    <span class="k">return</span> <span class="n">X</span></div>
+
+
+<div class="viewcode-block" id="preprocess_data"><a class="viewcode-back" href="../../preproc.html#glhmm.preproc.preprocess_data">[docs]</a><span class="k">def</span> <span class="nf">preprocess_data</span><span class="p">(</span><span class="n">data</span><span class="p">,</span><span class="n">indices</span><span class="p">,</span>
+        <span class="n">fs</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span> <span class="c1"># frequency of the data</span>
+        <span class="n">standardise</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="c1"># True / False</span>
+        <span class="nb">filter</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="c1"># Tuple with low-pass high-pass thresholds, or None</span>
+        <span class="n">detrend</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="c1"># True / False</span>
+        <span class="n">onpower</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="c1"># True / False</span>
+        <span class="n">pca</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="c1"># Number of components, % explained variance, or None</span>
+        <span class="n">whitening</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="c1"># True / False</span>
+        <span class="n">exact_pca</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+        <span class="n">downsample</span><span class="o">=</span><span class="kc">None</span> <span class="c1"># new frequency, or None</span>
+        <span class="p">):</span>
+<span class="w">    </span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Preprocess the input data.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    data : array-like of shape (n_samples, n_parcels)</span>
+<span class="sd">        The input data to be preprocessed.</span>
+
+<span class="sd">    indices : array-like of shape (n_sessions, 2)</span>
+<span class="sd">        The start and end indices of each trial/session in the input data.</span>
+
+<span class="sd">    fs : int or float, default=1</span>
+<span class="sd">        The frequency of the input data.</span>
+
+<span class="sd">    standardise : bool, default=True</span>
+<span class="sd">        Whether to standardize the input data.</span>
+
+<span class="sd">    filter : tuple of length 2 or None, default=None</span>
+<span class="sd">        The low-pass and high-pass thresholds to apply to the input data.</span>
+<span class="sd">        If None, no filtering will be applied.</span>
+<span class="sd">        If a tuple, the first element is the low-pass threshold and the second is the high-pass threshold.</span>
+
+<span class="sd">    detrend : bool, default=True</span>
+<span class="sd">        Whether to detrend the input data.</span>
+
+<span class="sd">    onpower : bool, default=False</span>
+<span class="sd">        Whether to calculate the power of the input data using the Hilbert transform.</span>
+
+<span class="sd">    pca : int or float or None, default=None</span>
+<span class="sd">        If int, the number of components to keep after applying PCA.</span>
+<span class="sd">        If float, the percentage of explained variance to keep after applying PCA.</span>
+<span class="sd">        If None, no PCA will be applied.</span>
+
+<span class="sd">    whitening : bool, default=False</span>
+<span class="sd">        Whether to whiten the input data after applying PCA.</span>
+
+<span class="sd">    exact_pca : bool, default=True</span>
+<span class="sd">        Whether to use full SVD solver for PCA.</span>
+
+<span class="sd">    downsample : int or float or None, default=None</span>
+<span class="sd">        The new frequency of the input data after downsampling.</span>
+<span class="sd">        If None, no downsampling will be applied.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    data_processed : array-like of shape (n_samples_processed, n_parcels)</span>
+<span class="sd">        The preprocessed input data.</span>
+
+<span class="sd">    indices_processed : array-like of shape (n_sessions_processed, 2)</span>
+<span class="sd">        The start and end indices of each trial/session in the preprocessed data.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">p</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+    <span class="n">N</span> <span class="o">=</span> <span class="n">indices</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+
+    <span class="n">data</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">copy</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">standardise</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">N</span><span class="p">):</span>
+            <span class="n">t</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">indices</span><span class="p">[</span><span class="n">j</span><span class="p">,</span><span class="mi">0</span><span class="p">],</span><span class="n">indices</span><span class="p">[</span><span class="n">j</span><span class="p">,</span><span class="mi">1</span><span class="p">])</span> 
+            <span class="n">data</span><span class="p">[</span><span class="n">t</span><span class="p">,:]</span> <span class="o">-=</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="n">t</span><span class="p">,:],</span><span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+            <span class="n">data</span><span class="p">[</span><span class="n">t</span><span class="p">,:]</span> <span class="o">/=</span> <span class="n">np</span><span class="o">.</span><span class="n">std</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="n">t</span><span class="p">,:],</span><span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>   
+
+    <span class="k">if</span> <span class="nb">filter</span> <span class="o">!=</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">filterorder</span> <span class="o">=</span> <span class="mi">6</span>
+        <span class="k">if</span> <span class="nb">filter</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span> <span class="c1"># low-pass</span>
+            <span class="n">sos</span> <span class="o">=</span> <span class="n">signal</span><span class="o">.</span><span class="n">butter</span><span class="p">(</span><span class="n">filterorder</span><span class="p">,</span> <span class="nb">filter</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="s1">&#39;lowpass&#39;</span><span class="p">,</span> <span class="n">output</span><span class="o">=</span><span class="s1">&#39;sos&#39;</span><span class="p">,</span> <span class="n">fs</span> <span class="o">=</span> <span class="n">fs</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="nb">filter</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">==</span> <span class="kc">None</span><span class="p">:</span> <span class="c1"># high-pass</span>
+            <span class="n">sos</span> <span class="o">=</span> <span class="n">signal</span><span class="o">.</span><span class="n">butter</span><span class="p">(</span><span class="n">filterorder</span><span class="p">,</span> <span class="nb">filter</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="s1">&#39;highpass&#39;</span><span class="p">,</span> <span class="n">output</span><span class="o">=</span><span class="s1">&#39;sos&#39;</span><span class="p">,</span> <span class="n">fs</span> <span class="o">=</span> <span class="n">fs</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">sos</span> <span class="o">=</span> <span class="n">signal</span><span class="o">.</span><span class="n">butter</span><span class="p">(</span><span class="n">filterorder</span><span class="p">,</span> <span class="nb">filter</span><span class="p">,</span> <span class="s1">&#39;bandpass&#39;</span><span class="p">,</span> <span class="n">output</span><span class="o">=</span><span class="s1">&#39;sos&#39;</span><span class="p">,</span> <span class="n">fs</span> <span class="o">=</span> <span class="n">fs</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">N</span><span class="p">):</span>
+            <span class="n">t</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">indices</span><span class="p">[</span><span class="n">j</span><span class="p">,</span><span class="mi">0</span><span class="p">],</span><span class="n">indices</span><span class="p">[</span><span class="n">j</span><span class="p">,</span><span class="mi">1</span><span class="p">])</span>
+            <span class="n">data</span><span class="p">[</span><span class="n">t</span><span class="p">,:]</span> <span class="o">=</span> <span class="n">signal</span><span class="o">.</span><span class="n">sosfilt</span><span class="p">(</span><span class="n">sos</span><span class="p">,</span> <span class="n">data</span><span class="p">[</span><span class="n">t</span><span class="p">,:],</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">detrend</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">N</span><span class="p">):</span>
+            <span class="n">t</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">indices</span><span class="p">[</span><span class="n">j</span><span class="p">,</span><span class="mi">0</span><span class="p">],</span><span class="n">indices</span><span class="p">[</span><span class="n">j</span><span class="p">,</span><span class="mi">1</span><span class="p">])</span> 
+            <span class="n">data</span><span class="p">[</span><span class="n">t</span><span class="p">,:]</span> <span class="o">=</span> <span class="n">signal</span><span class="o">.</span><span class="n">detrend</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="n">t</span><span class="p">,:],</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>       
+
+    <span class="k">if</span> <span class="n">onpower</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">N</span><span class="p">):</span>
+            <span class="n">t</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">indices</span><span class="p">[</span><span class="n">j</span><span class="p">,</span><span class="mi">0</span><span class="p">],</span><span class="n">indices</span><span class="p">[</span><span class="n">j</span><span class="p">,</span><span class="mi">1</span><span class="p">])</span> 
+            <span class="n">data</span><span class="p">[</span><span class="n">t</span><span class="p">,:]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">signal</span><span class="o">.</span><span class="n">hilbert</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="n">t</span><span class="p">,:],</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">))</span>
+
+    <span class="k">if</span> <span class="n">pca</span> <span class="o">!=</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">data</span> <span class="o">=</span> <span class="n">apply_pca</span><span class="p">(</span><span class="n">data</span><span class="p">,</span><span class="n">pca</span><span class="p">,</span><span class="n">whitening</span><span class="p">,</span><span class="n">exact_pca</span><span class="p">)</span>
+        
+    <span class="k">if</span> <span class="n">downsample</span> <span class="o">!=</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">factor</span> <span class="o">=</span> <span class="n">downsample</span> <span class="o">/</span> <span class="n">fs</span>
+        <span class="n">Tnew</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ceil</span><span class="p">(</span><span class="n">factor</span> <span class="o">*</span> <span class="p">(</span><span class="n">indices</span><span class="p">[:,</span><span class="mi">1</span><span class="p">]</span><span class="o">-</span><span class="n">indices</span><span class="p">[:,</span><span class="mi">0</span><span class="p">]))</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">int</span><span class="p">)</span>
+        <span class="n">indices_new</span> <span class="o">=</span> <span class="n">auxiliary</span><span class="o">.</span><span class="n">make_indices_from_T</span><span class="p">(</span><span class="n">Tnew</span><span class="p">)</span>
+        <span class="n">data_new</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">Tnew</span><span class="p">),</span><span class="n">p</span><span class="p">))</span>
+        <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">N</span><span class="p">):</span>
+            <span class="n">t</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">indices</span><span class="p">[</span><span class="n">j</span><span class="p">,</span><span class="mi">0</span><span class="p">],</span><span class="n">indices</span><span class="p">[</span><span class="n">j</span><span class="p">,</span><span class="mi">1</span><span class="p">])</span> 
+            <span class="n">tnew</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">indices_new</span><span class="p">[</span><span class="n">j</span><span class="p">,</span><span class="mi">0</span><span class="p">],</span><span class="n">indices_new</span><span class="p">[</span><span class="n">j</span><span class="p">,</span><span class="mi">1</span><span class="p">])</span> 
+            <span class="n">Tjnew</span> <span class="o">=</span> <span class="n">tnew</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+            <span class="n">data_new</span><span class="p">[</span><span class="n">tnew</span><span class="p">,:]</span> <span class="o">=</span> <span class="n">signal</span><span class="o">.</span><span class="n">resample</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="n">t</span><span class="p">,:],</span> <span class="n">Tjnew</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>     
+        <span class="n">data</span> <span class="o">=</span> <span class="n">data_new</span>
+    <span class="k">else</span><span class="p">:</span> <span class="n">indices_new</span> <span class="o">=</span> <span class="n">indices</span>
+
+    <span class="k">return</span> <span class="n">data</span><span class="p">,</span><span class="n">indices_new</span></div>
+
+
+<div class="viewcode-block" id="build_data_autoregressive"><a class="viewcode-back" href="../../preproc.html#glhmm.preproc.build_data_autoregressive">[docs]</a><span class="k">def</span> <span class="nf">build_data_autoregressive</span><span class="p">(</span><span class="n">data</span><span class="p">,</span><span class="n">indices</span><span class="p">,</span><span class="n">autoregressive_order</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+        <span class="n">connectivity</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span><span class="n">center_data</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Builds X and Y for the autoregressive model, </span>
+<span class="sd">    as well as an adapted indices array and predefined connectivity </span>
+<span class="sd">    matrix in the right format. X and Y are centered by default.</span>
+<span class="sd">    </span>
+<span class="sd">    Parameters:</span>
+<span class="sd">    -----------</span>
+<span class="sd">    data : array-like of shape (n_samples,n_parcels)</span>
+<span class="sd">        The data timeseries.</span>
+<span class="sd">    indices : array-like of shape (n_sessions, 2)</span>
+<span class="sd">        The start and end indices of each trial/session in the input data.</span>
+<span class="sd">    autoregressive_order : int, optional, default=1</span>
+<span class="sd">        The number of lags to include in the autoregressive model.</span>
+<span class="sd">    connectivity : array-like of shape (n_parcels, n_parcels), optional, default=None</span>
+<span class="sd">        The matrix indicating which regressors should be used for each variable.</span>
+<span class="sd">    center_data : bool, optional, default=True</span>
+<span class="sd">        If True, the data will be centered.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">    --------</span>
+<span class="sd">    X : array-like of shape (n_samples - n_sessions*autoregressive_order, n_parcels*autoregressive_order)</span>
+<span class="sd">        The timeseries of set of variables 1 (i.e., the regressors).</span>
+<span class="sd">    Y : array-like of shape (n_samples - n_sessions*autoregressive_order, n_parcels)</span>
+<span class="sd">        The timeseries of set of variables 2 (i.e., variables to predict, targets).</span>
+<span class="sd">    indices_new : array-like of shape (n_sessions, 2)</span>
+<span class="sd">        The new array of start and end indices for each trial/session.</span>
+<span class="sd">    connectivity_new : array-like of shape (n_parcels*autoregressive_order, n_parcels)</span>
+<span class="sd">        The new connectivity matrix indicating which regressors should be used for each variable.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">T</span><span class="p">,</span><span class="n">p</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">shape</span>
+    <span class="n">N</span> <span class="o">=</span> <span class="n">indices</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+
+    <span class="k">if</span> <span class="n">autoregressive_order</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="s2">&quot;autoregressive_order is 0 so nothing to be done&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">empty</span><span class="p">(</span><span class="mi">0</span><span class="p">),</span><span class="n">data</span><span class="p">,</span><span class="n">indices</span><span class="p">,</span><span class="n">connectivity</span>
+    
+    <span class="n">X</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">T</span> <span class="o">-</span> <span class="n">N</span><span class="o">*</span><span class="n">autoregressive_order</span><span class="p">,</span><span class="n">p</span><span class="o">*</span><span class="n">autoregressive_order</span><span class="p">))</span>
+    <span class="n">Y</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">T</span> <span class="o">-</span> <span class="n">N</span><span class="o">*</span><span class="n">autoregressive_order</span><span class="p">,</span><span class="n">p</span><span class="p">))</span>
+    <span class="n">indices_new</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">N</span><span class="p">,</span><span class="mi">2</span><span class="p">))</span>
+
+    <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">N</span><span class="p">):</span>
+        <span class="n">ind_1</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">indices</span><span class="p">[</span><span class="n">j</span><span class="p">,</span><span class="mi">0</span><span class="p">]</span><span class="o">+</span><span class="n">autoregressive_order</span><span class="p">,</span><span class="n">indices</span><span class="p">[</span><span class="n">j</span><span class="p">,</span><span class="mi">1</span><span class="p">],</span><span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">int64</span><span class="p">)</span>
+        <span class="n">ind_2</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">indices</span><span class="p">[</span><span class="n">j</span><span class="p">,</span><span class="mi">0</span><span class="p">],</span><span class="n">indices</span><span class="p">[</span><span class="n">j</span><span class="p">,</span><span class="mi">1</span><span class="p">]</span><span class="o">-</span><span class="n">autoregressive_order</span><span class="p">,</span><span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">int64</span><span class="p">)</span> \
+            <span class="o">-</span> <span class="n">j</span> <span class="o">*</span> <span class="n">autoregressive_order</span>
+        <span class="n">Y</span><span class="p">[</span><span class="n">ind_2</span><span class="p">,:]</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="n">ind_1</span><span class="p">,:]</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">autoregressive_order</span><span class="p">):</span>
+            <span class="n">ind_3</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">indices</span><span class="p">[</span><span class="n">j</span><span class="p">,</span><span class="mi">0</span><span class="p">]</span><span class="o">+</span><span class="n">autoregressive_order</span><span class="o">-</span><span class="p">(</span><span class="n">i</span><span class="o">+</span><span class="mi">1</span><span class="p">),</span><span class="n">indices</span><span class="p">[</span><span class="n">j</span><span class="p">,</span><span class="mi">1</span><span class="p">]</span><span class="o">-</span><span class="p">(</span><span class="n">i</span><span class="o">+</span><span class="mi">1</span><span class="p">),</span><span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">int64</span><span class="p">)</span>
+            <span class="n">ind_ch</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">p</span><span class="p">)</span> <span class="o">+</span> <span class="n">i</span> <span class="o">*</span> <span class="n">p</span>
+            <span class="n">X</span><span class="p">[</span><span class="n">ind_2</span><span class="p">,</span><span class="n">ind_ch</span><span class="p">[:,</span><span class="n">np</span><span class="o">.</span><span class="n">newaxis</span><span class="p">]]</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="n">ind_3</span><span class="p">,:]</span><span class="o">.</span><span class="n">T</span>
+        <span class="n">indices_new</span><span class="p">[</span><span class="n">j</span><span class="p">,</span><span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="n">ind_2</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="n">indices_new</span><span class="p">[</span><span class="n">j</span><span class="p">,</span><span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="n">ind_2</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">+</span> <span class="mi">1</span>
+
+    <span class="c1"># center</span>
+    <span class="k">if</span> <span class="n">center_data</span><span class="p">:</span>
+        <span class="n">Y</span> <span class="o">-=</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">Y</span><span class="p">,</span><span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+        <span class="n">X</span> <span class="o">-=</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">X</span><span class="p">,</span><span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">connectivity</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="c1"># connectivity_new : (regressors by regressed) </span>
+        <span class="n">connectivity_new</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">autoregressive_order</span><span class="o">*</span><span class="n">p</span><span class="p">,</span><span class="n">p</span><span class="p">))</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">autoregressive_order</span><span class="p">):</span>
+            <span class="n">ind_ch</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">p</span><span class="p">)</span> <span class="o">+</span> <span class="n">i</span> <span class="o">*</span> <span class="n">p</span>
+            <span class="n">connectivity_new</span><span class="p">[</span><span class="n">ind_ch</span><span class="p">,:]</span> <span class="o">=</span> <span class="n">connectivity</span>
+        <span class="c1"># regress out when asked</span>
+        <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">p</span><span class="p">):</span>
+            <span class="n">jj</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">connectivity_new</span><span class="p">[:,</span><span class="n">j</span><span class="p">]</span><span class="o">==</span><span class="mi">0</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">jj</span><span class="p">)</span><span class="o">==</span><span class="mi">0</span><span class="p">:</span> <span class="k">continue</span>
+            <span class="n">b</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">inv</span><span class="p">(</span><span class="n">X</span><span class="p">[:,</span><span class="n">jj</span><span class="p">]</span><span class="o">.</span><span class="n">T</span> <span class="o">@</span> <span class="n">X</span><span class="p">[:,</span><span class="n">jj</span><span class="p">]</span> <span class="o">+</span> <span class="mf">0.001</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">eye</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">jj</span><span class="p">)))</span> \
+                <span class="o">@</span> <span class="p">(</span><span class="n">X</span><span class="p">[:,</span><span class="n">jj</span><span class="p">]</span><span class="o">.</span><span class="n">T</span> <span class="o">@</span> <span class="n">Y</span><span class="p">[:,</span><span class="n">j</span><span class="p">])</span>
+            <span class="n">Y</span><span class="p">[:,</span><span class="n">j</span><span class="p">]</span> <span class="o">-=</span> <span class="n">X</span><span class="p">[:,</span><span class="n">jj</span><span class="p">]</span> <span class="o">@</span> <span class="n">b</span>
+        <span class="c1"># remove unused variables</span>
+        <span class="n">active_X</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">p</span><span class="p">,</span><span class="n">dtype</span><span class="o">=</span><span class="nb">bool</span><span class="p">)</span>
+        <span class="n">active_Y</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">p</span><span class="p">,</span><span class="n">dtype</span><span class="o">=</span><span class="nb">bool</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">p</span><span class="p">):</span>
+            <span class="n">active_X</span><span class="p">[</span><span class="n">j</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">connectivity</span><span class="p">[</span><span class="n">j</span><span class="p">,:]</span><span class="o">==</span><span class="mi">1</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span>
+            <span class="n">active_Y</span><span class="p">[</span><span class="n">j</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">connectivity</span><span class="p">[:,</span><span class="n">j</span><span class="p">]</span><span class="o">==</span><span class="mi">1</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span>
+        <span class="n">active_X</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">tile</span><span class="p">(</span><span class="n">active_X</span><span class="p">,</span><span class="n">autoregressive_order</span><span class="p">)</span>
+        <span class="n">active_X</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">active_X</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="n">active_Y</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">active_Y</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="n">Y</span> <span class="o">=</span> <span class="n">Y</span><span class="p">[:,</span><span class="n">active_Y</span><span class="p">]</span>
+        <span class="n">X</span> <span class="o">=</span> <span class="n">X</span><span class="p">[:,</span><span class="n">active_X</span><span class="p">]</span>
+        <span class="n">connectivity_new</span> <span class="o">=</span> <span class="n">connectivity_new</span><span class="p">[</span><span class="n">active_X</span><span class="p">,</span><span class="n">active_Y</span><span class="p">[:,</span><span class="n">np</span><span class="o">.</span><span class="n">newaxis</span><span class="p">]]</span><span class="o">.</span><span class="n">T</span>
+    <span class="k">else</span><span class="p">:</span> <span class="n">connectivity_new</span> <span class="o">=</span> <span class="kc">None</span>
+
+    <span class="k">return</span> <span class="n">X</span><span class="p">,</span><span class="n">Y</span><span class="p">,</span><span class="n">indices_new</span><span class="p">,</span><span class="n">connectivity_new</span></div>
+
+
+<div class="viewcode-block" id="build_data_partial_connectivity"><a class="viewcode-back" href="../../preproc.html#glhmm.preproc.build_data_partial_connectivity">[docs]</a><span class="k">def</span> <span class="nf">build_data_partial_connectivity</span><span class="p">(</span><span class="n">X</span><span class="p">,</span><span class="n">Y</span><span class="p">,</span><span class="n">connectivity</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span><span class="n">center_data</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Builds X and Y for the partial connectivity model, </span>
+<span class="sd">    essentially regressing out things when indicated in connectivity,</span>
+<span class="sd">    and getting rid of regressors / regressed variables that are not used;</span>
+<span class="sd">    it return connectivity with the right dimensions as well. </span>
+
+<span class="sd">    Parameters:</span>
+<span class="sd">    -----------</span>
+<span class="sd">    X : np.ndarray of shape (n_samples, n_parcels)</span>
+<span class="sd">        The timeseries of set of variables 1 (i.e., the regressors).</span>
+<span class="sd">    Y : np.ndarray of shape (n_samples, n_parcels)</span>
+<span class="sd">        The timeseries of set of variables 2 (i.e., variables to predict, targets).</span>
+<span class="sd">    connectivity : np.ndarray of shape (n_parcels, n_parcels), optional, default=None</span>
+<span class="sd">        A binary matrix indicating which regressors affect which targets (i.e., variables to predict). </span>
+<span class="sd">    center_data : bool, default=True</span>
+<span class="sd">        Center data to zero mean.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">    --------</span>
+<span class="sd">    X_new : np.ndarray of shape (n_samples, n_active_parcels)</span>
+<span class="sd">        The timeseries of set of variables 1 (i.e., the regressors) after removing unused predictors and regressing out </span>
+<span class="sd">        the effects indicated in connectivity.</span>
+<span class="sd">    Y_new : np.ndarray of shape (n_samples, n_active_parcels)</span>
+<span class="sd">        The timeseries of set of variables 2 (i.e., variables to predict, targets) after removing unused targets and regressing out </span>
+<span class="sd">        the effects indicated in connectivity.</span>
+<span class="sd">    connectivity_new : np.ndarray of shape (n_active_parcels, n_active_parcels), optional, default=None</span>
+<span class="sd">        A binary matrix indicating which regressors affect which targets</span>
+<span class="sd">        The matrix has the same structure as `connectivity` after removing unused predictors and targets.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">X_new</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">copy</span><span class="p">(</span><span class="n">X</span><span class="p">)</span>
+    <span class="n">Y_new</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">copy</span><span class="p">(</span><span class="n">Y</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">connectivity</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">p</span> <span class="o">=</span> <span class="n">X</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+        <span class="n">q</span> <span class="o">=</span> <span class="n">Y</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+        <span class="c1"># regress out when asked</span>
+        <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">q</span><span class="p">):</span>
+            <span class="n">jj</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">connectivity</span><span class="p">[:,</span><span class="n">j</span><span class="p">]</span><span class="o">==</span><span class="mi">0</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">jj</span><span class="p">)</span><span class="o">==</span><span class="mi">0</span><span class="p">:</span> <span class="k">continue</span>
+            <span class="n">b</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">inv</span><span class="p">(</span><span class="n">X</span><span class="p">[:,</span><span class="n">jj</span><span class="p">]</span><span class="o">.</span><span class="n">T</span> <span class="o">@</span> <span class="n">X</span><span class="p">[:,</span><span class="n">jj</span><span class="p">]</span> <span class="o">+</span> <span class="mf">0.001</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">eye</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">jj</span><span class="p">)))</span> \
+                <span class="o">@</span> <span class="p">(</span><span class="n">X</span><span class="p">[:,</span><span class="n">jj</span><span class="p">]</span><span class="o">.</span><span class="n">T</span> <span class="o">@</span> <span class="n">Y</span><span class="p">[:,</span><span class="n">j</span><span class="p">])</span>
+            <span class="n">Y_new</span><span class="p">[:,</span><span class="n">j</span><span class="p">]</span> <span class="o">-=</span> <span class="n">X</span><span class="p">[:,</span><span class="n">jj</span><span class="p">]</span> <span class="o">@</span> <span class="n">b</span>
+        <span class="c1"># remove unused variables</span>
+        <span class="n">active_X</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">p</span><span class="p">,</span><span class="n">dtype</span><span class="o">=</span><span class="nb">bool</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">p</span><span class="p">):</span> <span class="n">active_X</span><span class="p">[</span><span class="n">j</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">connectivity</span><span class="p">[</span><span class="n">j</span><span class="p">,:]</span><span class="o">==</span><span class="mi">1</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span>
+        <span class="n">active_Y</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">q</span><span class="p">,</span><span class="n">dtype</span><span class="o">=</span><span class="nb">bool</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">q</span><span class="p">):</span> <span class="n">active_Y</span><span class="p">[</span><span class="n">j</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">connectivity</span><span class="p">[:,</span><span class="n">j</span><span class="p">]</span><span class="o">==</span><span class="mi">1</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span>
+        <span class="n">active_X</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">active_X</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="n">active_Y</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">active_Y</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="n">Y</span> <span class="o">=</span> <span class="n">Y</span><span class="p">[:,</span><span class="n">active_Y</span><span class="p">]</span>
+        <span class="n">X</span> <span class="o">=</span> <span class="n">X</span><span class="p">[:,</span><span class="n">active_X</span><span class="p">]</span>
+        <span class="c1"># copy of connectivity</span>
+        <span class="n">connectivity_new</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">copy</span><span class="p">(</span><span class="n">connectivity</span><span class="p">)</span>
+        <span class="n">connectivity_new</span> <span class="o">=</span> <span class="n">connectivity_new</span><span class="p">[</span><span class="n">active_X</span><span class="p">,</span><span class="n">active_Y</span><span class="p">[:,</span><span class="n">np</span><span class="o">.</span><span class="n">newaxis</span><span class="p">]]</span><span class="o">.</span><span class="n">T</span>
+    <span class="k">else</span><span class="p">:</span> <span class="n">connectivity_new</span> <span class="o">=</span> <span class="kc">None</span>
+
+    <span class="c1"># center</span>
+    <span class="k">if</span> <span class="n">center_data</span><span class="p">:</span>
+        <span class="n">Y_new</span> <span class="o">=</span> <span class="n">Y_new</span> <span class="o">-</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">Y_new</span><span class="p">,</span><span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+        <span class="n">X_new</span> <span class="o">=</span> <span class="n">X_new</span> <span class="o">-</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">X_new</span><span class="p">,</span><span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">X_new</span><span class="p">,</span><span class="n">Y_new</span><span class="p">,</span><span class="n">connectivity_new</span></div>
+
+
+<div class="viewcode-block" id="build_data_tde"><a class="viewcode-back" href="../../preproc.html#glhmm.preproc.build_data_tde">[docs]</a><span class="k">def</span> <span class="nf">build_data_tde</span><span class="p">(</span><span class="n">data</span><span class="p">,</span><span class="n">indices</span><span class="p">,</span><span class="n">lags</span><span class="p">,</span><span class="n">pca</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span><span class="n">standardise_pc</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Builds X for the temporal delay embedded HMM, as well as an adapted indices array.</span>
+
+<span class="sd">    Parameters:</span>
+<span class="sd">    -----------</span>
+<span class="sd">    data : numpy array of shape (n_samples, n_parcels)</span>
+<span class="sd">        The data matrix.</span>
+<span class="sd">    indices : array-like of shape (n_sessions, 2)</span>
+<span class="sd">        The start and end indices of each trial/session in the input data.</span>
+<span class="sd">    lags : list or array-like</span>
+<span class="sd">        The lags to use for the embedding.</span>
+<span class="sd">    pca : None or int or float or numpy array, default=None</span>
+<span class="sd">        The number of components for PCA, the explained variance for PCA, the precomputed PCA projection matrix, </span>
+<span class="sd">        or None to skip PCA.</span>
+<span class="sd">    standardise_pc : bool, default=True</span>
+<span class="sd">        Whether or not to standardise the principal components before returning.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">    --------</span>
+<span class="sd">    X : numpy array of shape (n_samples - n_sessions*rwindow, n_parcels*n_lags)</span>
+<span class="sd">        The delay-embedded timeseries data.</span>
+<span class="sd">    indices_new : numpy array of shape (n_sessions, 2)</span>
+<span class="sd">        The adapted indices for each segment of delay-embedded data.</span>
+
+<span class="sd">    PCA can be run optionally: if pca &gt;=1, that is the number of components;</span>
+<span class="sd">    if pca &lt; 1, that is explained variance;</span>
+<span class="sd">    if pca is a numpy array, then it is a precomputed PCA projection matrix;</span>
+<span class="sd">    if pca is None, then no PCA is run.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">T</span><span class="p">,</span><span class="n">p</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">shape</span>
+    <span class="n">N</span> <span class="o">=</span> <span class="n">indices</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+    
+    <span class="n">L</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">lags</span><span class="p">)</span>
+    <span class="n">minlag</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">min</span><span class="p">(</span><span class="n">lags</span><span class="p">)</span>
+    <span class="n">maxlag</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">lags</span><span class="p">)</span>
+    <span class="n">rwindow</span> <span class="o">=</span> <span class="n">maxlag</span><span class="o">-</span><span class="n">minlag</span>
+
+    <span class="n">X</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">T</span> <span class="o">-</span> <span class="n">N</span><span class="o">*</span><span class="n">rwindow</span><span class="p">,</span><span class="n">p</span><span class="o">*</span><span class="n">L</span><span class="p">))</span>
+    <span class="n">indices_new</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">N</span><span class="p">,</span><span class="mi">2</span><span class="p">))</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">int</span><span class="p">)</span>
+
+    <span class="c1"># Embedding</span>
+    <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">N</span><span class="p">):</span>
+        <span class="n">ind_1</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">indices</span><span class="p">[</span><span class="n">j</span><span class="p">,</span><span class="mi">0</span><span class="p">],</span><span class="n">indices</span><span class="p">[</span><span class="n">j</span><span class="p">,</span><span class="mi">1</span><span class="p">],</span><span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">int64</span><span class="p">)</span>
+        <span class="n">ind_2</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">indices</span><span class="p">[</span><span class="n">j</span><span class="p">,</span><span class="mi">0</span><span class="p">],</span><span class="n">indices</span><span class="p">[</span><span class="n">j</span><span class="p">,</span><span class="mi">1</span><span class="p">]</span><span class="o">-</span><span class="n">rwindow</span><span class="p">,</span><span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">int64</span><span class="p">)</span> <span class="o">-</span> <span class="n">j</span> <span class="o">*</span> <span class="n">rwindow</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">L</span><span class="p">):</span>
+            <span class="n">l</span> <span class="o">=</span> <span class="n">lags</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+            <span class="n">X_l</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">roll</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="n">ind_1</span><span class="p">,:],</span><span class="n">l</span><span class="p">,</span><span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+            <span class="n">X_l</span> <span class="o">=</span> <span class="n">X_l</span><span class="p">[</span><span class="o">-</span><span class="n">minlag</span><span class="p">:</span><span class="o">-</span><span class="n">maxlag</span><span class="p">,:]</span>
+            <span class="n">ind_ch</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="n">L</span><span class="o">*</span><span class="n">p</span><span class="p">,</span><span class="n">L</span><span class="p">)</span>
+            <span class="n">X</span><span class="p">[</span><span class="n">ind_2</span><span class="p">,</span><span class="n">ind_ch</span><span class="p">[:,</span><span class="n">np</span><span class="o">.</span><span class="n">newaxis</span><span class="p">]]</span> <span class="o">=</span> <span class="n">X_l</span><span class="o">.</span><span class="n">T</span>
+        <span class="n">indices_new</span><span class="p">[</span><span class="n">j</span><span class="p">,</span><span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="n">ind_2</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="n">indices_new</span><span class="p">[</span><span class="n">j</span><span class="p">,</span><span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="n">ind_2</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">+</span> <span class="mi">1</span>
+
+    <span class="c1"># Standardise (in Matlab&#39;s HMM-MAR we only centered pre-embedding)</span>
+    <span class="c1"># note that this is done for the entire data set and not per sessions</span>
+    <span class="n">X</span> <span class="o">-=</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">X</span><span class="p">,</span><span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+    <span class="n">X</span> <span class="o">/=</span> <span class="n">np</span><span class="o">.</span><span class="n">std</span><span class="p">(</span><span class="n">X</span><span class="p">,</span><span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+
+    <span class="c1"># PCA and whitening </span>
+    <span class="k">if</span> <span class="n">pca</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">X</span> <span class="o">=</span> <span class="n">apply_pca</span><span class="p">(</span><span class="n">X</span><span class="p">,</span><span class="n">pca</span><span class="p">,</span><span class="n">standardise_pc</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">X</span><span class="p">,</span><span class="n">indices_new</span></div>
+
+
+<div class="viewcode-block" id="load_files"><a class="viewcode-back" href="../../preproc.html#glhmm.preproc.load_files">[docs]</a><span class="k">def</span> <span class="nf">load_files</span><span class="p">(</span><span class="n">files</span><span class="p">,</span><span class="n">I</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span><span class="n">do_only_indices</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>        
+
+    <span class="n">X</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">Y</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">indices</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">sum_T</span> <span class="o">=</span> <span class="mi">0</span>
+
+    <span class="k">if</span> <span class="n">I</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">I</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">files</span><span class="p">))</span>
+    <span class="k">elif</span> <span class="nb">type</span><span class="p">(</span><span class="n">I</span><span class="p">)</span> <span class="ow">is</span> <span class="nb">int</span><span class="p">:</span>
+        <span class="n">I</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">I</span><span class="p">])</span>
+
+    <span class="k">for</span> <span class="n">ij</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">I</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
+
+        <span class="n">j</span> <span class="o">=</span> <span class="n">I</span><span class="p">[</span><span class="n">ij</span><span class="p">]</span>
+
+        <span class="c1"># if type(files[j]) is tuple:</span>
+        <span class="c1">#     if len(files[j][0]) &gt; 0: # X</span>
+        <span class="c1">#         if files[j][0][-4:] == &#39;.npy&#39;:</span>
+        <span class="c1">#             X.append(np.load(files[j][0]))</span>
+        <span class="c1">#         elif files[j][0][-4:] == &#39;.txt&#39;:</span>
+
+        <span class="k">if</span> <span class="n">files</span><span class="p">[</span><span class="n">j</span><span class="p">][</span><span class="o">-</span><span class="mi">4</span><span class="p">:]</span> <span class="o">==</span> <span class="s1">&#39;.mat&#39;</span><span class="p">:</span>
+            <span class="n">dat</span> <span class="o">=</span> <span class="n">scipy</span><span class="o">.</span><span class="n">io</span><span class="o">.</span><span class="n">loadmat</span><span class="p">(</span><span class="n">files</span><span class="p">[</span><span class="n">j</span><span class="p">])</span>
+
+        <span class="k">elif</span> <span class="n">files</span><span class="p">[</span><span class="n">j</span><span class="p">][</span><span class="o">-</span><span class="mi">4</span><span class="p">:]</span> <span class="o">==</span> <span class="s1">&#39;.npz&#39;</span><span class="p">:</span>
+            <span class="n">dat</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">files</span><span class="p">[</span><span class="n">j</span><span class="p">])</span>
+            
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">do_only_indices</span><span class="p">:</span>
+            <span class="k">if</span> <span class="p">(</span><span class="s1">&#39;X&#39;</span> <span class="ow">in</span> <span class="n">dat</span><span class="p">)</span> <span class="ow">and</span> <span class="p">(</span><span class="ow">not</span> <span class="s1">&#39;Y&#39;</span> <span class="ow">in</span> <span class="n">dat</span><span class="p">):</span> 
+                <span class="n">Y</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">dat</span><span class="p">[</span><span class="s2">&quot;X&quot;</span><span class="p">])</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">if</span> <span class="s1">&#39;X&#39;</span> <span class="ow">in</span> <span class="n">dat</span><span class="p">:</span> <span class="n">X</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">dat</span><span class="p">[</span><span class="s2">&quot;X&quot;</span><span class="p">])</span>
+                <span class="n">Y</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">dat</span><span class="p">[</span><span class="s2">&quot;Y&quot;</span><span class="p">])</span>
+        <span class="k">if</span> <span class="s1">&#39;indices&#39;</span> <span class="ow">in</span> <span class="n">dat</span><span class="p">:</span> 
+            <span class="n">indices</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">dat</span><span class="p">[</span><span class="s1">&#39;indices&#39;</span><span class="p">])</span>
+        <span class="k">elif</span> <span class="s1">&#39;T&#39;</span> <span class="ow">in</span> <span class="n">dat</span><span class="p">:</span>
+            <span class="n">indices</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">make_indices_from_T</span><span class="p">(</span><span class="n">dat</span><span class="p">[</span><span class="s1">&#39;T&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="n">sum_T</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">ind</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">))</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">int</span><span class="p">)</span>
+            <span class="n">ind</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="mi">0</span>
+            <span class="n">ind</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span><span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="n">Y</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+            <span class="n">indices</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">ind</span> <span class="o">+</span> <span class="n">sum_T</span><span class="p">)</span>
+
+        <span class="n">sum_T</span> <span class="o">+=</span> <span class="n">dat</span><span class="p">[</span><span class="s2">&quot;Y&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">do_only_indices</span><span class="p">:</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">X</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span> <span class="n">X</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">(</span><span class="n">X</span><span class="p">)</span>
+        <span class="n">Y</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">(</span><span class="n">Y</span><span class="p">)</span>
+    <span class="n">indices</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">(</span><span class="n">indices</span><span class="p">)</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">indices</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span> <span class="n">indices</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">expand_dims</span><span class="p">(</span><span class="n">indices</span><span class="p">,</span><span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">X</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span> <span class="n">X</span> <span class="o">=</span> <span class="kc">None</span>
+
+    <span class="k">return</span> <span class="n">X</span><span class="p">,</span><span class="n">Y</span><span class="p">,</span><span class="n">indices</span></div>
+
+
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2023, Diego Vidaurre.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

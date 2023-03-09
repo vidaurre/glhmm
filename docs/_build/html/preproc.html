@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.19: https://docutils.sourceforge.io/" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>preproc module &mdash; GLHMM 0.0.1 documentation</title>
+      <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+        <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js"></script>
+        <script src="_static/doctools.js"></script>
+        <script src="_static/sphinx_highlight.js"></script>
+        <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="auxiliary module" href="auxiliary.html" />
+    <link rel="prev" title="io_glhmm module" href="io_glhmm.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            GLHMM
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="reference internal" href="modules.html">API</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="glhmm.html">glhmm module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="io_glhmm.html">io_glhmm module</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">preproc module</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#glhmm.preproc.apply_pca"><code class="docutils literal notranslate"><span class="pre">apply_pca()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#glhmm.preproc.build_data_autoregressive"><code class="docutils literal notranslate"><span class="pre">build_data_autoregressive()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#glhmm.preproc.build_data_partial_connectivity"><code class="docutils literal notranslate"><span class="pre">build_data_partial_connectivity()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#glhmm.preproc.build_data_tde"><code class="docutils literal notranslate"><span class="pre">build_data_tde()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#glhmm.preproc.load_files"><code class="docutils literal notranslate"><span class="pre">load_files()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#glhmm.preproc.preprocess_data"><code class="docutils literal notranslate"><span class="pre">preprocess_data()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="auxiliary.html">auxiliary module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="utils.html">utils module</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="glossary.html">Glossary</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">GLHMM</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="modules.html">API</a></li>
+      <li class="breadcrumb-item active">preproc module</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/preproc.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  
+<style>
+/* CSS overrides for sphinx_rtd_theme */
+
+/* 24px margin */
+.nbinput.nblast.container,
+.nboutput.nblast.container {
+    margin-bottom: 19px;  /* padding has already 5px */
+}
+
+/* ... except between code cells! */
+.nblast.container + .nbinput.container {
+    margin-top: -19px;
+}
+
+.admonition > p:before {
+    margin-right: 4px;  /* make room for the exclamation icon */
+}
+
+/* Fix math alignment, see https://github.com/rtfd/sphinx_rtd_theme/pull/686 */
+.math {
+    text-align: unset;
+}
+</style>
+<section id="module-glhmm.preproc">
+<span id="preproc-module"></span><h1>preproc module<a class="headerlink" href="#module-glhmm.preproc" title="Permalink to this heading"></a></h1>
+<p>Preprocessing functions - General/Gaussian Linear Hidden Markov Model
+&#64;author: Diego Vidaurre 2023</p>
+<dl class="py function">
+<dt class="sig sig-object py" id="glhmm.preproc.apply_pca">
+<span class="sig-prename descclassname"><span class="pre">glhmm.preproc.</span></span><span class="sig-name descname"><span class="pre">apply_pca</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">X</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">d</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">whitening</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">exact</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/glhmm/preproc.html#apply_pca"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#glhmm.preproc.apply_pca" title="Permalink to this definition"></a></dt>
+<dd><p>Applies PCA to the input data X.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>X</strong> (<em>array-like</em><em> of </em><em>shape</em><em> (</em><em>n_samples</em><em>, </em><em>n_parcels</em><em>)</em>) – The input data to be transformed.</p></li>
+<li><p><strong>d</strong> (<em>int</em><em> or </em><em>float</em>) – If int, the number of components to keep.
+If float, the percentage of explained variance to keep.
+If array-like of shape (n_parcels, n_components), the transformation matrix.</p></li>
+<li><p><strong>whitening</strong> (<em>bool</em><em>, </em><em>default=False</em>) – Whether to whiten the transformed data.</p></li>
+<li><p><strong>exact</strong> (<em>bool</em><em>, </em><em>default=True</em>) – Whether to use full SVD solver for PCA.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><strong>X_transformed</strong> – The transformed data after applying PCA.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>array-like of shape (n_samples, n_components)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="glhmm.preproc.build_data_autoregressive">
+<span class="sig-prename descclassname"><span class="pre">glhmm.preproc.</span></span><span class="sig-name descname"><span class="pre">build_data_autoregressive</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">indices</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">autoregressive_order</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">connectivity</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">center_data</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/glhmm/preproc.html#build_data_autoregressive"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#glhmm.preproc.build_data_autoregressive" title="Permalink to this definition"></a></dt>
+<dd><p>Builds X and Y for the autoregressive model,
+as well as an adapted indices array and predefined connectivity
+matrix in the right format. X and Y are centered by default.</p>
+<section id="parameters">
+<h2>Parameters:<a class="headerlink" href="#parameters" title="Permalink to this heading"></a></h2>
+<dl class="simple">
+<dt>data<span class="classifier">array-like of shape (n_samples,n_parcels)</span></dt><dd><p>The data timeseries.</p>
+</dd>
+<dt>indices<span class="classifier">array-like of shape (n_sessions, 2)</span></dt><dd><p>The start and end indices of each trial/session in the input data.</p>
+</dd>
+<dt>autoregressive_order<span class="classifier">int, optional, default=1</span></dt><dd><p>The number of lags to include in the autoregressive model.</p>
+</dd>
+<dt>connectivity<span class="classifier">array-like of shape (n_parcels, n_parcels), optional, default=None</span></dt><dd><p>The matrix indicating which regressors should be used for each variable.</p>
+</dd>
+<dt>center_data<span class="classifier">bool, optional, default=True</span></dt><dd><p>If True, the data will be centered.</p>
+</dd>
+</dl>
+</section>
+<section id="returns">
+<h2>Returns:<a class="headerlink" href="#returns" title="Permalink to this heading"></a></h2>
+<dl class="simple">
+<dt>X<span class="classifier">array-like of shape (n_samples - n_sessions*autoregressive_order, n_parcels*autoregressive_order)</span></dt><dd><p>The timeseries of set of variables 1 (i.e., the regressors).</p>
+</dd>
+<dt>Y<span class="classifier">array-like of shape (n_samples - n_sessions*autoregressive_order, n_parcels)</span></dt><dd><p>The timeseries of set of variables 2 (i.e., variables to predict, targets).</p>
+</dd>
+<dt>indices_new<span class="classifier">array-like of shape (n_sessions, 2)</span></dt><dd><p>The new array of start and end indices for each trial/session.</p>
+</dd>
+<dt>connectivity_new<span class="classifier">array-like of shape (n_parcels*autoregressive_order, n_parcels)</span></dt><dd><p>The new connectivity matrix indicating which regressors should be used for each variable.</p>
+</dd>
+</dl>
+</section>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="glhmm.preproc.build_data_partial_connectivity">
+<span class="sig-prename descclassname"><span class="pre">glhmm.preproc.</span></span><span class="sig-name descname"><span class="pre">build_data_partial_connectivity</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">X</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Y</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">connectivity</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">center_data</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/glhmm/preproc.html#build_data_partial_connectivity"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#glhmm.preproc.build_data_partial_connectivity" title="Permalink to this definition"></a></dt>
+<dd><p>Builds X and Y for the partial connectivity model,
+essentially regressing out things when indicated in connectivity,
+and getting rid of regressors / regressed variables that are not used;
+it return connectivity with the right dimensions as well.</p>
+<section id="id1">
+<h2>Parameters:<a class="headerlink" href="#id1" title="Permalink to this heading"></a></h2>
+<dl class="simple">
+<dt>X<span class="classifier">np.ndarray of shape (n_samples, n_parcels)</span></dt><dd><p>The timeseries of set of variables 1 (i.e., the regressors).</p>
+</dd>
+<dt>Y<span class="classifier">np.ndarray of shape (n_samples, n_parcels)</span></dt><dd><p>The timeseries of set of variables 2 (i.e., variables to predict, targets).</p>
+</dd>
+<dt>connectivity<span class="classifier">np.ndarray of shape (n_parcels, n_parcels), optional, default=None</span></dt><dd><p>A binary matrix indicating which regressors affect which targets (i.e., variables to predict).</p>
+</dd>
+<dt>center_data<span class="classifier">bool, default=True</span></dt><dd><p>Center data to zero mean.</p>
+</dd>
+</dl>
+</section>
+<section id="id2">
+<h2>Returns:<a class="headerlink" href="#id2" title="Permalink to this heading"></a></h2>
+<dl class="simple">
+<dt>X_new<span class="classifier">np.ndarray of shape (n_samples, n_active_parcels)</span></dt><dd><p>The timeseries of set of variables 1 (i.e., the regressors) after removing unused predictors and regressing out
+the effects indicated in connectivity.</p>
+</dd>
+<dt>Y_new<span class="classifier">np.ndarray of shape (n_samples, n_active_parcels)</span></dt><dd><p>The timeseries of set of variables 2 (i.e., variables to predict, targets) after removing unused targets and regressing out
+the effects indicated in connectivity.</p>
+</dd>
+<dt>connectivity_new<span class="classifier">np.ndarray of shape (n_active_parcels, n_active_parcels), optional, default=None</span></dt><dd><p>A binary matrix indicating which regressors affect which targets
+The matrix has the same structure as <cite>connectivity</cite> after removing unused predictors and targets.</p>
+</dd>
+</dl>
+</section>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="glhmm.preproc.build_data_tde">
+<span class="sig-prename descclassname"><span class="pre">glhmm.preproc.</span></span><span class="sig-name descname"><span class="pre">build_data_tde</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">indices</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">lags</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">pca</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">standardise_pc</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/glhmm/preproc.html#build_data_tde"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#glhmm.preproc.build_data_tde" title="Permalink to this definition"></a></dt>
+<dd><p>Builds X for the temporal delay embedded HMM, as well as an adapted indices array.</p>
+<section id="id3">
+<h2>Parameters:<a class="headerlink" href="#id3" title="Permalink to this heading"></a></h2>
+<dl class="simple">
+<dt>data<span class="classifier">numpy array of shape (n_samples, n_parcels)</span></dt><dd><p>The data matrix.</p>
+</dd>
+<dt>indices<span class="classifier">array-like of shape (n_sessions, 2)</span></dt><dd><p>The start and end indices of each trial/session in the input data.</p>
+</dd>
+<dt>lags<span class="classifier">list or array-like</span></dt><dd><p>The lags to use for the embedding.</p>
+</dd>
+<dt>pca<span class="classifier">None or int or float or numpy array, default=None</span></dt><dd><p>The number of components for PCA, the explained variance for PCA, the precomputed PCA projection matrix,
+or None to skip PCA.</p>
+</dd>
+<dt>standardise_pc<span class="classifier">bool, default=True</span></dt><dd><p>Whether or not to standardise the principal components before returning.</p>
+</dd>
+</dl>
+</section>
+<section id="id4">
+<h2>Returns:<a class="headerlink" href="#id4" title="Permalink to this heading"></a></h2>
+<dl class="simple">
+<dt>X<span class="classifier">numpy array of shape (n_samples - n_sessions*rwindow, n_parcels*n_lags)</span></dt><dd><p>The delay-embedded timeseries data.</p>
+</dd>
+<dt>indices_new<span class="classifier">numpy array of shape (n_sessions, 2)</span></dt><dd><p>The adapted indices for each segment of delay-embedded data.</p>
+</dd>
+</dl>
+<p>PCA can be run optionally: if pca &gt;=1, that is the number of components;
+if pca &lt; 1, that is explained variance;
+if pca is a numpy array, then it is a precomputed PCA projection matrix;
+if pca is None, then no PCA is run.</p>
+</section>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="glhmm.preproc.load_files">
+<span class="sig-prename descclassname"><span class="pre">glhmm.preproc.</span></span><span class="sig-name descname"><span class="pre">load_files</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">files</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">I</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">do_only_indices</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/glhmm/preproc.html#load_files"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#glhmm.preproc.load_files" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="glhmm.preproc.preprocess_data">
+<span class="sig-prename descclassname"><span class="pre">glhmm.preproc.</span></span><span class="sig-name descname"><span class="pre">preprocess_data</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">indices</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">standardise</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">filter</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">detrend</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">onpower</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">pca</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">whitening</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">exact_pca</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">downsample</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/glhmm/preproc.html#preprocess_data"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#glhmm.preproc.preprocess_data" title="Permalink to this definition"></a></dt>
+<dd><p>Preprocess the input data.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>data</strong> (<em>array-like</em><em> of </em><em>shape</em><em> (</em><em>n_samples</em><em>, </em><em>n_parcels</em><em>)</em>) – The input data to be preprocessed.</p></li>
+<li><p><strong>indices</strong> (<em>array-like</em><em> of </em><em>shape</em><em> (</em><em>n_sessions</em><em>, </em><em>2</em><em>)</em>) – The start and end indices of each trial/session in the input data.</p></li>
+<li><p><strong>fs</strong> (<em>int</em><em> or </em><em>float</em><em>, </em><em>default=1</em>) – The frequency of the input data.</p></li>
+<li><p><strong>standardise</strong> (<em>bool</em><em>, </em><em>default=True</em>) – Whether to standardize the input data.</p></li>
+<li><p><strong>filter</strong> (<em>tuple</em><em> of </em><em>length 2</em><em> or </em><em>None</em><em>, </em><em>default=None</em>) – The low-pass and high-pass thresholds to apply to the input data.
+If None, no filtering will be applied.
+If a tuple, the first element is the low-pass threshold and the second is the high-pass threshold.</p></li>
+<li><p><strong>detrend</strong> (<em>bool</em><em>, </em><em>default=True</em>) – Whether to detrend the input data.</p></li>
+<li><p><strong>onpower</strong> (<em>bool</em><em>, </em><em>default=False</em>) – Whether to calculate the power of the input data using the Hilbert transform.</p></li>
+<li><p><strong>pca</strong> (<em>int</em><em> or </em><em>float</em><em> or </em><em>None</em><em>, </em><em>default=None</em>) – If int, the number of components to keep after applying PCA.
+If float, the percentage of explained variance to keep after applying PCA.
+If None, no PCA will be applied.</p></li>
+<li><p><strong>whitening</strong> (<em>bool</em><em>, </em><em>default=False</em>) – Whether to whiten the input data after applying PCA.</p></li>
+<li><p><strong>exact_pca</strong> (<em>bool</em><em>, </em><em>default=True</em>) – Whether to use full SVD solver for PCA.</p></li>
+<li><p><strong>downsample</strong> (<em>int</em><em> or </em><em>float</em><em> or </em><em>None</em><em>, </em><em>default=None</em>) – The new frequency of the input data after downsampling.
+If None, no downsampling will be applied.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p><strong>data_processed</strong> (<em>array-like of shape (n_samples_processed, n_parcels)</em>) – The preprocessed input data.</p></li>
+<li><p><strong>indices_processed</strong> (<em>array-like of shape (n_sessions_processed, 2)</em>) – The start and end indices of each trial/session in the preprocessed data.</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="io_glhmm.html" class="btn btn-neutral float-left" title="io_glhmm module" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="auxiliary.html" class="btn btn-neutral float-right" title="auxiliary module" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2023, Diego Vidaurre.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

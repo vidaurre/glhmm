@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.19: https://docutils.sourceforge.io/" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>API &mdash; GLHMM 0.0.1 documentation</title>
+      <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+        <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js"></script>
+        <script src="_static/doctools.js"></script>
+        <script src="_static/sphinx_highlight.js"></script>
+        <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="glhmm module" href="glhmm.html" />
+    <link rel="prev" title="Glhmm documentation" href="index.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            GLHMM
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="current reference internal" href="#">API</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="glhmm.html">glhmm module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="io_glhmm.html">io_glhmm module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="preproc.html">preproc module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="auxiliary.html">auxiliary module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="utils.html">utils module</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="glossary.html">Glossary</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">GLHMM</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">API</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/modules.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  
+<style>
+/* CSS overrides for sphinx_rtd_theme */
+
+/* 24px margin */
+.nbinput.nblast.container,
+.nboutput.nblast.container {
+    margin-bottom: 19px;  /* padding has already 5px */
+}
+
+/* ... except between code cells! */
+.nblast.container + .nbinput.container {
+    margin-top: -19px;
+}
+
+.admonition > p:before {
+    margin-right: 4px;  /* make room for the exclamation icon */
+}
+
+/* Fix math alignment, see https://github.com/rtfd/sphinx_rtd_theme/pull/686 */
+.math {
+    text-align: unset;
+}
+</style>
+<section id="api">
+<h1>API<a class="headerlink" href="#api" title="Permalink to this heading"></a></h1>
+<div class="toctree-wrapper compound">
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="glhmm.html">glhmm module</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="glhmm.html#glhmm.glhmm.glhmm"><code class="docutils literal notranslate"><span class="pre">glhmm</span></code></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="glhmm.html#glhmm.glhmm.glhmm.decode"><code class="docutils literal notranslate"><span class="pre">glhmm.decode()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="glhmm.html#glhmm.glhmm.glhmm.dual_estimate"><code class="docutils literal notranslate"><span class="pre">glhmm.dual_estimate()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="glhmm.html#glhmm.glhmm.glhmm.get_beta"><code class="docutils literal notranslate"><span class="pre">glhmm.get_beta()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="glhmm.html#glhmm.glhmm.glhmm.get_covariance_matrix"><code class="docutils literal notranslate"><span class="pre">glhmm.get_covariance_matrix()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="glhmm.html#glhmm.glhmm.glhmm.get_fe"><code class="docutils literal notranslate"><span class="pre">glhmm.get_fe()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="glhmm.html#glhmm.glhmm.glhmm.get_inverse_covariance_matrix"><code class="docutils literal notranslate"><span class="pre">glhmm.get_inverse_covariance_matrix()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="glhmm.html#glhmm.glhmm.glhmm.get_mean"><code class="docutils literal notranslate"><span class="pre">glhmm.get_mean()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="glhmm.html#glhmm.glhmm.glhmm.loglikelihood"><code class="docutils literal notranslate"><span class="pre">glhmm.loglikelihood()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="glhmm.html#glhmm.glhmm.glhmm.sample"><code class="docutils literal notranslate"><span class="pre">glhmm.sample()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="glhmm.html#glhmm.glhmm.glhmm.sample_Gamma"><code class="docutils literal notranslate"><span class="pre">glhmm.sample_Gamma()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="glhmm.html#glhmm.glhmm.glhmm.train"><code class="docutils literal notranslate"><span class="pre">glhmm.train()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="io_glhmm.html">io_glhmm module</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="io_glhmm.html#glhmm.io_glhmm.load_files"><code class="docutils literal notranslate"><span class="pre">load_files()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="io_glhmm.html#glhmm.io_glhmm.read_flattened_hmm_mat"><code class="docutils literal notranslate"><span class="pre">read_flattened_hmm_mat()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="preproc.html">preproc module</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="preproc.html#glhmm.preproc.apply_pca"><code class="docutils literal notranslate"><span class="pre">apply_pca()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="preproc.html#glhmm.preproc.build_data_autoregressive"><code class="docutils literal notranslate"><span class="pre">build_data_autoregressive()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="preproc.html#glhmm.preproc.build_data_partial_connectivity"><code class="docutils literal notranslate"><span class="pre">build_data_partial_connectivity()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="preproc.html#glhmm.preproc.build_data_tde"><code class="docutils literal notranslate"><span class="pre">build_data_tde()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="preproc.html#glhmm.preproc.load_files"><code class="docutils literal notranslate"><span class="pre">load_files()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="preproc.html#glhmm.preproc.preprocess_data"><code class="docutils literal notranslate"><span class="pre">preprocess_data()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="auxiliary.html">auxiliary module</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="auxiliary.html#glhmm.auxiliary.Gamma_entropy"><code class="docutils literal notranslate"><span class="pre">Gamma_entropy()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="auxiliary.html#glhmm.auxiliary.Gamma_indices_to_Xi_indices"><code class="docutils literal notranslate"><span class="pre">Gamma_indices_to_Xi_indices()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="auxiliary.html#glhmm.auxiliary.approximate_Xi"><code class="docutils literal notranslate"><span class="pre">approximate_Xi()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="auxiliary.html#glhmm.auxiliary.compute_alpha_beta"><code class="docutils literal notranslate"><span class="pre">compute_alpha_beta()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="auxiliary.html#glhmm.auxiliary.compute_qstar"><code class="docutils literal notranslate"><span class="pre">compute_qstar()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="auxiliary.html#glhmm.auxiliary.dirichlet_kl"><code class="docutils literal notranslate"><span class="pre">dirichlet_kl()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="auxiliary.html#glhmm.auxiliary.gamma_kl"><code class="docutils literal notranslate"><span class="pre">gamma_kl()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="auxiliary.html#glhmm.auxiliary.gauss1d_kl"><code class="docutils literal notranslate"><span class="pre">gauss1d_kl()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="auxiliary.html#glhmm.auxiliary.gauss_kl"><code class="docutils literal notranslate"><span class="pre">gauss_kl()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="auxiliary.html#glhmm.auxiliary.jls_extract_def"><code class="docutils literal notranslate"><span class="pre">jls_extract_def()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="auxiliary.html#glhmm.auxiliary.make_indices_from_T"><code class="docutils literal notranslate"><span class="pre">make_indices_from_T()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="auxiliary.html#glhmm.auxiliary.slice_matrix"><code class="docutils literal notranslate"><span class="pre">slice_matrix()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="auxiliary.html#glhmm.auxiliary.wishart_kl"><code class="docutils literal notranslate"><span class="pre">wishart_kl()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="utils.html">utils module</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="utils.html#glhmm.utils.get_FO"><code class="docutils literal notranslate"><span class="pre">get_FO()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="utils.html#glhmm.utils.get_FO_entropy"><code class="docutils literal notranslate"><span class="pre">get_FO_entropy()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="utils.html#glhmm.utils.get_life_times"><code class="docutils literal notranslate"><span class="pre">get_life_times()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="utils.html#glhmm.utils.get_maxFO"><code class="docutils literal notranslate"><span class="pre">get_maxFO()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="utils.html#glhmm.utils.get_state_evoked_response"><code class="docutils literal notranslate"><span class="pre">get_state_evoked_response()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="utils.html#glhmm.utils.get_state_evoked_response_entropy"><code class="docutils literal notranslate"><span class="pre">get_state_evoked_response_entropy()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="utils.html#glhmm.utils.get_state_onsets"><code class="docutils literal notranslate"><span class="pre">get_state_onsets()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="utils.html#glhmm.utils.get_switching_rate"><code class="docutils literal notranslate"><span class="pre">get_switching_rate()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="utils.html#glhmm.utils.get_visits"><code class="docutils literal notranslate"><span class="pre">get_visits()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</div>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="index.html" class="btn btn-neutral float-left" title="Glhmm documentation" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="glhmm.html" class="btn btn-neutral float-right" title="glhmm module" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2023, Diego Vidaurre.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

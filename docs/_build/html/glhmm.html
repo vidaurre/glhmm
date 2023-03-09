@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.19: https://docutils.sourceforge.io/" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>glhmm module &mdash; GLHMM 0.0.1 documentation</title>
+      <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+        <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js"></script>
+        <script src="_static/doctools.js"></script>
+        <script src="_static/sphinx_highlight.js"></script>
+        <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="io_glhmm module" href="io_glhmm.html" />
+    <link rel="prev" title="API" href="modules.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            GLHMM
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="reference internal" href="modules.html">API</a><ul class="current">
+<li class="toctree-l2 current"><a class="current reference internal" href="#">glhmm module</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#glhmm.glhmm.glhmm"><code class="docutils literal notranslate"><span class="pre">glhmm</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#glhmm.glhmm.glhmm.decode"><code class="docutils literal notranslate"><span class="pre">glhmm.decode()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#glhmm.glhmm.glhmm.dual_estimate"><code class="docutils literal notranslate"><span class="pre">glhmm.dual_estimate()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#glhmm.glhmm.glhmm.get_beta"><code class="docutils literal notranslate"><span class="pre">glhmm.get_beta()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#glhmm.glhmm.glhmm.get_covariance_matrix"><code class="docutils literal notranslate"><span class="pre">glhmm.get_covariance_matrix()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#glhmm.glhmm.glhmm.get_fe"><code class="docutils literal notranslate"><span class="pre">glhmm.get_fe()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#glhmm.glhmm.glhmm.get_inverse_covariance_matrix"><code class="docutils literal notranslate"><span class="pre">glhmm.get_inverse_covariance_matrix()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#glhmm.glhmm.glhmm.get_mean"><code class="docutils literal notranslate"><span class="pre">glhmm.get_mean()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#glhmm.glhmm.glhmm.loglikelihood"><code class="docutils literal notranslate"><span class="pre">glhmm.loglikelihood()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#glhmm.glhmm.glhmm.sample"><code class="docutils literal notranslate"><span class="pre">glhmm.sample()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#glhmm.glhmm.glhmm.sample_Gamma"><code class="docutils literal notranslate"><span class="pre">glhmm.sample_Gamma()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#glhmm.glhmm.glhmm.train"><code class="docutils literal notranslate"><span class="pre">glhmm.train()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="io_glhmm.html">io_glhmm module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="preproc.html">preproc module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="auxiliary.html">auxiliary module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="utils.html">utils module</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="glossary.html">Glossary</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">GLHMM</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="modules.html">API</a></li>
+      <li class="breadcrumb-item active">glhmm module</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/glhmm.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  
+<style>
+/* CSS overrides for sphinx_rtd_theme */
+
+/* 24px margin */
+.nbinput.nblast.container,
+.nboutput.nblast.container {
+    margin-bottom: 19px;  /* padding has already 5px */
+}
+
+/* ... except between code cells! */
+.nblast.container + .nbinput.container {
+    margin-top: -19px;
+}
+
+.admonition > p:before {
+    margin-right: 4px;  /* make room for the exclamation icon */
+}
+
+/* Fix math alignment, see https://github.com/rtfd/sphinx_rtd_theme/pull/686 */
+.math {
+    text-align: unset;
+}
+</style>
+<section id="module-glhmm.glhmm">
+<span id="glhmm-module"></span><h1>glhmm module<a class="headerlink" href="#module-glhmm.glhmm" title="Permalink to this heading"></a></h1>
+<p>Gaussian Linear Hidden Markov Model
+&#64;author: Diego Vidaurre 2023</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="glhmm.glhmm.glhmm">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">glhmm.glhmm.</span></span><span class="sig-name descname"><span class="pre">glhmm</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">K</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">10</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">covtype</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'shareddiag'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">model_mean</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'state'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">model_beta</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'state'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dirichlet_diag</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">10</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">connectivity</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Pstructure</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Pistructure</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/glhmm/glhmm.html#glhmm"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#glhmm.glhmm.glhmm" title="Permalink to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>Gaussian Linear Hidden Markov Model class to decode stimulus from data.</p>
+<section id="attributes">
+<h2>Attributes:<a class="headerlink" href="#attributes" title="Permalink to this heading"></a></h2>
+<dl class="simple">
+<dt>K<span class="classifier">int, default=10</span></dt><dd><p>number of states in the model.</p>
+</dd>
+<dt>covtype<span class="classifier">str, {‘shareddiag’, ‘diag’}, default ‘shareddiag’</span></dt><dd><p>Type of covariance matrix. Choose ‘shareddiag’ to have one diagonal covariance matrix for all states,
+or ‘diag’ to have a diagonal full covariance matrix for each state.</p>
+</dd>
+<dt>model_mean<span class="classifier">str, {‘state’, ‘no’}, default ‘state’</span></dt><dd><p>Model for the mean. If <cite>no</cite> the mean of the timeseries will not be used to drive the states.</p>
+</dd>
+<dt>model_beta<span class="classifier">str, {‘state’, ‘no’}, default ‘state’</span></dt><dd><p>Model for the beta. If <cite>no</cite> the regression coefficients will not be used to drive the states.</p>
+</dd>
+<dt>dirichlet_diag<span class="classifier">int, default=10</span></dt><dd><p>The value of the diagonal of the Dirichlet distribution for the transition probabilities.
+The higher the value, the more persistent the states will be.
+Note that this value is relative; the prior competes with the data, so if the timeseries is very long,
+the <cite>dirichlet_diag</cite> may have little effect unless it is set to a very large value.</p>
+</dd>
+<dt>connectivity<span class="classifier">array_like of shape (n_states, n_states), optional</span></dt><dd><p>Matrix of binary values defining the connectivity of the states.
+This parameter can only be used with a diagonal covariance matrix (i.e., <cite>covtype=’diag’</cite>).</p>
+</dd>
+<dt>Pstructure<span class="classifier">array_like, optional</span></dt><dd><p>Binary matrix defining the allowed transitions between states.
+The default is a (n_states, n_states) matrix of all ones, allowing all possible transitions between states.</p>
+</dd>
+<dt>Pistructure<span class="classifier">array_like, optional</span></dt><dd><p>Binary vector defining the allowed initial states.
+The default is a (n_states,) vector of all ones, allowing all states to be used as initial states.</p>
+</dd>
+</dl>
+</section>
+<section id="notes">
+<h2>Notes:<a class="headerlink" href="#notes" title="Permalink to this heading"></a></h2>
+<p>This class requires the following modules: numpy, math, scipy, sys, warnings, copy, and time.</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="glhmm.glhmm.glhmm.decode">
+<span class="sig-name descname"><span class="pre">decode</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">X</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Y</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">indices</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">files</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">viterbi</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">set</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/glhmm/glhmm.html#glhmm.decode"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#glhmm.glhmm.glhmm.decode" title="Permalink to this definition"></a></dt>
+<dd><p>Calculates state time courses for all the data using either parallel or sequential processing.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>X</strong> (<em>array-like</em><em> of </em><em>shape</em><em> (</em><em>n_samples</em><em>, </em><em>n_parcels</em><em>)</em>) – The timeseries of set of variables 1.</p></li>
+<li><p><strong>Y</strong> (<em>array-like</em><em> of </em><em>shape</em><em> (</em><em>n_samples</em><em>, </em><em>n_parcels</em><em>)</em>) – The timeseries of set of variables 2.</p></li>
+<li><p><strong>indices</strong> (<em>array-like</em><em> of </em><em>shape</em><em> (</em><em>n_sessions</em><em>, </em><em>2</em><em>)</em><em>, </em><em>optional</em><em>, </em><em>default=None</em>) – The start and end indices of each trial/session in the input data.</p></li>
+<li><p><strong>files</strong> (<em>list</em><em> of </em><em>str</em><em>, </em><em>optional</em><em>, </em><em>default=None</em>) – List of filenames corresponding to the indices.</p></li>
+<li><p><strong>viterbi</strong> (<em>bool</em><em>, </em><em>optional</em><em>, </em><em>default=False</em>) – Whether or not the Viterbi algorithm should be used.</p></li>
+<li><p><strong>set</strong> (<em>int</em><em>, </em><em>optional</em><em>, </em><em>default=None</em>) – Index of the sessions set to decode.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><ul>
+<li><p><em>If viterbi=True</em> –</p>
+<dl class="simple">
+<dt>vpath<span class="classifier">array of shape (n_samples,)</span></dt><dd><p>The most likely state sequence.</p>
+</dd>
+</dl>
+</li>
+<li><p><em>If viterbi=False</em> –</p>
+<dl class="simple">
+<dt>Gamma<span class="classifier">array of shape (n_samples, n_states)</span></dt><dd><p>The state probability timeseries.</p>
+</dd>
+<dt>Xi<span class="classifier">array of shape (n_samples - n_sessions, n_states, n_states)</span></dt><dd><p>The joint probabilities of past and future states conditioned on data.</p>
+</dd>
+<dt>scale<span class="classifier">array-like of shape (n_samples,), optional</span></dt><dd><p>The scaling factors used to compute the free energy of the
+dataset. If None, scaling is automatically computed.</p>
+</dd>
+</dl>
+</li>
+</ul>
+</p>
+</dd>
+<dt class="field-odd">Raises<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>Exception</strong> – If the model has not been trained.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="glhmm.glhmm.glhmm.dual_estimate">
+<span class="sig-name descname"><span class="pre">dual_estimate</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">X</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Y</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">indices</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Gamma</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Xi</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/glhmm/glhmm.html#glhmm.dual_estimate"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#glhmm.glhmm.glhmm.dual_estimate" title="Permalink to this definition"></a></dt>
+<dd><p>Dual estimation of HMM parameters.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>X</strong> (<em>array-like</em><em> of </em><em>shape</em><em> (</em><em>n_samples</em><em>, </em><em>n_parcels</em><em>)</em>) – The timeseries of set of variables 1.</p></li>
+<li><p><strong>Y</strong> (<em>array-like</em><em> of </em><em>shape</em><em> (</em><em>n_samples</em><em>, </em><em>n_parcels</em><em>)</em>) – The timeseries of set of variables 2.</p></li>
+<li><p><strong>indices</strong> (<em>array-like</em><em> of </em><em>shape</em><em> (</em><em>n_sessions</em><em>, </em><em>2</em><em>)</em><em>, </em><em>optional</em>) – The start and end indices of each trial/session in the input data. If None, a single
+segment spanning the entire sequence is used.</p></li>
+<li><p><strong>Gamma</strong> (<em>array-like</em><em> of </em><em>shape</em><em> (</em><em>n_samples</em><em>, </em><em>n_states</em><em>)</em><em>, </em><em>optional</em>) – The state probabilities. If None, it is computed from the input
+observations.</p></li>
+<li><p><strong>Xi</strong> (<em>array-like</em><em> of </em><em>shape</em><em> (</em><em>n_samples - n_sessions</em><em>, </em><em>n_states</em><em>, </em><em>n_states</em><em>)</em><em>, </em><em>optional</em>) – The joint probabilities of past and future states conditioned on data. If None, it is computed from the input observations.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><strong>hmm_dual</strong> – A copy of the HMM object with updated dynamics and observation
+distributions.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>object</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="glhmm.glhmm.glhmm.get_beta">
+<span class="sig-name descname"><span class="pre">get_beta</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">k</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/glhmm/glhmm.html#glhmm.get_beta"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#glhmm.glhmm.glhmm.get_beta" title="Permalink to this definition"></a></dt>
+<dd><p>Returns the beta of the specified state.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>k</strong> (<em>int</em><em>, </em><em>optional</em>) – The index of the state for which to retrieve the beta value. Default=0.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The beta value of the specified state.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>float</p>
+</dd>
+<dt class="field-even">Raises<span class="colon">:</span></dt>
+<dd class="field-even"><ul class="simple">
+<li><p><strong>Exception</strong> – If the model has not yet been trained.</p></li>
+<li><p><strong>Exception</strong> – If the model has no beta.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="glhmm.glhmm.glhmm.get_covariance_matrix">
+<span class="sig-name descname"><span class="pre">get_covariance_matrix</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">k</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/glhmm/glhmm.html#glhmm.get_covariance_matrix"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#glhmm.glhmm.glhmm.get_covariance_matrix" title="Permalink to this definition"></a></dt>
+<dd><p>Returns the covariance matrix for the specified state.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>k</strong> (<em>int</em><em>, </em><em>optional</em>) – The index of the state. Default=0.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The covariance matrix for the specified state.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>array of shape (n_parcels, n_parcels)</p>
+</dd>
+<dt class="field-even">Raises<span class="colon">:</span></dt>
+<dd class="field-even"><p><strong>Exception</strong> – If the model has not been trained.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="glhmm.glhmm.glhmm.get_fe">
+<span class="sig-name descname"><span class="pre">get_fe</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">X</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Y</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Gamma</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Xi</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scale</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">indices</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">todo</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/glhmm/glhmm.html#glhmm.get_fe"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#glhmm.glhmm.glhmm.get_fe" title="Permalink to this definition"></a></dt>
+<dd><p>Computes the Free Energy of an HMM depending on observation model.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>X</strong> (<em>array</em><em> of </em><em>shape</em><em> (</em><em>n_samples</em><em>, </em><em>n_parcels</em><em>)</em>) – The timeseries of set of variables 1.</p></li>
+<li><p><strong>Y</strong> (<em>array</em><em> of </em><em>shape</em><em> (</em><em>n_samples</em><em>, </em><em>n_parcels</em><em>)</em>) – The timeseries of set of variables 2.</p></li>
+<li><p><strong>Gamma</strong> (<em>array</em><em> of </em><em>shape</em><em> (</em><em>n_samples</em><em>, </em><em>n_states</em><em>)</em><em>, </em><em>default=None</em>) – The state timeseries probabilities.</p></li>
+<li><p><strong>Xi</strong> (<em>array-like</em><em> of </em><em>shape</em><em> (</em><em>n_samples - n_sessions</em><em>, </em><em>n_states</em><em>, </em><em>n_states</em><em>)</em>) – The joint probabilities of past and future states conditioned on data.</p></li>
+<li><p><strong>scale</strong> (<em>array-like</em><em> of </em><em>shape</em><em> (</em><em>n_samples</em><em>,</em><em>)</em><em>, </em><em>default=None</em>) – The scaling factors used to compute the free energy of the
+dataset. If None, scaling is automatically computed.</p></li>
+<li><p><strong>indices</strong> (<em>array-like</em><em> of </em><em>shape</em><em> (</em><em>n_sessions</em><em>, </em><em>2</em><em>)</em><em>, </em><em>optional</em><em>, </em><em>default=None</em>) – The start and end indices of each trial/session in the input data.</p></li>
+<li><p><strong>todo</strong> (<em>bool</em><em> of </em><em>shape</em><em> (</em><em>n_terms</em><em>,</em><em>) or </em><em>None</em><em>, </em><em>default=None</em>) – Whether or not each of the 5 elements (see <cite>fe_terms</cite>) should be computed.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><p><strong>fe_terms</strong> – The variational free energy, separated into different terms:</p>
+<ul class="simple">
+<li><p>element 1: Gamma Entropy</p></li>
+<li><p>element 2: Data negative log-likelihood</p></li>
+<li><p>element 3: Gamma negative log-likelihood</p></li>
+<li><p>element 4: KL divergence for initial and transition probabilities</p></li>
+<li><p>element 5: KL divergence for the state parameters</p></li>
+</ul>
+</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>array of shape (n_terms,)</p>
+</dd>
+<dt class="field-even">Raises<span class="colon">:</span></dt>
+<dd class="field-even"><p><strong>Exception</strong> – If the model has not been trained.</p>
+</dd>
+</dl>
+<p class="rubric">Notes</p>
+<p>This function computes the variational free energy using a specific algorithm. For more information on the algorithm, see [1^].</p>
+<p class="rubric">References</p>
+<p>[1^] Smith, J. et al. “A variational approach to Bayesian learning of switching dynamics in dynamical systems.” Journal of Machine Learning Research, vol. 18, no. 4, 2017.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="glhmm.glhmm.glhmm.get_inverse_covariance_matrix">
+<span class="sig-name descname"><span class="pre">get_inverse_covariance_matrix</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">k</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/glhmm/glhmm.html#glhmm.get_inverse_covariance_matrix"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#glhmm.glhmm.glhmm.get_inverse_covariance_matrix" title="Permalink to this definition"></a></dt>
+<dd><p>Returns the inverse covariance matrix for the specified state.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>k</strong> (<em>int</em><em>, </em><em>optional</em>) – The index of the state. Default=0.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The inverse covariance matrix for the specified state.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>array of shape (n_parcels, n_parcels)</p>
+</dd>
+<dt class="field-even">Raises<span class="colon">:</span></dt>
+<dd class="field-even"><p><strong>Exception</strong> – If the model has not been trained.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="glhmm.glhmm.glhmm.get_mean">
+<span class="sig-name descname"><span class="pre">get_mean</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">k</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/glhmm/glhmm.html#glhmm.get_mean"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#glhmm.glhmm.glhmm.get_mean" title="Permalink to this definition"></a></dt>
+<dd><p>Returns the mean of the specified state.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>k</strong> (<em>int</em><em>, </em><em>optional</em>) – The index of the state for which to retrieve the mean. Default=0.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The mean value of the specified component.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>float</p>
+</dd>
+<dt class="field-even">Raises<span class="colon">:</span></dt>
+<dd class="field-even"><ul class="simple">
+<li><p><strong>Exception</strong> – If the model has not yet been trained.</p></li>
+<li><p><strong>Exception</strong> – If the model has no mean.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="glhmm.glhmm.glhmm.loglikelihood">
+<span class="sig-name descname"><span class="pre">loglikelihood</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">X</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Y</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/glhmm/glhmm.html#glhmm.loglikelihood"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#glhmm.glhmm.glhmm.loglikelihood" title="Permalink to this definition"></a></dt>
+<dd><p>Computes the likelihood of the model per state and time point gicven the data X and Y.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>X</strong> (<em>array-like</em><em> of </em><em>shape</em><em> (</em><em>n_samples</em><em>, </em><em>n_parcels</em><em>)</em>) – The timeseries of set of variables 1.</p></li>
+<li><p><strong>Y</strong> (<em>array-like</em><em> of </em><em>shape</em><em> (</em><em>n_samples</em><em>, </em><em>n_parcels</em><em>)</em>) – The timeseries of set of variables 2.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><strong>L</strong> – The likelihood of the model per state and time point given the data X and Y.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>array of shape (n_samples, n_states)</p>
+</dd>
+<dt class="field-even">Raises<span class="colon">:</span></dt>
+<dd class="field-even"><p><strong>Exception</strong> – If the model has not been trained.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="glhmm.glhmm.glhmm.sample">
+<span class="sig-name descname"><span class="pre">sample</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">size</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">X</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Gamma</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/glhmm/glhmm.html#glhmm.sample"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#glhmm.glhmm.glhmm.sample" title="Permalink to this definition"></a></dt>
+<dd><p>Generates Gamma and Y for timeseries of lengths specified in variable size.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>size</strong> (<em>array</em><em> of </em><em>shape</em><em> (</em><em>n_sessions</em><em>,</em><em>) or </em><em>(</em><em>n_sessions</em><em>, </em><em>2</em><em>)</em>) – If <cite>size</cite> is 1-dimensional, each element represents the length of a session. If <cite>size</cite> is 2-dimensional,
+each row of <cite>size</cite> represents the start and end indices of a session in a timeseries.</p></li>
+<li><p><strong>X</strong> (<em>array</em><em> of </em><em>shape</em><em> (</em><em>n_samples</em><em>, </em><em>n_parcels</em><em>)</em><em>, </em><em>default=None</em>) – The timeseries of set of variables 1.</p></li>
+<li><p><strong>Gamma</strong> (<em>array</em><em> of </em><em>shape</em><em> (</em><em>n_samples</em><em>, </em><em>n_states</em><em>)</em><em>, </em><em>default=None</em>) – The state probability timeseries.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><ul>
+<li><p><strong>Gamma</strong> (<em>array of shape (n_samples, n_states)</em>) – The state probability timeseries.</p></li>
+<li><p><strong>Y</strong> (<em>array of shape (n_samples,n_parcels)</em>) – The timeseries of set of variables 2.</p></li>
+<li><p><em>If X=None</em> –</p>
+<dl class="simple">
+<dt>X<span class="classifier">array of shape (n_samples, n_parcels)</span></dt><dd><p>The timeseries of set of variables 1.</p>
+</dd>
+</dl>
+</li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="glhmm.glhmm.glhmm.sample_Gamma">
+<span class="sig-name descname"><span class="pre">sample_Gamma</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">size</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/glhmm/glhmm.html#glhmm.sample_Gamma"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#glhmm.glhmm.glhmm.sample_Gamma" title="Permalink to this definition"></a></dt>
+<dd><p>Generates Gamma, for timeseries of lengths specified in variable size.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>size</strong> (<em>array</em>) – Array of shape (n_sessions,) or (n_sessions, 2). If <cite>size</cite> is 1-dimensional,
+each element represents the length of a session. If <cite>size</cite> is 2-dimensional,
+each row of <cite>size</cite> represents the start and end indices of a session in a timeseries.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><strong>Gamma</strong> – The state probability timeseries.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>array of shape (n_samples, n_states)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="glhmm.glhmm.glhmm.train">
+<span class="sig-name descname"><span class="pre">train</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">X</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Y</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">indices</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">files</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Gamma</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Xi</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scale</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">options</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/glhmm/glhmm.html#glhmm.train"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#glhmm.glhmm.glhmm.train" title="Permalink to this definition"></a></dt>
+<dd><p>Train the HMM on input data X and Y.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>X</strong> (<em>array-like</em><em> of </em><em>shape</em><em> (</em><em>n_samples</em><em>, </em><em>n_parcels</em><em>)</em>) – The timeseries of set of variables 1.</p></li>
+<li><p><strong>Y</strong> (<em>array-like</em><em> of </em><em>shape</em><em> (</em><em>n_samples</em><em>, </em><em>n_parcels</em><em>)</em>) – The timeseries of set of variables 2.</p></li>
+<li><p><strong>indices</strong> (<em>array-like</em><em> of </em><em>shape</em><em> (</em><em>n_sessions</em><em>, </em><em>2</em><em>)</em><em>, </em><em>optional</em>) – The start and end indices of each trial/session in the input data.
+If None, one big segment with no cuts is assumed.</p></li>
+<li><p><strong>files</strong> (<em>str</em><em> or </em><em>list</em><em> of </em><em>str</em><em>, </em><em>optional</em>) – The filename(s) containing the data to load. If not None,
+X, Y, and indices are ignored.</p></li>
+<li><p><strong>Gamma</strong> (<em>array-like</em><em> of </em><em>shape</em><em> (</em><em>n_samples</em><em>, </em><em>n_states</em><em>)</em><em>, </em><em>optional</em>) – The initial values of the state probabilities.</p></li>
+<li><p><strong>Xi</strong> (<em>array-like</em><em> of </em><em>shape</em><em> (</em><em>n_samples - n_sessions</em><em>, </em><em>n_states</em><em>, </em><em>n_states</em><em>)</em><em>, </em><em>optional</em>) – The joint probabilities of past and future states conditioned on data.</p></li>
+<li><p><strong>scale</strong> (<em>array-like</em><em> of </em><em>shape</em><em> (</em><em>n_samples</em><em>,</em><em>)</em><em>, </em><em>optional</em>) – The scaling factors used to compute the free energy of the
+dataset. If None, scaling is automatically computed.</p></li>
+<li><p><strong>options</strong> (<em>dict</em><em>, </em><em>optional</em>) – A dictionary with options to control the training process.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p><strong>Gamma</strong> (<em>array-like of shape (n_samples, n_states)</em>) – The state probabilities.</p></li>
+<li><p><strong>Xi</strong> (<em>array-like of shape (n_samples - n_sessions, n_states, n_states)</em>) – The joint probabilities of past and future states conditioned on data.</p></li>
+<li><p><strong>fe</strong> (<em>array-like</em>) – The free energy computed at each iteration of the training process.</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+</section>
+</dd></dl>
+
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="modules.html" class="btn btn-neutral float-left" title="API" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="io_glhmm.html" class="btn btn-neutral float-right" title="io_glhmm module" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2023, Diego Vidaurre.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.19: https://docutils.sourceforge.io/" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>auxiliary module &mdash; GLHMM 0.0.1 documentation</title>
+      <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+        <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js"></script>
+        <script src="_static/doctools.js"></script>
+        <script src="_static/sphinx_highlight.js"></script>
+        <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="utils module" href="utils.html" />
+    <link rel="prev" title="preproc module" href="preproc.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            GLHMM
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="reference internal" href="modules.html">API</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="glhmm.html">glhmm module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="io_glhmm.html">io_glhmm module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="preproc.html">preproc module</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">auxiliary module</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#glhmm.auxiliary.Gamma_entropy"><code class="docutils literal notranslate"><span class="pre">Gamma_entropy()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#glhmm.auxiliary.Gamma_indices_to_Xi_indices"><code class="docutils literal notranslate"><span class="pre">Gamma_indices_to_Xi_indices()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#glhmm.auxiliary.approximate_Xi"><code class="docutils literal notranslate"><span class="pre">approximate_Xi()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#glhmm.auxiliary.compute_alpha_beta"><code class="docutils literal notranslate"><span class="pre">compute_alpha_beta()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#glhmm.auxiliary.compute_qstar"><code class="docutils literal notranslate"><span class="pre">compute_qstar()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#glhmm.auxiliary.dirichlet_kl"><code class="docutils literal notranslate"><span class="pre">dirichlet_kl()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#glhmm.auxiliary.gamma_kl"><code class="docutils literal notranslate"><span class="pre">gamma_kl()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#glhmm.auxiliary.gauss1d_kl"><code class="docutils literal notranslate"><span class="pre">gauss1d_kl()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#glhmm.auxiliary.gauss_kl"><code class="docutils literal notranslate"><span class="pre">gauss_kl()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#glhmm.auxiliary.jls_extract_def"><code class="docutils literal notranslate"><span class="pre">jls_extract_def()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#glhmm.auxiliary.make_indices_from_T"><code class="docutils literal notranslate"><span class="pre">make_indices_from_T()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#glhmm.auxiliary.slice_matrix"><code class="docutils literal notranslate"><span class="pre">slice_matrix()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#glhmm.auxiliary.wishart_kl"><code class="docutils literal notranslate"><span class="pre">wishart_kl()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="utils.html">utils module</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="glossary.html">Glossary</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">GLHMM</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="modules.html">API</a></li>
+      <li class="breadcrumb-item active">auxiliary module</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/auxiliary.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  
+<style>
+/* CSS overrides for sphinx_rtd_theme */
+
+/* 24px margin */
+.nbinput.nblast.container,
+.nboutput.nblast.container {
+    margin-bottom: 19px;  /* padding has already 5px */
+}
+
+/* ... except between code cells! */
+.nblast.container + .nbinput.container {
+    margin-top: -19px;
+}
+
+.admonition > p:before {
+    margin-right: 4px;  /* make room for the exclamation icon */
+}
+
+/* Fix math alignment, see https://github.com/rtfd/sphinx_rtd_theme/pull/686 */
+.math {
+    text-align: unset;
+}
+</style>
+<section id="module-glhmm.auxiliary">
+<span id="auxiliary-module"></span><h1>auxiliary module<a class="headerlink" href="#module-glhmm.auxiliary" title="Permalink to this heading"></a></h1>
+<p>Auxiliary functions - Gaussian Linear Hidden Markov Model
+&#64;author: Diego Vidaurre 2022</p>
+<dl class="py function">
+<dt class="sig sig-object py" id="glhmm.auxiliary.Gamma_entropy">
+<span class="sig-prename descclassname"><span class="pre">glhmm.auxiliary.</span></span><span class="sig-name descname"><span class="pre">Gamma_entropy</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">Gamma</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Xi</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">indices</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/glhmm/auxiliary.html#Gamma_entropy"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#glhmm.auxiliary.Gamma_entropy" title="Permalink to this definition"></a></dt>
+<dd><p>Computes the entropy of a Gamma distribution and a sequence of transition probabilities Xi.</p>
+<section id="parameters">
+<h2>Parameters:<a class="headerlink" href="#parameters" title="Permalink to this heading"></a></h2>
+<blockquote>
+<div><dl class="simple">
+<dt>Gamma<span class="classifier">Array-like of shape (n_samples, n_states)</span></dt><dd><p>The posterior probabilities of a hidden variable.</p>
+</dd>
+<dt>Xi<span class="classifier">Array-like of shape (n_samples - n_sessions, n_states, n_states)</span></dt><dd><p>The joint probability of past and future states conditioned on data.</p>
+</dd>
+<dt>indices<span class="classifier">Array-like of shape (n_sessions, 2)</span></dt><dd><p>The start and end indices of each trial/session in the input data.</p>
+</dd>
+</dl>
+</div></blockquote>
+</section>
+<section id="returns">
+<h2>Returns:<a class="headerlink" href="#returns" title="Permalink to this heading"></a></h2>
+<blockquote>
+<div><p>float: The entropy of the Gamma distribution and the sequence of transition probabilities.</p>
+</div></blockquote>
+</section>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="glhmm.auxiliary.Gamma_indices_to_Xi_indices">
+<span class="sig-prename descclassname"><span class="pre">glhmm.auxiliary.</span></span><span class="sig-name descname"><span class="pre">Gamma_indices_to_Xi_indices</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">indices</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/glhmm/auxiliary.html#Gamma_indices_to_Xi_indices"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#glhmm.auxiliary.Gamma_indices_to_Xi_indices" title="Permalink to this definition"></a></dt>
+<dd><p>Converts indices from Gamma array to Xi array format.</p>
+<p>Note Xi has 1 sample less than Gamma per trial/session (i.e., n_samples - n_sessions).</p>
+<section id="id1">
+<h2>Parameters:<a class="headerlink" href="#id1" title="Permalink to this heading"></a></h2>
+<dl class="simple">
+<dt>indices<span class="classifier">array-like of shape (n_sessions, 2)</span></dt><dd><p>The start and end indices of each trial/session in the input data.</p>
+</dd>
+</dl>
+</section>
+<section id="id2">
+<h2>Returns:<a class="headerlink" href="#id2" title="Permalink to this heading"></a></h2>
+<dl class="simple">
+<dt>indices_Xi<span class="classifier">array-like of shape (n_sessions, 2)</span></dt><dd><p>The converted indices in Xi array format.</p>
+</dd>
+</dl>
+</section>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="glhmm.auxiliary.approximate_Xi">
+<span class="sig-prename descclassname"><span class="pre">glhmm.auxiliary.</span></span><span class="sig-name descname"><span class="pre">approximate_Xi</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">Gamma</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">indices</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/glhmm/auxiliary.html#approximate_Xi"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#glhmm.auxiliary.approximate_Xi" title="Permalink to this definition"></a></dt>
+<dd><p>Approximates Xi array based on Gamma and indices.</p>
+<section id="id3">
+<h2>Parameters:<a class="headerlink" href="#id3" title="Permalink to this heading"></a></h2>
+<dl class="simple">
+<dt>Gamma<span class="classifier">array-like of shape (n_samples, n_states)</span></dt><dd><p>The state probability time series.</p>
+</dd>
+<dt>indices<span class="classifier">array-like of shape (n_sessions, 2)</span></dt><dd><p>The start and end indices of each trial/session in the input data.</p>
+</dd>
+</dl>
+</section>
+<section id="id4">
+<h2>Returns:<a class="headerlink" href="#id4" title="Permalink to this heading"></a></h2>
+<dl class="simple">
+<dt>Xi<span class="classifier">array-like of shape (n_samples - n_sessions, n_states, n_states)</span></dt><dd><p>The joint probabilities of past and future states conditioned on data.</p>
+</dd>
+</dl>
+</section>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="glhmm.auxiliary.compute_alpha_beta">
+<span class="sig-prename descclassname"><span class="pre">glhmm.auxiliary.</span></span><span class="sig-name descname"><span class="pre">compute_alpha_beta</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">L</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Pi</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">P</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/glhmm/auxiliary.html#compute_alpha_beta"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#glhmm.auxiliary.compute_alpha_beta" title="Permalink to this definition"></a></dt>
+<dd><p>Computes alpha and beta values and scaling factors.</p>
+<section id="id5">
+<h2>Parameters:<a class="headerlink" href="#id5" title="Permalink to this heading"></a></h2>
+<dl class="simple">
+<dt>L<span class="classifier">array-like of shape (n_samples, n_states)</span></dt><dd><p>The L matrix.</p>
+</dd>
+<dt>Pi<span class="classifier">array-like with shape (n_states,)</span></dt><dd><p>The initial state probabilities.</p>
+</dd>
+<dt>P<span class="classifier">array-like of shape (n_states, n_states)</span></dt><dd><p>The transition probabilities across states.</p>
+</dd>
+</dl>
+</section>
+<section id="id6">
+<h2>Returns:<a class="headerlink" href="#id6" title="Permalink to this heading"></a></h2>
+<dl class="simple">
+<dt>a<span class="classifier">array-like of shape (n_samples, n_states)</span></dt><dd><p>The alpha values.</p>
+</dd>
+<dt>b<span class="classifier">array-like of shape (n_samples, n_states)</span></dt><dd><p>The beta values.</p>
+</dd>
+<dt>sc<span class="classifier">array-like of shape (n_samples,)</span></dt><dd><p>The scaling factors.</p>
+</dd>
+</dl>
+</section>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="glhmm.auxiliary.compute_qstar">
+<span class="sig-prename descclassname"><span class="pre">glhmm.auxiliary.</span></span><span class="sig-name descname"><span class="pre">compute_qstar</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">L</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Pi</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">P</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/glhmm/auxiliary.html#compute_qstar"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#glhmm.auxiliary.compute_qstar" title="Permalink to this definition"></a></dt>
+<dd><p>Compute the most probable state sequence.</p>
+<section id="id7">
+<h2>Parameters:<a class="headerlink" href="#id7" title="Permalink to this heading"></a></h2>
+<dl class="simple">
+<dt>L<span class="classifier">array-like of shape (n_samples, n_states)</span></dt><dd><p>The L matrix.</p>
+</dd>
+<dt>Pi<span class="classifier">array-like with shape (n_states,)</span></dt><dd><p>The initial state probabilities.</p>
+</dd>
+<dt>P<span class="classifier">array-like of shape (n_states, n_states)</span></dt><dd><p>The transition probabilities across states.</p>
+</dd>
+</dl>
+</section>
+<section id="id8">
+<h2>Returns:<a class="headerlink" href="#id8" title="Permalink to this heading"></a></h2>
+<dl class="simple">
+<dt>qstar<span class="classifier">array-like of shape (n_samples, n_states)</span></dt><dd><p>The most probable state sequence.</p>
+</dd>
+</dl>
+</section>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="glhmm.auxiliary.dirichlet_kl">
+<span class="sig-prename descclassname"><span class="pre">glhmm.auxiliary.</span></span><span class="sig-name descname"><span class="pre">dirichlet_kl</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">alpha_q</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">alpha_p</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/glhmm/auxiliary.html#dirichlet_kl"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#glhmm.auxiliary.dirichlet_kl" title="Permalink to this definition"></a></dt>
+<dd><p>Computes the Kullback-Leibler divergence between two Dirichlet distributions with parameters alpha_q and alpha_p.</p>
+<section id="id9">
+<h2>Parameters:<a class="headerlink" href="#id9" title="Permalink to this heading"></a></h2>
+<blockquote>
+<div><dl class="simple">
+<dt>alpha_q<span class="classifier">Array of shape (n_states,)</span></dt><dd><p>The concentration parameters of the first Dirichlet distribution.</p>
+</dd>
+<dt>alpha_p<span class="classifier">Array of shape (n_states,)</span></dt><dd><p>The concentration parameters of the second Dirichlet distribution.</p>
+</dd>
+</dl>
+</div></blockquote>
+</section>
+<section id="id10">
+<h2>Returns:<a class="headerlink" href="#id10" title="Permalink to this heading"></a></h2>
+<blockquote>
+<div><p>float: The Kullback-Leibler divergence between the two Dirichlet distributions.</p>
+</div></blockquote>
+</section>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="glhmm.auxiliary.gamma_kl">
+<span class="sig-prename descclassname"><span class="pre">glhmm.auxiliary.</span></span><span class="sig-name descname"><span class="pre">gamma_kl</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">shape_q</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rate_q</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">shape_p</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rate_p</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/glhmm/auxiliary.html#gamma_kl"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#glhmm.auxiliary.gamma_kl" title="Permalink to this definition"></a></dt>
+<dd><p>Computes the Kullback-Leibler divergence between two Gamma distributions with shape and rate parameters.</p>
+<p>The Kullback-Leibler divergence is a measure of how different two probability distributions are.</p>
+<p>This implementation follows the formula presented here (<a class="reference external" href="https://statproofbook.github.io/P/gam-kl">https://statproofbook.github.io/P/gam-kl</a>) from the book “KL-Divergences of Normal, Gamma, Dirichlet and Wishart densities” by Penny, William D. in 2001.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>shape_q</strong> (<em>float</em><em> or </em><em>numpy.ndarray</em>) – The shape parameter of the first Gamma distribution.</p></li>
+<li><p><strong>rate_q</strong> (<em>float</em><em> or </em><em>numpy.ndarray</em>) – The rate parameter of the first Gamma distribution.</p></li>
+<li><p><strong>shape_p</strong> (<em>float</em><em> or </em><em>numpy.ndarray</em>) – The shape parameter of the second Gamma distribution.</p></li>
+<li><p><strong>rate_p</strong> (<em>float</em><em> or </em><em>numpy.ndarray</em>) – The rate parameter of the second Gamma distribution.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><strong>D</strong> – The Kullback-Leibler divergence between the two Gamma distributions.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>float or numpy.ndarray</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="glhmm.auxiliary.gauss1d_kl">
+<span class="sig-prename descclassname"><span class="pre">glhmm.auxiliary.</span></span><span class="sig-name descname"><span class="pre">gauss1d_kl</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">mu_q</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sigma_q</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mu_p</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sigma_p</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/glhmm/auxiliary.html#gauss1d_kl"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#glhmm.auxiliary.gauss1d_kl" title="Permalink to this definition"></a></dt>
+<dd><p>Computes the KL divergence between two univariate Gaussian distributions.</p>
+<section id="id11">
+<h2>Parameters:<a class="headerlink" href="#id11" title="Permalink to this heading"></a></h2>
+<dl class="simple">
+<dt>mu_q<span class="classifier">float of shape (n_parcels,)</span></dt><dd><p>The mean of the first Gaussian distribution.</p>
+</dd>
+<dt>sigma_q<span class="classifier">float of shape (n_parcels, n_parcels)</span></dt><dd><p>The variance of the first Gaussian distribution.</p>
+</dd>
+<dt>mu_p<span class="classifier">float of shape (n_parcels,)</span></dt><dd><p>The mean of the second Gaussian distribution.</p>
+</dd>
+<dt>sigma_p<span class="classifier">float of shape (n_parcels, n_parcels)</span></dt><dd><p>The variance of the second Gaussian distribution.</p>
+</dd>
+</dl>
+</section>
+<section id="id12">
+<h2>Returns:<a class="headerlink" href="#id12" title="Permalink to this heading"></a></h2>
+<dl class="simple">
+<dt>D<span class="classifier">float</span></dt><dd><p>The KL divergence between the two Gaussian distributions.</p>
+</dd>
+</dl>
+</section>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="glhmm.auxiliary.gauss_kl">
+<span class="sig-prename descclassname"><span class="pre">glhmm.auxiliary.</span></span><span class="sig-name descname"><span class="pre">gauss_kl</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">mu_q</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sigma_q</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mu_p</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sigma_p</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/glhmm/auxiliary.html#gauss_kl"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#glhmm.auxiliary.gauss_kl" title="Permalink to this definition"></a></dt>
+<dd><p>Computes the KL divergence between two multivariate Gaussian distributions.</p>
+<section id="id13">
+<h2>Parameters:<a class="headerlink" href="#id13" title="Permalink to this heading"></a></h2>
+<dl class="simple">
+<dt>mu_q<span class="classifier">float of shape (n_parcels,)</span></dt><dd><p>The mean of the first Gaussian distribution.</p>
+</dd>
+<dt>sigma_q<span class="classifier">float of shape (n_parcels, n_parcels)</span></dt><dd><p>The variance of the first Gaussian distribution.</p>
+</dd>
+<dt>mu_p<span class="classifier">float of shape (n_parcels,)</span></dt><dd><p>The mean of the second Gaussian distribution.</p>
+</dd>
+<dt>sigma_p<span class="classifier">float of shape (n_parcels, n_parcels)</span></dt><dd><p>The variance of the second Gaussian distribution.</p>
+</dd>
+</dl>
+</section>
+<section id="id14">
+<h2>Returns:<a class="headerlink" href="#id14" title="Permalink to this heading"></a></h2>
+<dl class="simple">
+<dt>D<span class="classifier">float</span></dt><dd><p>The KL divergence between the two Gaussian distributions.</p>
+</dd>
+</dl>
+</section>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="glhmm.auxiliary.jls_extract_def">
+<span class="sig-prename descclassname"><span class="pre">glhmm.auxiliary.</span></span><span class="sig-name descname"><span class="pre">jls_extract_def</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/glhmm/auxiliary.html#jls_extract_def"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#glhmm.auxiliary.jls_extract_def" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="glhmm.auxiliary.make_indices_from_T">
+<span class="sig-prename descclassname"><span class="pre">glhmm.auxiliary.</span></span><span class="sig-name descname"><span class="pre">make_indices_from_T</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">T</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/glhmm/auxiliary.html#make_indices_from_T"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#glhmm.auxiliary.make_indices_from_T" title="Permalink to this definition"></a></dt>
+<dd><p>Creates indices array from trials/sessions lengths.</p>
+<section id="id15">
+<h2>Parameters:<a class="headerlink" href="#id15" title="Permalink to this heading"></a></h2>
+<dl class="simple">
+<dt>T<span class="classifier">array-like of shape (n_sessions,)</span></dt><dd><p>Contains the lengths of each trial/session.</p>
+</dd>
+</dl>
+</section>
+<section id="id16">
+<h2>Returns:<a class="headerlink" href="#id16" title="Permalink to this heading"></a></h2>
+<dl class="simple">
+<dt>indices<span class="classifier">array-like of shape (n_sessions, 2)</span></dt><dd><p>The start and end indices of each trial/session in the input data.</p>
+</dd>
+</dl>
+</section>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="glhmm.auxiliary.slice_matrix">
+<span class="sig-prename descclassname"><span class="pre">glhmm.auxiliary.</span></span><span class="sig-name descname"><span class="pre">slice_matrix</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">M</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">indices</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/glhmm/auxiliary.html#slice_matrix"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#glhmm.auxiliary.slice_matrix" title="Permalink to this definition"></a></dt>
+<dd><p>Slices rows of input matrix M based on indices array along axis 0.</p>
+<section id="id17">
+<h2>Parameters:<a class="headerlink" href="#id17" title="Permalink to this heading"></a></h2>
+<dl class="simple">
+<dt>M<span class="classifier">array-like of shape (n_samples, n_parcels)</span></dt><dd><p>The input matrix.</p>
+</dd>
+<dt>indices<span class="classifier">array-like of shape (n_sessions, 2)</span></dt><dd><p>The indices that define the sections (i.e., trials/sessions) of the data to be processed.</p>
+</dd>
+</dl>
+</section>
+<section id="id18">
+<h2>Returns:<a class="headerlink" href="#id18" title="Permalink to this heading"></a></h2>
+<dl class="simple">
+<dt>M_sliced<span class="classifier">array-like of shape (n_total_samples, n_parcels)</span></dt><dd><p>The sliced matrix.</p>
+</dd>
+</dl>
+</section>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="glhmm.auxiliary.wishart_kl">
+<span class="sig-prename descclassname"><span class="pre">glhmm.auxiliary.</span></span><span class="sig-name descname"><span class="pre">wishart_kl</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">shape_q</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">C_q</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">shape_p</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">C_p</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/glhmm/auxiliary.html#wishart_kl"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#glhmm.auxiliary.wishart_kl" title="Permalink to this definition"></a></dt>
+<dd><p>Computes the Kullback-Leibler (KL) divergence between two Wishart distributions.</p>
+<section id="id19">
+<h2>Parameters:<a class="headerlink" href="#id19" title="Permalink to this heading"></a></h2>
+<dl class="simple">
+<dt>shape_q<span class="classifier">float</span></dt><dd><p>Shape parameter of the first Wishart distribution.</p>
+</dd>
+<dt>C_q<span class="classifier">ndarray of shape (n_parcels, n_parcels)</span></dt><dd><p>Scale parameter of the first Wishart distribution.</p>
+</dd>
+<dt>shape_p<span class="classifier">float</span></dt><dd><p>Shape parameter of the second Wishart distribution.</p>
+</dd>
+<dt>C_p<span class="classifier">ndarray of shape (n_parcels, n_parcels)</span></dt><dd><p>Scale parameter of the second Wishart distribution.</p>
+</dd>
+</dl>
+</section>
+<section id="id20">
+<h2>Returns:<a class="headerlink" href="#id20" title="Permalink to this heading"></a></h2>
+<dl class="simple">
+<dt>D<span class="classifier">float</span></dt><dd><p>KL divergence from the first to the second Wishart distribution.</p>
+</dd>
+</dl>
+</section>
+</dd></dl>
+
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="preproc.html" class="btn btn-neutral float-left" title="preproc module" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="utils.html" class="btn btn-neutral float-right" title="utils module" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2023, Diego Vidaurre.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

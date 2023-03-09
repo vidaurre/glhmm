@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>glhmm.io_glhmm &mdash; GLHMM 0.0.1 documentation</title>
+      <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="../../_static/css/theme.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+        <script data-url_root="../../" id="documentation_options" src="../../_static/documentation_options.js"></script>
+        <script src="../../_static/doctools.js"></script>
+        <script src="../../_static/sphinx_highlight.js"></script>
+        <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            GLHMM
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../modules.html">API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../glossary.html">Glossary</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">GLHMM</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">glhmm.io_glhmm</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for glhmm.io_glhmm</h1><div class="highlight"><pre>
+<span></span><span class="ch">#!/usr/bin/env python3</span>
+<span class="c1"># -*- coding: utf-8 -*-</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">Input/output functions - Gaussian Linear Hidden Markov Model</span>
+<span class="sd">@author: Diego Vidaurre 2023</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="kn">import</span> <span class="nn">scipy.special</span>
+<span class="kn">import</span> <span class="nn">scipy.io</span>
+
+<span class="kn">from</span> <span class="nn">.</span> <span class="kn">import</span> <span class="n">glhmm</span>
+<span class="kn">from</span> <span class="nn">.</span> <span class="kn">import</span> <span class="n">auxiliary</span>
+
+<div class="viewcode-block" id="load_files"><a class="viewcode-back" href="../../io_glhmm.html#glhmm.io_glhmm.load_files">[docs]</a><span class="k">def</span> <span class="nf">load_files</span><span class="p">(</span><span class="n">files</span><span class="p">,</span><span class="n">I</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span><span class="n">do_only_indices</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Loads data from files and returns the loaded data, indices, and individual indices for each file.</span>
+<span class="sd">    &quot;&quot;&quot;</span>       
+
+    <span class="n">X</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">Y</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">indices</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">indices_individual</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">sum_T</span> <span class="o">=</span> <span class="mi">0</span>
+
+    <span class="k">if</span> <span class="n">I</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">I</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">files</span><span class="p">))</span>
+    <span class="k">elif</span> <span class="nb">type</span><span class="p">(</span><span class="n">I</span><span class="p">)</span> <span class="ow">is</span> <span class="nb">int</span><span class="p">:</span>
+        <span class="n">I</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">I</span><span class="p">])</span>
+
+    <span class="k">for</span> <span class="n">ij</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">I</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
+
+        <span class="n">j</span> <span class="o">=</span> <span class="n">I</span><span class="p">[</span><span class="n">ij</span><span class="p">]</span>
+
+        <span class="c1"># if type(files[j]) is tuple:</span>
+        <span class="c1">#     if len(files[j][0]) &gt; 0: # X</span>
+        <span class="c1">#         if files[j][0][-4:] == &#39;.npy&#39;:</span>
+        <span class="c1">#             X.append(np.load(files[j][0]))</span>
+        <span class="c1">#         elif files[j][0][-4:] == &#39;.txt&#39;:</span>
+
+        <span class="k">if</span> <span class="n">files</span><span class="p">[</span><span class="n">j</span><span class="p">][</span><span class="o">-</span><span class="mi">4</span><span class="p">:]</span> <span class="o">==</span> <span class="s1">&#39;.mat&#39;</span><span class="p">:</span>
+            <span class="n">dat</span> <span class="o">=</span> <span class="n">scipy</span><span class="o">.</span><span class="n">io</span><span class="o">.</span><span class="n">loadmat</span><span class="p">(</span><span class="n">files</span><span class="p">[</span><span class="n">j</span><span class="p">])</span>
+
+        <span class="k">elif</span> <span class="n">files</span><span class="p">[</span><span class="n">j</span><span class="p">][</span><span class="o">-</span><span class="mi">4</span><span class="p">:]</span> <span class="o">==</span> <span class="s1">&#39;.npz&#39;</span><span class="p">:</span>
+            <span class="n">dat</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">files</span><span class="p">[</span><span class="n">j</span><span class="p">])</span>
+            
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">do_only_indices</span><span class="p">:</span>
+            <span class="k">if</span> <span class="p">(</span><span class="s1">&#39;X&#39;</span> <span class="ow">in</span> <span class="n">dat</span><span class="p">)</span> <span class="ow">and</span> <span class="p">(</span><span class="ow">not</span> <span class="s1">&#39;Y&#39;</span> <span class="ow">in</span> <span class="n">dat</span><span class="p">):</span> 
+                <span class="n">Y</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">dat</span><span class="p">[</span><span class="s2">&quot;X&quot;</span><span class="p">])</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">if</span> <span class="s1">&#39;X&#39;</span> <span class="ow">in</span> <span class="n">dat</span><span class="p">:</span> <span class="n">X</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">dat</span><span class="p">[</span><span class="s2">&quot;X&quot;</span><span class="p">])</span>
+                <span class="n">Y</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">dat</span><span class="p">[</span><span class="s2">&quot;Y&quot;</span><span class="p">])</span>
+        <span class="k">if</span> <span class="s1">&#39;indices&#39;</span> <span class="ow">in</span> <span class="n">dat</span><span class="p">:</span> 
+            <span class="n">ind</span> <span class="o">=</span> <span class="n">dat</span><span class="p">[</span><span class="s1">&#39;indices&#39;</span><span class="p">]</span>
+        <span class="k">elif</span> <span class="s1">&#39;T&#39;</span> <span class="ow">in</span> <span class="n">dat</span><span class="p">:</span>
+            <span class="n">ind</span> <span class="o">=</span> <span class="n">auxiliary</span><span class="o">.</span><span class="n">make_indices_from_T</span><span class="p">(</span><span class="n">dat</span><span class="p">[</span><span class="s1">&#39;T&#39;</span><span class="p">])</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">ind</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">))</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">int</span><span class="p">)</span>
+            <span class="n">ind</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="mi">0</span>
+            <span class="n">ind</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span><span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="n">Y</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">ind</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span> <span class="n">ind</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">expand_dims</span><span class="p">(</span><span class="n">ind</span><span class="p">,</span><span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+        <span class="n">indices_individual</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">ind</span><span class="p">)</span>
+        <span class="n">indices</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">ind</span> <span class="o">+</span> <span class="n">sum_T</span><span class="p">)</span>
+
+        <span class="n">sum_T</span> <span class="o">+=</span> <span class="n">dat</span><span class="p">[</span><span class="s2">&quot;Y&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">do_only_indices</span><span class="p">:</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">X</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span> <span class="n">X</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">(</span><span class="n">X</span><span class="p">)</span>
+        <span class="n">Y</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">(</span><span class="n">Y</span><span class="p">)</span>
+    <span class="n">indices</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">(</span><span class="n">indices</span><span class="p">)</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">indices</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span> <span class="n">indices</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">expand_dims</span><span class="p">(</span><span class="n">indices</span><span class="p">,</span><span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">X</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span> <span class="n">X</span> <span class="o">=</span> <span class="kc">None</span>
+
+    <span class="k">return</span> <span class="n">X</span><span class="p">,</span><span class="n">Y</span><span class="p">,</span><span class="n">indices</span><span class="p">,</span><span class="n">indices_individual</span></div>
+
+
+<div class="viewcode-block" id="read_flattened_hmm_mat"><a class="viewcode-back" href="../../io_glhmm.html#glhmm.io_glhmm.read_flattened_hmm_mat">[docs]</a><span class="k">def</span> <span class="nf">read_flattened_hmm_mat</span><span class="p">(</span><span class="n">file</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Reads a MATLAB file containing hidden Markov model (HMM) parameters, and initializes a Gaussian linear hidden Markov model (GLHMM) using those parameters.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    
+    <span class="n">hmm_mat</span> <span class="o">=</span> <span class="n">scipy</span><span class="o">.</span><span class="n">io</span><span class="o">.</span><span class="n">loadmat</span><span class="p">(</span><span class="n">file</span><span class="p">)</span>
+
+    <span class="n">K</span> <span class="o">=</span> <span class="n">hmm_mat</span><span class="p">[</span><span class="s2">&quot;K&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span>
+    <span class="n">covtype</span> <span class="o">=</span> <span class="n">hmm_mat</span><span class="p">[</span><span class="s2">&quot;train&quot;</span><span class="p">][</span><span class="s2">&quot;covtype&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">][</span><span class="mi">0</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span>
+    <span class="n">zeromean</span> <span class="o">=</span> <span class="n">hmm_mat</span><span class="p">[</span><span class="s2">&quot;train&quot;</span><span class="p">][</span><span class="s2">&quot;zeromean&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">][</span><span class="mi">0</span><span class="p">][</span><span class="mi">0</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">zeromean</span><span class="p">:</span> <span class="n">model_mean</span> <span class="o">=</span> <span class="s1">&#39;state&#39;</span>
+    <span class="k">else</span><span class="p">:</span> <span class="n">model_mean</span> <span class="o">=</span> <span class="s1">&#39;no&#39;</span>
+    <span class="k">if</span> <span class="s2">&quot;state_0_Mu_W&quot;</span> <span class="ow">in</span> <span class="n">hmm_mat</span><span class="p">:</span> 
+        <span class="k">if</span> <span class="p">(</span><span class="n">model_mean</span> <span class="o">==</span> <span class="s1">&#39;state&#39;</span><span class="p">)</span> <span class="ow">and</span> <span class="p">(</span><span class="n">hmm_mat</span><span class="p">[</span><span class="s2">&quot;state_0_Mu_W&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="mi">1</span><span class="p">):</span>
+            <span class="n">model_beta</span> <span class="o">=</span> <span class="s1">&#39;no&#39;</span>
+        <span class="k">elif</span> <span class="n">hmm_mat</span><span class="p">[</span><span class="s2">&quot;state_0_Mu_W&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">model_beta</span> <span class="o">=</span> <span class="s1">&#39;no&#39;</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">model_beta</span> <span class="o">=</span> <span class="s1">&#39;state&#39;</span>
+    <span class="k">else</span><span class="p">:</span> 
+        <span class="n">model_beta</span> <span class="o">=</span> <span class="s1">&#39;no&#39;</span>
+    <span class="n">dirichlet_diag</span> <span class="o">=</span> <span class="n">hmm_mat</span><span class="p">[</span><span class="s2">&quot;train&quot;</span><span class="p">][</span><span class="s2">&quot;DirichletDiag&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">][</span><span class="mi">0</span><span class="p">][</span><span class="mi">0</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span>
+    <span class="n">connectivity</span> <span class="o">=</span> <span class="n">hmm_mat</span><span class="p">[</span><span class="s2">&quot;train&quot;</span><span class="p">][</span><span class="s2">&quot;S&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span>
+    <span class="n">Pstructure</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">hmm_mat</span><span class="p">[</span><span class="s2">&quot;train&quot;</span><span class="p">][</span><span class="s2">&quot;Pstructure&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">][</span><span class="mi">0</span><span class="p">],</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">bool</span><span class="p">)</span>
+    <span class="n">Pistructure</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">squeeze</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">hmm_mat</span><span class="p">[</span><span class="s2">&quot;train&quot;</span><span class="p">][</span><span class="s2">&quot;Pistructure&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">][</span><span class="mi">0</span><span class="p">],</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">bool</span><span class="p">))</span>
+
+    <span class="n">shared_covmat</span> <span class="o">=</span> <span class="p">(</span><span class="n">covtype</span> <span class="o">==</span> <span class="s1">&#39;shareddiag&#39;</span><span class="p">)</span> <span class="ow">or</span> <span class="p">(</span><span class="n">covtype</span> <span class="o">==</span> <span class="s1">&#39;sharedfull&#39;</span><span class="p">)</span>
+    <span class="n">diagonal_covmat</span> <span class="o">=</span> <span class="p">(</span><span class="n">covtype</span> <span class="o">==</span> <span class="s1">&#39;shareddiag&#39;</span><span class="p">)</span> <span class="ow">or</span> <span class="p">(</span><span class="n">covtype</span> <span class="o">==</span> <span class="s1">&#39;diag&#39;</span><span class="p">)</span> 
+
+    <span class="k">if</span> <span class="s2">&quot;prior_Omega_Gam_rate&quot;</span> <span class="ow">in</span> <span class="n">hmm_mat</span><span class="p">:</span>
+        <span class="n">prior_Omega_Gam_rate</span> <span class="o">=</span> <span class="n">hmm_mat</span><span class="p">[</span><span class="s2">&quot;prior_Omega_Gam_rate&quot;</span><span class="p">]</span>
+        <span class="n">prior_Omega_Gam_shape</span> <span class="o">=</span> <span class="n">hmm_mat</span><span class="p">[</span><span class="s2">&quot;prior_Omega_Gam_shape&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">prior_Omega_Gam_rate</span> <span class="o">=</span> <span class="n">hmm_mat</span><span class="p">[</span><span class="s2">&quot;state_0_prior_Omega_Gam_rate&quot;</span><span class="p">]</span>
+        <span class="n">prior_Omega_Gam_shape</span> <span class="o">=</span> <span class="n">hmm_mat</span><span class="p">[</span><span class="s2">&quot;state_0_prior_Omega_Gam_shape&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span>    
+    <span class="k">if</span> <span class="n">diagonal_covmat</span><span class="p">:</span> <span class="n">prior_Omega_Gam_rate</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">squeeze</span><span class="p">(</span><span class="n">prior_Omega_Gam_rate</span><span class="p">)</span>
+    <span class="n">q</span> <span class="o">=</span> <span class="n">prior_Omega_Gam_rate</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+
+    <span class="k">if</span> <span class="s2">&quot;state_0_Mu_W&quot;</span> <span class="ow">in</span> <span class="n">hmm_mat</span><span class="p">:</span>
+        <span class="n">p</span> <span class="o">=</span> <span class="n">hmm_mat</span><span class="p">[</span><span class="s2">&quot;state_0_Mu_W&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="k">if</span> <span class="n">model_mean</span> <span class="o">==</span> <span class="s1">&#39;state&#39;</span><span class="p">:</span> <span class="n">p</span> <span class="o">-=</span> <span class="mi">1</span>
+    <span class="k">else</span><span class="p">:</span> <span class="n">p</span> <span class="o">=</span> <span class="mi">0</span>
+
+    <span class="n">hmm</span> <span class="o">=</span> <span class="n">glhmm</span><span class="o">.</span><span class="n">glhmm</span><span class="p">(</span>
+        <span class="n">K</span><span class="o">=</span><span class="n">K</span><span class="p">,</span>
+        <span class="n">covtype</span><span class="o">=</span><span class="n">covtype</span><span class="p">,</span>
+        <span class="n">model_mean</span><span class="o">=</span><span class="n">model_mean</span><span class="p">,</span>
+        <span class="n">model_beta</span><span class="o">=</span><span class="n">model_beta</span><span class="p">,</span>
+        <span class="n">dirichlet_diag</span><span class="o">=</span><span class="n">dirichlet_diag</span><span class="p">,</span>
+        <span class="n">connectivity</span><span class="o">=</span><span class="n">connectivity</span><span class="p">,</span>
+        <span class="n">Pstructure</span><span class="o">=</span><span class="n">Pstructure</span><span class="p">,</span>
+        <span class="n">Pistructure</span><span class="o">=</span><span class="n">Pistructure</span>
+        <span class="p">)</span>
+
+    <span class="c1"># mean </span>
+    <span class="k">if</span> <span class="n">model_mean</span> <span class="o">==</span> <span class="s1">&#39;state&#39;</span><span class="p">:</span>
+        <span class="n">hmm</span><span class="o">.</span><span class="n">mean</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">K</span><span class="p">):</span>
+            <span class="n">hmm</span><span class="o">.</span><span class="n">mean</span><span class="o">.</span><span class="n">append</span><span class="p">({})</span>
+            <span class="n">Sigma_W</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">squeeze</span><span class="p">(</span><span class="n">hmm_mat</span><span class="p">[</span><span class="s2">&quot;state_&quot;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">k</span><span class="p">)</span> <span class="o">+</span> <span class="s2">&quot;_S_W&quot;</span><span class="p">])</span>
+            <span class="n">Mu_W</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">squeeze</span><span class="p">(</span><span class="n">hmm_mat</span><span class="p">[</span><span class="s2">&quot;state_&quot;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">k</span><span class="p">)</span> <span class="o">+</span> <span class="s2">&quot;_Mu_W&quot;</span><span class="p">])</span>
+            <span class="k">if</span> <span class="n">model_beta</span> <span class="o">==</span> <span class="s1">&#39;state&#39;</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">q</span><span class="o">==</span><span class="mi">1</span><span class="p">:</span> <span class="n">hmm</span><span class="o">.</span><span class="n">mean</span><span class="p">[</span><span class="n">k</span><span class="p">][</span><span class="s2">&quot;Mu&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">Mu_W</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+                <span class="k">else</span><span class="p">:</span> <span class="n">hmm</span><span class="o">.</span><span class="n">mean</span><span class="p">[</span><span class="n">k</span><span class="p">][</span><span class="s2">&quot;Mu&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">Mu_W</span><span class="p">[</span><span class="mi">0</span><span class="p">,:]</span>
+            <span class="k">else</span><span class="p">:</span> 
+                <span class="k">if</span> <span class="n">q</span><span class="o">==</span><span class="mi">1</span><span class="p">:</span> <span class="n">hmm</span><span class="o">.</span><span class="n">mean</span><span class="p">[</span><span class="n">k</span><span class="p">][</span><span class="s2">&quot;Mu&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">Mu_W</span><span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span> <span class="n">hmm</span><span class="o">.</span><span class="n">mean</span><span class="p">[</span><span class="n">k</span><span class="p">][</span><span class="s2">&quot;Mu&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">Mu_W</span>
+            <span class="k">if</span> <span class="n">diagonal_covmat</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">model_beta</span> <span class="o">==</span> <span class="s1">&#39;state&#39;</span><span class="p">:</span>
+                    <span class="k">if</span> <span class="n">q</span><span class="o">==</span><span class="mi">1</span><span class="p">:</span> <span class="n">hmm</span><span class="o">.</span><span class="n">mean</span><span class="p">[</span><span class="n">k</span><span class="p">][</span><span class="s2">&quot;Sigma&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([[</span><span class="n">Sigma_W</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">]]])</span>
+                    <span class="k">else</span><span class="p">:</span> <span class="n">hmm</span><span class="o">.</span><span class="n">mean</span><span class="p">[</span><span class="n">k</span><span class="p">][</span><span class="s2">&quot;Sigma&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">diag</span><span class="p">(</span><span class="n">Sigma_W</span><span class="p">[:,</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">])</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="k">if</span> <span class="n">q</span><span class="o">==</span><span class="mi">1</span><span class="p">:</span> <span class="n">hmm</span><span class="o">.</span><span class="n">mean</span><span class="p">[</span><span class="n">k</span><span class="p">][</span><span class="s2">&quot;Sigma&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([[</span><span class="n">Sigma_W</span><span class="p">]])</span>
+                    <span class="n">hmm</span><span class="o">.</span><span class="n">mean</span><span class="p">[</span><span class="n">k</span><span class="p">][</span><span class="s2">&quot;Sigma&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">diag</span><span class="p">(</span><span class="n">Sigma_W</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">q</span><span class="o">==</span><span class="mi">1</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([[</span><span class="n">Sigma_W</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">]]])</span>
+                <span class="k">else</span><span class="p">:</span> <span class="n">hmm</span><span class="o">.</span><span class="n">mean</span><span class="p">[</span><span class="n">k</span><span class="p">][</span><span class="s2">&quot;Sigma&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">Sigma_W</span><span class="p">[</span><span class="mi">0</span><span class="p">:</span><span class="n">q</span><span class="p">,</span><span class="mi">0</span><span class="p">:</span><span class="n">q</span><span class="p">]</span>
+
+    <span class="c1"># beta</span>
+    <span class="k">if</span> <span class="n">model_beta</span> <span class="o">==</span> <span class="s1">&#39;state&#39;</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">model_mean</span> <span class="o">==</span> <span class="s1">&#39;state&#39;</span><span class="p">:</span> <span class="n">j0</span> <span class="o">=</span> <span class="mi">1</span>
+        <span class="k">else</span><span class="p">:</span> <span class="n">j0</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="n">hmm</span><span class="o">.</span><span class="n">beta</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">K</span><span class="p">):</span>
+            <span class="n">hmm</span><span class="o">.</span><span class="n">beta</span><span class="o">.</span><span class="n">append</span><span class="p">({})</span>
+            <span class="n">Sigma_W</span> <span class="o">=</span> <span class="n">hmm_mat</span><span class="p">[</span><span class="s2">&quot;state_&quot;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">k</span><span class="p">)</span> <span class="o">+</span> <span class="s2">&quot;_S_W&quot;</span><span class="p">]</span>
+            <span class="n">Mu_W</span> <span class="o">=</span> <span class="n">hmm_mat</span><span class="p">[</span><span class="s2">&quot;state_&quot;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">k</span><span class="p">)</span> <span class="o">+</span> <span class="s2">&quot;_Mu_W&quot;</span><span class="p">]</span>
+            <span class="n">hmm</span><span class="o">.</span><span class="n">beta</span><span class="p">[</span><span class="n">k</span><span class="p">][</span><span class="s2">&quot;Mu&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">p</span><span class="p">,</span><span class="n">q</span><span class="p">))</span>
+            <span class="n">hmm</span><span class="o">.</span><span class="n">beta</span><span class="p">[</span><span class="n">k</span><span class="p">][</span><span class="s2">&quot;Mu&quot;</span><span class="p">][:,:]</span> <span class="o">=</span> <span class="n">Mu_W</span><span class="p">[</span><span class="n">j0</span><span class="p">:,:]</span>
+            <span class="k">if</span> <span class="n">diagonal_covmat</span><span class="p">:</span>
+                <span class="n">hmm</span><span class="o">.</span><span class="n">beta</span><span class="p">[</span><span class="n">k</span><span class="p">][</span><span class="s2">&quot;Sigma&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">p</span><span class="p">,</span><span class="n">p</span><span class="p">,</span><span class="n">q</span><span class="p">))</span>
+                <span class="k">if</span> <span class="n">q</span><span class="o">==</span><span class="mi">1</span><span class="p">:</span>
+                    <span class="n">hmm</span><span class="o">.</span><span class="n">beta</span><span class="p">[</span><span class="n">k</span><span class="p">][</span><span class="s2">&quot;Sigma&quot;</span><span class="p">][:,:,</span><span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="n">Sigma_W</span><span class="p">[</span><span class="n">j0</span><span class="p">:,</span><span class="n">j0</span><span class="p">:]</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">q</span><span class="p">):</span>
+                        <span class="n">hmm</span><span class="o">.</span><span class="n">beta</span><span class="p">[</span><span class="n">k</span><span class="p">][</span><span class="s2">&quot;Sigma&quot;</span><span class="p">][:,:,</span><span class="n">j</span><span class="p">]</span> <span class="o">=</span> <span class="n">Sigma_W</span><span class="p">[</span><span class="n">j</span><span class="p">,</span><span class="n">j0</span><span class="p">:,</span><span class="n">j0</span><span class="p">:]</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">hmm</span><span class="o">.</span><span class="n">beta</span><span class="p">[</span><span class="n">k</span><span class="p">][</span><span class="s2">&quot;Sigma&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">Sigma_W</span><span class="p">[(</span><span class="n">j0</span><span class="o">*</span><span class="n">q</span><span class="p">):,(</span><span class="n">j0</span><span class="o">*</span><span class="n">q</span><span class="p">):]</span>
+
+    <span class="n">hmm</span><span class="o">.</span><span class="n">_glhmm__init_priors_sub</span><span class="p">(</span><span class="n">prior_Omega_Gam_rate</span><span class="p">,</span><span class="n">prior_Omega_Gam_shape</span><span class="p">,</span><span class="n">p</span><span class="p">,</span><span class="n">q</span><span class="p">)</span>
+    <span class="n">hmm</span><span class="o">.</span><span class="n">_glhmm__update_priors</span><span class="p">()</span>
+
+    <span class="c1"># covmatrix</span>
+    <span class="n">hmm</span><span class="o">.</span><span class="n">Sigma</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">if</span> <span class="n">diagonal_covmat</span> <span class="ow">and</span> <span class="n">shared_covmat</span><span class="p">:</span>
+        <span class="n">hmm</span><span class="o">.</span><span class="n">Sigma</span><span class="o">.</span><span class="n">append</span><span class="p">({})</span>
+        <span class="n">hmm</span><span class="o">.</span><span class="n">Sigma</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="s2">&quot;rate&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">q</span><span class="p">)</span>
+        <span class="n">hmm</span><span class="o">.</span><span class="n">Sigma</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="s2">&quot;rate&quot;</span><span class="p">][:]</span> <span class="o">=</span> <span class="n">hmm_mat</span><span class="p">[</span><span class="s2">&quot;Omega_Gam_rate&quot;</span><span class="p">]</span>
+        <span class="n">hmm</span><span class="o">.</span><span class="n">Sigma</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="s2">&quot;shape&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">hmm_mat</span><span class="p">[</span><span class="s2">&quot;Omega_Gam_shape&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span>
+    <span class="k">elif</span> <span class="n">diagonal_covmat</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">shared_covmat</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">K</span><span class="p">):</span>
+            <span class="n">hmm</span><span class="o">.</span><span class="n">Sigma</span><span class="o">.</span><span class="n">append</span><span class="p">({})</span>
+            <span class="n">hmm</span><span class="o">.</span><span class="n">Sigma</span><span class="p">[</span><span class="n">k</span><span class="p">][</span><span class="s2">&quot;rate&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">q</span><span class="p">)</span>
+            <span class="n">hmm</span><span class="o">.</span><span class="n">Sigma</span><span class="p">[</span><span class="n">k</span><span class="p">][</span><span class="s2">&quot;rate&quot;</span><span class="p">][:]</span> <span class="o">=</span> <span class="n">hmm_mat</span><span class="p">[</span><span class="s2">&quot;state_&quot;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">k</span><span class="p">)</span> <span class="o">+</span> <span class="s2">&quot;_Omega_Gam_rate&quot;</span><span class="p">]</span>
+            <span class="n">hmm</span><span class="o">.</span><span class="n">Sigma</span><span class="p">[</span><span class="n">k</span><span class="p">][</span><span class="s2">&quot;shape&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">hmm_mat</span><span class="p">[</span><span class="s2">&quot;state_&quot;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">k</span><span class="p">)</span> <span class="o">+</span> <span class="s2">&quot;_Omega_Gam_shape&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span>
+    <span class="k">elif</span> <span class="ow">not</span> <span class="n">diagonal_covmat</span> <span class="ow">and</span> <span class="n">shared_covmat</span><span class="p">:</span>
+        <span class="n">hmm</span><span class="o">.</span><span class="n">Sigma</span><span class="o">.</span><span class="n">append</span><span class="p">({})</span>
+        <span class="n">hmm</span><span class="o">.</span><span class="n">Sigma</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="s2">&quot;rate&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">hmm_mat</span><span class="p">[</span><span class="s2">&quot;Omega_Gam_rate&quot;</span><span class="p">]</span>
+        <span class="n">hmm</span><span class="o">.</span><span class="n">Sigma</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="s2">&quot;irate&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">hmm_mat</span><span class="p">[</span><span class="s2">&quot;Omega_Gam_irate&quot;</span><span class="p">]</span>
+        <span class="n">hmm</span><span class="o">.</span><span class="n">Sigma</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="s2">&quot;shape&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">hmm_mat</span><span class="p">[</span><span class="s2">&quot;Omega_Gam_shape&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span>
+    <span class="k">else</span><span class="p">:</span> <span class="c1"># not diagonal_covmat and not shared_covmat</span>
+        <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">K</span><span class="p">):</span>
+            <span class="n">hmm</span><span class="o">.</span><span class="n">Sigma</span><span class="o">.</span><span class="n">append</span><span class="p">({})</span>
+            <span class="n">hmm</span><span class="o">.</span><span class="n">Sigma</span><span class="p">[</span><span class="n">k</span><span class="p">][</span><span class="s2">&quot;rate&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">hmm_mat</span><span class="p">[</span><span class="s2">&quot;state_&quot;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">k</span><span class="p">)</span> <span class="o">+</span> <span class="s2">&quot;_Omega_Gam_rate&quot;</span><span class="p">]</span>
+            <span class="n">hmm</span><span class="o">.</span><span class="n">Sigma</span><span class="p">[</span><span class="n">k</span><span class="p">][</span><span class="s2">&quot;irate&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">hmm_mat</span><span class="p">[</span><span class="s2">&quot;state_&quot;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">k</span><span class="p">)</span> <span class="o">+</span> <span class="s2">&quot;_Omega_Gam_irate&quot;</span><span class="p">]</span>
+            <span class="n">hmm</span><span class="o">.</span><span class="n">Sigma</span><span class="p">[</span><span class="n">k</span><span class="p">][</span><span class="s2">&quot;shape&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">hmm_mat</span><span class="p">[</span><span class="s2">&quot;state_&quot;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">k</span><span class="p">)</span> <span class="o">+</span> <span class="s2">&quot;_Omega_Gam_shape&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span>
+
+    <span class="c1">#hmm.init_dynamics()</span>
+    <span class="n">hmm</span><span class="o">.</span><span class="n">P</span> <span class="o">=</span> <span class="n">hmm_mat</span><span class="p">[</span><span class="s2">&quot;P&quot;</span><span class="p">]</span>
+    <span class="n">hmm</span><span class="o">.</span><span class="n">Pi</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">squeeze</span><span class="p">(</span><span class="n">hmm_mat</span><span class="p">[</span><span class="s2">&quot;Pi&quot;</span><span class="p">])</span>
+    <span class="n">hmm</span><span class="o">.</span><span class="n">Dir2d_alpha</span> <span class="o">=</span> <span class="n">hmm_mat</span><span class="p">[</span><span class="s2">&quot;Dir2d_alpha&quot;</span><span class="p">]</span>
+    <span class="n">hmm</span><span class="o">.</span><span class="n">Dir_alpha</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">squeeze</span><span class="p">(</span><span class="n">hmm_mat</span><span class="p">[</span><span class="s2">&quot;Dir_alpha&quot;</span><span class="p">])</span>
+
+    <span class="k">return</span> <span class="n">hmm</span></div>
+
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2023, Diego Vidaurre.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

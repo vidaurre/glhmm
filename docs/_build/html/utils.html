@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.19: https://docutils.sourceforge.io/" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>utils module &mdash; GLHMM 0.0.1 documentation</title>
+      <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+        <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js"></script>
+        <script src="_static/doctools.js"></script>
+        <script src="_static/sphinx_highlight.js"></script>
+        <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Glossary" href="glossary.html" />
+    <link rel="prev" title="auxiliary module" href="auxiliary.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            GLHMM
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="reference internal" href="modules.html">API</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="glhmm.html">glhmm module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="io_glhmm.html">io_glhmm module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="preproc.html">preproc module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="auxiliary.html">auxiliary module</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">utils module</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#glhmm.utils.get_FO"><code class="docutils literal notranslate"><span class="pre">get_FO()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#glhmm.utils.get_FO_entropy"><code class="docutils literal notranslate"><span class="pre">get_FO_entropy()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#glhmm.utils.get_life_times"><code class="docutils literal notranslate"><span class="pre">get_life_times()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#glhmm.utils.get_maxFO"><code class="docutils literal notranslate"><span class="pre">get_maxFO()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#glhmm.utils.get_state_evoked_response"><code class="docutils literal notranslate"><span class="pre">get_state_evoked_response()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#glhmm.utils.get_state_evoked_response_entropy"><code class="docutils literal notranslate"><span class="pre">get_state_evoked_response_entropy()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#glhmm.utils.get_state_onsets"><code class="docutils literal notranslate"><span class="pre">get_state_onsets()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#glhmm.utils.get_switching_rate"><code class="docutils literal notranslate"><span class="pre">get_switching_rate()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#glhmm.utils.get_visits"><code class="docutils literal notranslate"><span class="pre">get_visits()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="glossary.html">Glossary</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">GLHMM</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="modules.html">API</a></li>
+      <li class="breadcrumb-item active">utils module</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/utils.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  
+<style>
+/* CSS overrides for sphinx_rtd_theme */
+
+/* 24px margin */
+.nbinput.nblast.container,
+.nboutput.nblast.container {
+    margin-bottom: 19px;  /* padding has already 5px */
+}
+
+/* ... except between code cells! */
+.nblast.container + .nbinput.container {
+    margin-top: -19px;
+}
+
+.admonition > p:before {
+    margin-right: 4px;  /* make room for the exclamation icon */
+}
+
+/* Fix math alignment, see https://github.com/rtfd/sphinx_rtd_theme/pull/686 */
+.math {
+    text-align: unset;
+}
+</style>
+<section id="module-glhmm.utils">
+<span id="utils-module"></span><h1>utils module<a class="headerlink" href="#module-glhmm.utils" title="Permalink to this heading"></a></h1>
+<p>Some public useful functions - Gaussian Linear Hidden Markov Model
+&#64;author: Diego Vidaurre 2023</p>
+<dl class="py function">
+<dt class="sig sig-object py" id="glhmm.utils.get_FO">
+<span class="sig-prename descclassname"><span class="pre">glhmm.utils.</span></span><span class="sig-name descname"><span class="pre">get_FO</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">Gamma</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">indices</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">summation</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/glhmm/utils.html#get_FO"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#glhmm.utils.get_FO" title="Permalink to this definition"></a></dt>
+<dd><p>Calculates the fractional occupancy of each state.</p>
+<section id="parameters">
+<h2>Parameters:<a class="headerlink" href="#parameters" title="Permalink to this heading"></a></h2>
+<dl class="simple">
+<dt>Gamma: array-like of shape (n_samples, n_states)</dt><dd><p>The state probability timeseries.</p>
+</dd>
+<dt>indices<span class="classifier">array-like of shape (n_sessions, 2)</span></dt><dd><p>The start and end indices of each trial/session in the input data.</p>
+</dd>
+<dt>summation: bool, default=False</dt><dd><p>If True, the sum of each row is not normalized, otherwise it is.</p>
+</dd>
+</dl>
+</section>
+<section id="returns">
+<h2>Returns:<a class="headerlink" href="#returns" title="Permalink to this heading"></a></h2>
+<dl class="simple">
+<dt>FO<span class="classifier">array-like of shape (n_sessions, n_states)</span></dt><dd><p>The fractional occupancy of each state per session.</p>
+</dd>
+</dl>
+</section>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="glhmm.utils.get_FO_entropy">
+<span class="sig-prename descclassname"><span class="pre">glhmm.utils.</span></span><span class="sig-name descname"><span class="pre">get_FO_entropy</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">Gamma</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">indices</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/glhmm/utils.html#get_FO_entropy"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#glhmm.utils.get_FO_entropy" title="Permalink to this definition"></a></dt>
+<dd><p>Calculates the entropy of each session, if we understand fractional occupancies as probabilities.</p>
+<section id="id1">
+<h2>Parameters:<a class="headerlink" href="#id1" title="Permalink to this heading"></a></h2>
+<dl class="simple">
+<dt>Gamma: array-like of shape (n_samples, n_states)</dt><dd><p>The Gamma represents the state probability timeseries.</p>
+</dd>
+<dt>indices<span class="classifier">array-like of shape (n_sessions, 2)</span></dt><dd><p>The start and end indices of each trial/session in the input data.</p>
+</dd>
+</dl>
+</section>
+<section id="id2">
+<h2>Returns:<a class="headerlink" href="#id2" title="Permalink to this heading"></a></h2>
+<dl class="simple">
+<dt>entropy: array-like of shape (n_sessions,)</dt><dd><p>The entropy of each session.</p>
+</dd>
+</dl>
+</section>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="glhmm.utils.get_life_times">
+<span class="sig-prename descclassname"><span class="pre">glhmm.utils.</span></span><span class="sig-name descname"><span class="pre">get_life_times</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">vpath</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">indices</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">threshold</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/glhmm/utils.html#get_life_times"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#glhmm.utils.get_life_times" title="Permalink to this definition"></a></dt>
+<dd><p>Calculates the average, median and maximum life times for each state.</p>
+<section id="id3">
+<h2>Parameters:<a class="headerlink" href="#id3" title="Permalink to this heading"></a></h2>
+<dl class="simple">
+<dt>vpath<span class="classifier">array-like of shape (n_samples,)</span></dt><dd><p>The viterbi path represents the most likely state sequence.</p>
+</dd>
+<dt>indices<span class="classifier">array-like of shape (n_sessions, 2)</span></dt><dd><p>The start and end indices of each trial/session in the input data.</p>
+</dd>
+<dt>threshold<span class="classifier">int, optional, default=0</span></dt><dd><p>A threshold value used to exclude visits with a duration below this value.</p>
+</dd>
+</dl>
+</section>
+<section id="id4">
+<h2>Returns:<a class="headerlink" href="#id4" title="Permalink to this heading"></a></h2>
+<dl class="simple">
+<dt>meanLF<span class="classifier">array-like of shape (n_sessions, n_states)</span></dt><dd><p>The average visit duration for each state in each trial/session.</p>
+</dd>
+<dt>medianLF<span class="classifier">array-like of shape (n_sessions, n_states)</span></dt><dd><p>The median visit duration for each state in each trial/session.</p>
+</dd>
+<dt>maxLF<span class="classifier">array-like of shape (n_sessions, n_states)</span></dt><dd><p>The maximum visit duration for each state in each trial/session.</p>
+</dd>
+</dl>
+</section>
+<section id="notes">
+<h2>Notes:<a class="headerlink" href="#notes" title="Permalink to this heading"></a></h2>
+<p>A visit to a state is defined as a contiguous sequence of time points in which the state is active.
+The duration of a visit is the number of time points in the sequence.
+This function uses the <cite>get_visits</cite> function to compute the visits and exclude those below the threshold.</p>
+</section>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="glhmm.utils.get_maxFO">
+<span class="sig-prename descclassname"><span class="pre">glhmm.utils.</span></span><span class="sig-name descname"><span class="pre">get_maxFO</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">Gamma</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">indices</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/glhmm/utils.html#get_maxFO"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#glhmm.utils.get_maxFO" title="Permalink to this definition"></a></dt>
+<dd><p>Calculates the maximum fractional occupancy per session.</p>
+<p>The first argument can also be a viterbi path (vpath).</p>
+<section id="id5">
+<h2>Parameters:<a class="headerlink" href="#id5" title="Permalink to this heading"></a></h2>
+<dl class="simple">
+<dt>Gamma: array-like of shape (n_samples, n_states); or a vpath, array of shape (n_samples,)</dt><dd><p>The Gamma represents the state probability timeseries and the vpath represents the most likely state sequence.</p>
+</dd>
+<dt>indices<span class="classifier">array-like of shape (n_sessions, 2)</span></dt><dd><p>The start and end indices of each trial/session in the input data.</p>
+</dd>
+</dl>
+</section>
+<section id="id6">
+<h2>Returns:<a class="headerlink" href="#id6" title="Permalink to this heading"></a></h2>
+<dl class="simple">
+<dt>maxFO: array-like of shape (n_sessions,)</dt><dd><p>The maximum fractional occupancy across states for each trial/session</p>
+</dd>
+</dl>
+</section>
+<section id="id7">
+<h2>Notes:<a class="headerlink" href="#id7" title="Permalink to this heading"></a></h2>
+<p>The maxFO is useful to assess the amount of <cite>state mixing</cite>. For more information, see [^1].</p>
+</section>
+<section id="references">
+<h2>References:<a class="headerlink" href="#references" title="Permalink to this heading"></a></h2>
+<dl class="simple">
+<dt>[^1]: Ahrends, R., et al. (2022). Data and model considerations for estimating time-varying functional connectivity in fMRI. NeuroImage 252, 119026.</dt><dd><p><a class="reference external" href="https://pubmed.ncbi.nlm.nih.gov/35217207/">https://pubmed.ncbi.nlm.nih.gov/35217207/</a>)</p>
+</dd>
+</dl>
+</section>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="glhmm.utils.get_state_evoked_response">
+<span class="sig-prename descclassname"><span class="pre">glhmm.utils.</span></span><span class="sig-name descname"><span class="pre">get_state_evoked_response</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">Gamma</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">indices</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/glhmm/utils.html#get_state_evoked_response"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#glhmm.utils.get_state_evoked_response" title="Permalink to this definition"></a></dt>
+<dd><p>Calculates the state evoked response</p>
+<p>The first argument can also be a viterbi path (vpath).</p>
+<section id="id8">
+<h2>Parameters:<a class="headerlink" href="#id8" title="Permalink to this heading"></a></h2>
+<dl class="simple">
+<dt>Gamma: array-like of shape (n_samples, n_states), or a vpath array of shape (n_samples,)</dt><dd><p>The Gamma represents the state probability timeseries and the vpath represents the most likely state sequence.</p>
+</dd>
+<dt>indices<span class="classifier">array-like of shape (n_sessions, 2)</span></dt><dd><p>The start and end indices of each trial/session in the input data.</p>
+</dd>
+</dl>
+</section>
+<section id="id9">
+<h2>Returns:<a class="headerlink" href="#id9" title="Permalink to this heading"></a></h2>
+<dl class="simple">
+<dt>ser: array-like of shape (n_samples, n_states)</dt><dd><p>The state evoked response matrix.</p>
+</dd>
+</dl>
+</section>
+<section id="raises">
+<h2>Raises:<a class="headerlink" href="#raises" title="Permalink to this heading"></a></h2>
+<dl class="simple">
+<dt>Exception</dt><dd><p>If the input data violates any of the following conditions:
+- There is only one trial/session
+- Not all trials/sessions have the same length.</p>
+</dd>
+</dl>
+</section>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="glhmm.utils.get_state_evoked_response_entropy">
+<span class="sig-prename descclassname"><span class="pre">glhmm.utils.</span></span><span class="sig-name descname"><span class="pre">get_state_evoked_response_entropy</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">Gamma</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">indices</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/glhmm/utils.html#get_state_evoked_response_entropy"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#glhmm.utils.get_state_evoked_response_entropy" title="Permalink to this definition"></a></dt>
+<dd><p>Calculates the entropy of each time point, if we understand state evoked responses as probabilities.</p>
+<section id="id10">
+<h2>Parameters:<a class="headerlink" href="#id10" title="Permalink to this heading"></a></h2>
+<dl class="simple">
+<dt>Gamma: array-like of shape (n_samples, n_states)</dt><dd><p>The Gamma represents the state probability timeseries.</p>
+</dd>
+<dt>indices<span class="classifier">array-like of shape (n_sessions, 2)</span></dt><dd><p>The start and end indices of each trial/session in the input data.</p>
+</dd>
+</dl>
+</section>
+<section id="id11">
+<h2>Returns:<a class="headerlink" href="#id11" title="Permalink to this heading"></a></h2>
+<dl class="simple">
+<dt>entropy: array-like of shape (n_samples,)</dt><dd><p>The entropy of each time point.</p>
+</dd>
+</dl>
+</section>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="glhmm.utils.get_state_onsets">
+<span class="sig-prename descclassname"><span class="pre">glhmm.utils.</span></span><span class="sig-name descname"><span class="pre">get_state_onsets</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">vpath</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">indices</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">threshold</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/glhmm/utils.html#get_state_onsets"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#glhmm.utils.get_state_onsets" title="Permalink to this definition"></a></dt>
+<dd><p>Calculates the state onsets, i.e., the time points when each state activates.</p>
+<section id="id12">
+<h2>Parameters:<a class="headerlink" href="#id12" title="Permalink to this heading"></a></h2>
+<dl class="simple">
+<dt>vpath<span class="classifier">array-like of shape (n_samples, n_states)</span></dt><dd><p>The viterbi path represents the most likely state sequence.</p>
+</dd>
+<dt>indices<span class="classifier">array-like of shape (n_sessions, 2)</span></dt><dd><p>The start and end indices of each trial/session in the input data.</p>
+</dd>
+<dt>threshold<span class="classifier">int, optional, default=0</span></dt><dd><p>A threshold value used to exclude visits with a duration below this value.</p>
+</dd>
+</dl>
+</section>
+<section id="id13">
+<h2>Returns:<a class="headerlink" href="#id13" title="Permalink to this heading"></a></h2>
+<dl class="simple">
+<dt>onsets<span class="classifier">list of lists of ints</span></dt><dd><p>A list of the time points when each state activates for each trial/session.</p>
+</dd>
+</dl>
+</section>
+<section id="id14">
+<h2>Notes:<a class="headerlink" href="#id14" title="Permalink to this heading"></a></h2>
+<p>A visit to a state is defined as a contiguous sequence of time points in which the state is active.
+This function uses the <cite>get_visits</cite> function to compute the visits and exclude those below the threshold.</p>
+</section>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="glhmm.utils.get_switching_rate">
+<span class="sig-prename descclassname"><span class="pre">glhmm.utils.</span></span><span class="sig-name descname"><span class="pre">get_switching_rate</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">Gamma</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">indices</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/glhmm/utils.html#get_switching_rate"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#glhmm.utils.get_switching_rate" title="Permalink to this definition"></a></dt>
+<dd><p>Calculates the switching rate.</p>
+<p>The first argument can also be a viterbi path (vpath).</p>
+<section id="id15">
+<h2>Parameters:<a class="headerlink" href="#id15" title="Permalink to this heading"></a></h2>
+<dl class="simple">
+<dt>Gamma: array-like of shape (n_samples, n_states), or a vpath array of shape (n_samples,)</dt><dd><p>The Gamma represents the state probability timeseries and the vpath represents the most likely state sequence.</p>
+</dd>
+<dt>indices<span class="classifier">array-like of shape (n_sessions, 2)</span></dt><dd><p>The start and end indices of each trial/session in the input data.</p>
+</dd>
+</dl>
+</section>
+<section id="id16">
+<h2>Returns:<a class="headerlink" href="#id16" title="Permalink to this heading"></a></h2>
+<dl class="simple">
+<dt>SR<span class="classifier">array-like of shape (n_sessions, n_states)</span></dt><dd><p>The switching rate matrix.</p>
+</dd>
+</dl>
+</section>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="glhmm.utils.get_visits">
+<span class="sig-prename descclassname"><span class="pre">glhmm.utils.</span></span><span class="sig-name descname"><span class="pre">get_visits</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">vpath</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">k</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">threshold</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/glhmm/utils.html#get_visits"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#glhmm.utils.get_visits" title="Permalink to this definition"></a></dt>
+<dd><p>Computes a list of visits for state k, given a viterbi path (vpath).</p>
+<section id="id17">
+<h2>Parameters:<a class="headerlink" href="#id17" title="Permalink to this heading"></a></h2>
+<dl class="simple">
+<dt>vpath<span class="classifier">array-like of shape (n_samples,)</span></dt><dd><p>The viterbi path represents the most likely state sequence.</p>
+</dd>
+<dt>k<span class="classifier">int</span></dt><dd><p>The state for which to compute the visits.</p>
+</dd>
+<dt>threshold<span class="classifier">int, optional, default=0</span></dt><dd><p>A threshold value used to exclude visits with a duration below this value.</p>
+</dd>
+</dl>
+</section>
+<section id="id18">
+<h2>Returns:<a class="headerlink" href="#id18" title="Permalink to this heading"></a></h2>
+<dl class="simple">
+<dt>lengths<span class="classifier">list of floats</span></dt><dd><p>A list of visit durations for state k, where each duration is greater than the threshold.</p>
+</dd>
+<dt>onsets<span class="classifier">list of ints</span></dt><dd><p>A list of onset time points for each visit.</p>
+</dd>
+</dl>
+</section>
+<section id="id19">
+<h2>Notes:<a class="headerlink" href="#id19" title="Permalink to this heading"></a></h2>
+<p>A visit to state k is defined as a contiguous sequence of time points in which state k is active.</p>
+</section>
+</dd></dl>
+
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="auxiliary.html" class="btn btn-neutral float-left" title="auxiliary module" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="glossary.html" class="btn btn-neutral float-right" title="Glossary" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2023, Diego Vidaurre.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

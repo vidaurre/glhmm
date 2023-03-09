@@ -56,11 +56,11 @@ def get_maxFO(Gamma,indices):
 
     Notes:
     ------
-    The maxFO is useful to assess the amount of `state mixing`. For more information, see [1]_
+    The maxFO is useful to assess the amount of `state mixing`. For more information, see [^1].
 
     References:
     -----------
-    .. [1] Ahrends, R., et al. (2022). Data and model considerations for estimating time-varying functional connectivity in fMRI. NeuroImage 252, 119026.
+    [^1]: Ahrends, R., et al. (2022). Data and model considerations for estimating time-varying functional connectivity in fMRI. NeuroImage 252, 119026.
            https://pubmed.ncbi.nlm.nih.gov/35217207/)
 
     """
