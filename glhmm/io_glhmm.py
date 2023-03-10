@@ -204,6 +204,8 @@ def read_flattened_hmm_mat(file):
     hmm.Pi = np.squeeze(hmm_mat["Pi"])
     hmm.Dir2d_alpha = hmm_mat["Dir2d_alpha"]
     hmm.Dir_alpha = np.squeeze(hmm_mat["Dir_alpha"])
-
+    
+    hmm.trained = True
+    
     return hmm
 
