@@ -39,7 +39,7 @@ def apply_pca(X,d,whitening=False,exact=True):
         if whitening: X /= np.std(X,axis=0)
         return X
 
-    if exact: svd_solver = 'full'
+    svd_solver = 'full' if exact else 'auto'
     if d >= 1: 
         pcamodel = PCA(n_components=d,whiten=whitening,svd_solver=svd_solver)
         pcamodel.fit(X)
