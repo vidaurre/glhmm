@@ -423,12 +423,8 @@ class glhmm():
 
         if files is None:
             prior_shape,prior_rate = self.__compute_prior_covmat(X,Y)
-            self.priors["Sigma"]["shape"],self.priors["Sigma"]["rate"] = \
-                self.__compute_prior_covmat(X,Y)
         else:
-            prior_shape,prior_rate = self.__compute_prior_covmat(files=files)
-            self.priors["Sigma"]["shape"],self.priors["Sigma"]["rate"] = \
-                self.__compute_prior_covmat(files=files)         
+            prior_shape,prior_rate = self.__compute_prior_covmat(files=files)       
 
         self.__init_priors_sub(prior_rate,prior_shape,p,q)
         
@@ -1271,6 +1267,24 @@ class glhmm():
 
         return X,Y,Gamma
 
+
+    def get_active_K(self):
+        """ Returns the number of active states
+
+        Parameters:
+        -----------
+        None
+
+        Returns:
+        --------
+
+        K_active : Number of active states
+        
+        """
+
+        K_active = np.sum(self.active_states)
+        return K_active
+    
             
     def get_fe(self,X,Y,Gamma,Xi,scale=None,indices=None,todo=None):
         """Computes the Free Energy of an HMM depending on observation model.
@@ -1499,7 +1513,7 @@ class glhmm():
 
 
     def get_beta(self,k=0):
-        """Returns the beta of the specified state.
+        """Returns a (n_variables_1 x n_variables_2) array of beta for the specified state.
 
         Parameters:
         -----------
@@ -1508,8 +1522,8 @@ class glhmm():
 
         Returns:
         --------
-        float
-            The beta value of the specified state.
+        numpy.ndarray
+            A (n_variables_1 x n_variables_2) beta array for the specified state.
 
         Raises:
         -------
@@ -1522,15 +1536,48 @@ class glhmm():
         if not self.trained: 
             raise Exception("The model has not yet been trained") 
 
-        if self.hyperparameters["model_beta"] != 'no':
+        if self.hyperparameters["model_beta"] == 'no':
             raise Exception("The model has no beta")
 
         return self.beta[k]["Mu"]
+    
+
+
+    def get_betas(self):
+        """Returns a (n_variables_1 x n_variables_2 x n_states) array with beta for all states.
+
+        Parameters:
+        -----------
+
+        Returns:
+        --------
+        numpy.ndarray
+            A (n_variables_1 x n_variables_2 x n_states) array of betas for all states.
+
+        Raises:
+        -------
+        Exception
+            If the model has not yet been trained.
+        Exception
+            If the model has no beta.
+        """
+
+        if not self.trained: 
+            raise Exception("The model has not yet been trained") 
+
+        if self.hyperparameters["model_beta"] == 'no':
+            raise Exception("The model has no beta")
+
+        (p,q) = self.beta[0]["Mu"].shape
+        K = self.hyperparameters["K"]
+        betas = np.zeros((p,q,K))
+        for k in range(K): betas[:,:,k] = self.beta[k]["Mu"]
+        return betas
 
 
     def get_mean(self,k=0):
 
-        """Returns the mean of the specified state.
+        """Returns the mean for the specified state.
 
         Parameters:
         -----------
@@ -1539,7 +1586,36 @@ class glhmm():
 
         Returns:
         --------
-        float
+        numpy.ndarray
+            The mean value of the specified state.
+
+        Raises:
+        -------
+        Exception
+            If the model has not yet been trained.
+        Exception
+            If the model has no mean.
+        """
+
+        if not self.trained: 
+            raise Exception("The model has not yet been trained") 
+
+        if self.hyperparameters["model_mean"] == 'no':
+            raise Exception("The model has no mean")
+
+        return self.mean[k]["Mu"]
+    
+
+    def get_means(self):
+
+        """Returns a (n_variables_2 x n_states) array of means for all states.
+
+        Parameters:
+        -----------
+
+        Returns:
+        --------
+        numpy.ndarray
             The mean value of the specified component.
 
         Raises:
@@ -1553,20 +1629,24 @@ class glhmm():
         if not self.trained: 
             raise Exception("The model has not yet been trained") 
 
-        if self.hyperparameters["model_mean"] != 'no':
+        if self.hyperparameters["model_mean"] == 'no':
             raise Exception("The model has no mean")
 
-        return self.mean[k]["Mu"]
-    
+        q = self.beta[0]["Mu"].shape
+        K = self.hyperparameters["K"]
+        means = np.zeros((q,K))
+        for k in range(K): means[:,k] = self.mean[k]["Mu"]
+        return means    
+
 
     def dual_estimate(self,X,Y,indices=None,Gamma=None,Xi=None):
         """Dual estimation of HMM parameters.
 
         Parameters:
         -----------
-        X : array-like of shape (n_samples, n_parcels)
+        X : array-like of shape (n_samples, n_variables_1)
             The timeseries of set of variables 1.
-        Y : array-like of shape (n_samples, n_parcels)
+        Y : array-like of shape (n_samples, n_variables_2)
             The timeseries of set of variables 2.
         indices : array-like of shape (n_sessions, 2), optional
             The start and end indices of each trial/session in the input data. If None, a single
@@ -1621,9 +1701,9 @@ class glhmm():
 
         Parameters:
         -----------
-        X : array-like of shape (n_samples, n_parcels)
+        X : array-like of shape (n_samples, n_variables_1)
             The timeseries of set of variables 1.
-        Y : array-like of shape (n_samples, n_parcels)
+        Y : array-like of shape (n_samples, n_variables_2)
             The timeseries of set of variables 2.
         indices : array-like of shape (n_sessions, 2), optional
             The start and end indices of each trial/session in the input data.
