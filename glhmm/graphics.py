@@ -13,7 +13,19 @@ from . import utils
 
 
 def show_trans_prob_mat(self,t=None,show_diag=True,show_colorbar=True):
+    """Displays a heatmap of the transition probability matrix.
 
+    Parameters:
+    -----------
+    t : float or None, default=None
+        The time index for the transition probability matrix to be displayed. 
+        If None (default), displays the entire matrix.
+    show_diag : bool
+        Whether to show the diagonal elements of the matrix. If False, sets the 
+        diagonal elements to zero and normalizes the rows of the matrix.
+    show_colorbar : bool, default=True
+        Whether to display the colorbar.
+    """
     P = np.copy(self.P)
     K = P.shape[0]
 
@@ -38,7 +50,20 @@ def show_trans_prob_mat(self,t=None,show_diag=True,show_colorbar=True):
 
 
 def show_Gamma(Gamma,tlim=None,Hz=1,palette='Oranges'):
+    """Displays the activity of the hidden states as a function of time.
 
+    Parameters:
+    -----------
+    Gamma : array of shape (n_samples, n_states)
+        The state timeseries probabilities.
+    tlim : tuple or None, default=None
+        The time interval to be displayed. If None (default), displays the 
+        entire sequence.
+    Hz : int, default=1
+        The frequency of the signal, in Hz.
+    palette : str, default = 'Oranges'
+        The name of the color palette to use.
+    """
     Hz = 100
 
     T,K = Gamma.shape
@@ -64,11 +89,24 @@ def show_Gamma(Gamma,tlim=None,Hz=1,palette='Oranges'):
 
 
 def show_temporal_statistic(s):
-    """ Box plots of a given temporal statistic s, which can be:
-      s = utils.get_FO(Gamma,indices)
-      s = utils.get_switching_rate(Gamma,indices)
-      s,_,_ = utils.get_life_times(vpath,indices)
-      s = utils.get_FO_entropy(Gamma,indices)
+    """Displays box plots of a given temporal aspect of the states
+    (e.g., fractional occupancies, switching rates, life times) `s`.
+
+    Parameters
+    ----------
+    s : array-like
+        The temporal statistic to plot. Can be one of the following:
+        - `utils.get_FO(Gamma, indices)`
+        - `utils.get_switching_rate(Gamma, indices)`
+        - `utils.get_life_times(vpath, indices)[0]`
+        - `utils.get_FO_entropy(Gamma, indices)`
+        
+    Examples
+    --------
+    >>> indices = [0, 1, 2]
+    >>> Gamma = np.random.rand(100, 3)
+    >>> s = utils.get_FO(Gamma, indices)
+    >>> show_temporal_statistic(s)
     """
 
     sb.set(style='whitegrid')
