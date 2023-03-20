@@ -8,4 +8,5 @@ io_glhmm
 preproc
 auxiliary
 utils
+graphics
 ```
