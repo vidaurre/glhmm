@@ -1,4 +1,4 @@
-# auxiliary module
+# glhmm.auxiliary
 
 ```{eval-rst}
 .. automodule:: glhmm.auxiliary
