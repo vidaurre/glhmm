@@ -35,7 +35,7 @@ extensions = [
     'sphinx.ext.autosummary',
     'sphinx.ext.viewcode',
     'sphinx.ext.napoleon', 
-    'graphics',
+    'glhmm.graphics',
 ]
 
 # Add any paths that contain templates here, relative to this directory.
