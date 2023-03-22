@@ -36,8 +36,6 @@ extensions = [
     'sphinx.ext.viewcode',
     'sphinx.ext.napoleon',
 ]
-# Tell Sphinx to mock the graphics module during the documentation build process, which can sometimes help resolve import errors.
-autodoc_mock_imports = ["graphics"]
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
