@@ -13,7 +13,19 @@ from . import utils
 
 
 def show_trans_prob_mat(hmm,only_active_states=False,show_diag=True,show_colorbar=True):
+    """Displays the transition probability matrix of a given HMM.
 
+    Params:
+    -------
+    hmm: HMM object
+        An instance of the HMM class containing the transition probability matrix to be visualized.
+    only_active_states : bool, optional, default=False
+        Whether to display only active states or all states in the matrix.
+    show_diag : bool, optional, defatult=True
+        Whether to display the diagonal elements of the matrix or not.
+    show_colorbar : bool, optional, default=True
+        Whether to display the colorbar next to the matrix or not.
+    """
     P = np.copy(hmm.P)
     if only_active_states:
         P = P[hmm.active_states,hmm.active_states]
@@ -40,7 +52,20 @@ def show_trans_prob_mat(hmm,only_active_states=False,show_diag=True,show_colorba
 
 
 def show_Gamma(Gamma,tlim=None,Hz=1,palette='Oranges'):
-
+    """Displays the activity of the hidden states as a function of time.
+    
+    Parameters:
+    -----------
+    Gamma : array of shape (n_samples, n_states)
+        The state timeseries probabilities.
+    tlim : tuple or None, default=None
+        The time interval to be displayed. If None (default), displays the 
+        entire sequence.
+    Hz : int, default=1
+        The frequency of the signal, in Hz.
+    palette : str, default = 'Oranges'
+        The name of the color palette to use.
+    """
     Hz = 100
 
     T,K = Gamma.shape
@@ -66,13 +91,25 @@ def show_Gamma(Gamma,tlim=None,Hz=1,palette='Oranges'):
 
 
 def show_temporal_statistic(Gamma,indices,statistic='FO',type_plot='barplot'):
-    # """ Box plots of a given temporal statistic s, which can be:
-    #   s = utils.get_FO(Gamma,indices)
-    #   s = utils.get_switching_rate(Gamma,indices)
-    #   s,_,_ = utils.get_life_times(vpath,indices)
-    #   s = utils.get_FO_entropy(Gamma,indices)
-    # """
+    """Plots a statistic over time for a set of sessions.
 
+    Params:
+    -------
+        Gamma : array of shape (n_samples, n_states)
+            The state timeseries probabilities.
+        indices: numpy.ndarray of shape (n_sessions,)
+            The session indices to plot, .
+        statistic:  str, default='FO'
+            The statistic to compute and plot. Can be 'FO', 'switching_rate', 'life_times' or 'entropy'.
+        type_plot: str, default='barplot'
+            The type of plot to generate. Can be 'barplot', 'boxplot' or 'matrix'.
+
+    Raises:
+    -------
+        Exception: If statistic is not one of 'FO', 'switching_rate', 'life_times' or 'entropy'.
+        Exception: If type_plot is 'boxplot' and there are less than 10 sessions.
+        Exception: If type_plot is 'matrix' and there is only one session.
+    """
     s = eval("utils.get_" + statistic)(Gamma,indices)
     if statistic not in ["FO","switching_rate","life_times","entropy"]:
         raise Exception("statistic has to be 'FO','switching_rate','life_times' or 'entropy'") 
@@ -102,7 +139,21 @@ def show_temporal_statistic(Gamma,indices,statistic='FO',type_plot='barplot'):
 
 
 def show_beta(hmm,only_active_states=False,X=None,Y=None,show_average=None):
-
+    """Displays the beta coefficients of a given HMM.
+    
+    Params:
+    -------
+    hmm: HMM object
+        An instance of the HMM class containing the beta coefficients to be visualized.
+    only_active_states: bool, optional, default=False
+        If True, only the beta coefficients of active states are shown.
+    X: numpy.ndarray, optional, default=None
+        The timeseries of set of variables 1.
+    Y: numpy.ndarray, optional, default=None
+        The timeseries of set of variables 2.
+    show_average: bool, optional, default=None
+        If True, an additional row of the average beta coefficients is shown.
+    """
     if show_average is None:
         show_average = not ((X is None) or (Y is None))
     
