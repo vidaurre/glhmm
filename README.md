@@ -13,10 +13,11 @@ The required dependencies to use glhmm are:
 
 - Python >= 3.6
 - NumPy
+- numba
 - scikit-learn
 - scipy
 - matplotlib
-- numba
+- seaborn
 
 ## Installation
 
