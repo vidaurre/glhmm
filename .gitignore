@@ -6,8 +6,6 @@
 
 *.bak
 
-glhmm/test_2.ipynb
-
 # Standard Python ignore below
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -36,6 +34,9 @@ share/python-wheels/
 .installed.cfg
 *.egg
 MANIFEST
+
+glhmm/__pycache__/*
+glhmm/__pycache__
 
 # PyInstaller
 #  Usually these files are written by a python script from a template

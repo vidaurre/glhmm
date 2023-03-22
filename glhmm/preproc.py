@@ -158,6 +158,7 @@ def preprocess_data(data,indices,
 
     if pca != None:
         data = apply_pca(data,pca,whitening,exact_pca)
+        p = data.shape[1]
         
     if downsample != None:
         factor = downsample / fs

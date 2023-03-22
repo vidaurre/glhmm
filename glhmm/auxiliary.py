@@ -57,7 +57,6 @@ def make_indices_from_T(T):
 
     """
 
-    
     N = T.shape[0]
     indices = np.zeros((N,2),dtype=int)
     acc = 0
