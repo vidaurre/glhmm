@@ -59,7 +59,7 @@ def show_Gamma(Gamma,tlim=None,Hz=1,palette='Oranges'):
     -----------
     Gamma : array of shape (n_samples, n_states)
         The state timeseries probabilities.
-    tlim : tuple or None, default=None
+    tlim : 2x1 array or None, default=None
         The time interval to be displayed. If None (default), displays the 
         entire sequence.
     Hz : int, default=1
@@ -108,9 +108,10 @@ def show_temporal_statistic(Gamma,indices,statistic='FO',type_plot='barplot'):
 
     Raises:
     -------
-        Exception: If statistic is not one of 'FO', 'switching_rate', 'life_times' or 'entropy'.
-        Exception: If type_plot is 'boxplot' and there are less than 10 sessions.
-        Exception: If type_plot is 'matrix' and there is only one session.
+        Exception
+            - If statistic is not one of 'FO', 'switching_rate', 'life_times' or 'entropy'.
+            - If type_plot is 'boxplot' and there are less than 10 sessions.
+            - If type_plot is 'matrix' and there is only one session.
     """
     
     s = eval("utils.get_" + statistic)(Gamma,indices)
