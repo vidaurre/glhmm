@@ -1,4 +1,4 @@
-# utils module
+# glhmm.utils
 
 ```{eval-rst}
 .. automodule:: glhmm.utils
