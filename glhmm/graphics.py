@@ -108,10 +108,11 @@ def show_temporal_statistic(Gamma,indices,statistic='FO',type_plot='barplot'):
 
     Raises:
     -------
-        Exception
-            - If statistic is not one of 'FO', 'switching_rate', 'life_times' or 'entropy'.
-            - If type_plot is 'boxplot' and there are less than 10 sessions.
-            - If type_plot is 'matrix' and there is only one session.
+    Exception
+        If any of the following:
+        - Statistic is not one of 'FO', 'switching_rate', 'life_times' or 'entropy'.
+        - type_plot is 'boxplot' and there are less than 10 sessions.
+        - type_plot is 'matrix' and there is only one session.
     """
     
     s = eval("utils.get_" + statistic)(Gamma,indices)
