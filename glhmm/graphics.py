@@ -15,8 +15,8 @@ from . import utils
 def show_trans_prob_mat(hmm,only_active_states=False,show_diag=True,show_colorbar=True):
     """Displays the transition probability matrix of a given HMM.
 
-    Params:
-    -------
+    Parameters:
+    -----------
     hmm: HMM object
         An instance of the HMM class containing the transition probability matrix to be visualized.
     only_active_states : bool, optional, default=False
@@ -26,6 +26,7 @@ def show_trans_prob_mat(hmm,only_active_states=False,show_diag=True,show_colorba
     show_colorbar : bool, optional, default=True
         Whether to display the colorbar next to the matrix or not.
     """
+    
     P = np.copy(hmm.P)
     if only_active_states:
         P = P[hmm.active_states,hmm.active_states]
@@ -66,6 +67,7 @@ def show_Gamma(Gamma,tlim=None,Hz=1,palette='Oranges'):
     palette : str, default = 'Oranges'
         The name of the color palette to use.
     """
+    
     Hz = 100
 
     T,K = Gamma.shape
@@ -93,8 +95,8 @@ def show_Gamma(Gamma,tlim=None,Hz=1,palette='Oranges'):
 def show_temporal_statistic(Gamma,indices,statistic='FO',type_plot='barplot'):
     """Plots a statistic over time for a set of sessions.
 
-    Params:
-    -------
+    Parameters:
+    -----------
         Gamma : array of shape (n_samples, n_states)
             The state timeseries probabilities.
         indices: numpy.ndarray of shape (n_sessions,)
@@ -110,6 +112,7 @@ def show_temporal_statistic(Gamma,indices,statistic='FO',type_plot='barplot'):
         Exception: If type_plot is 'boxplot' and there are less than 10 sessions.
         Exception: If type_plot is 'matrix' and there is only one session.
     """
+    
     s = eval("utils.get_" + statistic)(Gamma,indices)
     if statistic not in ["FO","switching_rate","life_times","entropy"]:
         raise Exception("statistic has to be 'FO','switching_rate','life_times' or 'entropy'") 
@@ -141,8 +144,8 @@ def show_temporal_statistic(Gamma,indices,statistic='FO',type_plot='barplot'):
 def show_beta(hmm,only_active_states=False,X=None,Y=None,show_average=None):
     """Displays the beta coefficients of a given HMM.
     
-    Params:
-    -------
+    Parameters:
+    -----------
     hmm: HMM object
         An instance of the HMM class containing the beta coefficients to be visualized.
     only_active_states: bool, optional, default=False
@@ -154,6 +157,7 @@ def show_beta(hmm,only_active_states=False,X=None,Y=None,show_average=None):
     show_average: bool, optional, default=None
         If True, an additional row of the average beta coefficients is shown.
     """
+    
     if show_average is None:
         show_average = not ((X is None) or (Y is None))
     
