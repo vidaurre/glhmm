@@ -1,4 +1,4 @@
-# API
+# Modules
 
 ```{toctree}
 :maxdepth: 4
@@ -8,4 +8,5 @@ io_glhmm
 preproc
 auxiliary
 utils
+graphics
 ```
