@@ -14,16 +14,15 @@ import sys
 import warnings
 import copy
 import time
-#import matplotlib.pyplot as plt
-# import scipy.spatial.distance as dist
 
-# import glhmm.auxiliary as auxiliary
-# import glhmm.io as io
-# import glhmm.utils as utils
+# import auxiliary
+# import io
+# import utils
 
 from . import auxiliary
 from . import io_glhmm as io
 from . import utils
+
 
 class glhmm():
     """ Gaussian Linear Hidden Markov Model class to decode stimulus from data.
@@ -160,7 +159,6 @@ class glhmm():
 
     def __loglikelihood_k(self,X,Y,L,k,cache):
 
-        K = self.hyperparameters["K"]
         T,q = Y.shape
         if self.hyperparameters["model_beta"] != 'no': p = X.shape[1]
         else: p = 0
@@ -328,7 +326,7 @@ class glhmm():
             options_r["cyc"] = options_r["initcyc"]
             options_r["stochastic"] = False
             options_r["initrep"] = 0
-            Gamma_r,_,fe_r = hmm_r.train(X,Y,indices,options_r)
+            Gamma_r,_,fe_r = hmm_r.train(X,Y,indices,options=options_r)
 
             fe[r] = fe_r[-1]
             if (r == 0) or (fe[r] < np.min(fe[0:r])):
@@ -549,7 +547,7 @@ class glhmm():
 
   
     def __update_dynamics(self,Gamma=None,Xi=None,indices=None,
-            Dir_alpha=None,Dir2d_alpha=None,rho=1):
+            Dir_alpha=None,Dir2d_alpha=None,rho=1,init=False):
         """
         Update transition prob matrix and initial probabilities
         """
@@ -565,8 +563,11 @@ class glhmm():
                 if Xi is None:
                     Xi = auxiliary.approximate_Xi(Gamma,indices)
                 Dir2d_alpha = np.sum(Xi,axis=0)
-            self.Dir2d_alpha = rho * (Dir2d_alpha + self.priors["Dir2d_alpha"]) \
-                + (1-rho) * self.Dir2d_alpha
+            if init:
+                self.Dir2d_alpha = Dir2d_alpha + self.priors["Dir2d_alpha"]
+            else:
+                self.Dir2d_alpha = rho * (Dir2d_alpha + self.priors["Dir2d_alpha"]) \
+                    + (1-rho) * self.Dir2d_alpha
         self.Dir2d_alpha[~Pstructure] = 0 
         self.__update_P()
 
@@ -576,8 +577,11 @@ class glhmm():
         else:
             if Dir_alpha is None:
                 Dir_alpha = np.sum(Gamma[indices[:,0]],axis=0)
-            self.Dir_alpha = rho * (Dir_alpha + self.priors["Dir_alpha"]) \
-                + (1-rho) * self.Dir_alpha
+            if init:
+                self.Dir_alpha = Dir_alpha + self.priors["Dir_alpha"]
+            else:
+                self.Dir_alpha = rho * (Dir_alpha + self.priors["Dir_alpha"]) \
+                    + (1-rho) * self.Dir_alpha                
         self.Dir_alpha[~Pistructure] = 0
         self.__update_Pi()
 
@@ -587,7 +591,7 @@ class glhmm():
         Initialise transition prob matrix and initial probabilities
         """
 
-        self.__update_dynamics(Gamma,None,indices)
+        self.__update_dynamics(Gamma,None,indices,init=True)
 
 
     def __update_obsdist(self,X,Y,Gamma,Tfactor=1,rho=1):
@@ -814,14 +818,14 @@ class glhmm():
             for k in range(K_mean):
                 self.alpha_mean.append({})
                 self.alpha_mean[k]["rate"] = 0.1 * np.ones(q)
-                self.alpha_mean[k]["shape"] = 0.0 # unregularised start
+                self.alpha_mean[k]["shape"] = 0.0001 # mild-regularised start
 
         if self.hyperparameters["model_beta"] != 'no':
             self.alpha_beta = []
             for k in range(K_beta):
                 self.alpha_beta.append({})
                 self.alpha_beta[k]["rate"] = 0.1 * np.ones((p,q))
-                self.alpha_beta[k]["shape"] = 0.0 # unregularised start  
+                self.alpha_beta[k]["shape"] = 0.0001 # mild-regularised start  
 
         # Sigma (set to priors)
         self.Sigma = []
@@ -1025,7 +1029,7 @@ class glhmm():
     ### Public methods
 
     def loglikelihood(self,X,Y):
-        """Computes the likelihood of the model per state and time point gicven the data X and Y.
+        """Computes the likelihood of the model per state and time point given the data X and Y.
 
         Parameters:
         -----------
@@ -1285,9 +1289,77 @@ class glhmm():
         K_active = np.sum(self.active_states)
         return K_active
     
+
+    def get_r2(self,X,Y,Gamma,indices=None):
+        """ Computes the explained variance per session/trial and per column of Y
+
+        Parameters:
+        -----------
+        X : array of shape (n_samples, n_variables_1)
+            The timeseries of set of variables 1.
+        Y : array of shape (n_samples, n_variables_2)
+            The timeseries of set of variables 2.
+        Gamma : array of shape (n_samples, n_states), default=None
+            The state timeseries probabilities.
+        indices : array-like of shape (n_sessions, 2), optional, default=None
+            The start and end indices of each trial/session in the input data.
+                
+        Returns:
+        --------
+        r2 : array of shape (n_sessions, n_variables_2) containing explained variances
+            
+        Raises:
+        --------
+        Exception
+            If the model has not been trained, or if it does not have neither mean or beta
+
+        Notes:
+        -------
+        This function does not take the covariance matrix into account
+        
+        """
+
+        if not self.trained: 
+            raise Exception("The model has not yet been trained") 
+
+        K = self.hyperparameters["K"]
+        q = Y.shape[1]
+        N = indices.shape[0]
+
+        r2 = np.zeros((N,q))
+        m = np.mean(Y,axis=0)
+
+        for j in range(N):
+
+            tt_j = range(indices[j,0],indices[j,1])
+
+            if X is not None:
+                Xj = np.copy(X[tt_j,:])
+
+            d = np.copy(Y[tt_j,:])
+            if self.hyperparameters["model_mean"] == 'shared':
+                d -= np.expand_dims(self.mean[0]['Mu'],axis=0)
+            if self.hyperparameters["model_beta"] == 'shared':
+                d -= (Xj @ self.beta[0]['Mu'])
+            for k in range(K):
+                if self.hyperparameters["model_mean"] == 'state': 
+                    d -= np.expand_dims(self.mean[k]['Mu'],axis=0) * np.expand_dims(Gamma[:,k],axis=1)
+                if self.hyperparameters["model_beta"] == 'state':
+                    d -= (Xj @ self.beta[k]['Mu']) * np.expand_dims(Gamma[:,k],axis=1)
+            d = np.sum(d**2,axis=0)
+
+            d0 = np.copy(Y[tt_j,:])
+            if self.hyperparameters["model_mean"] != 'no':
+                d0 -= np.expand_dims(m,axis=0)
+            d0 = np.sum(d0**2,axis=0)
+
+            r2[j,:] = 1 - (d / d0)
+
+        return r2
+
             
     def get_fe(self,X,Y,Gamma,Xi,scale=None,indices=None,todo=None):
-        """Computes the Free Energy of an HMM depending on observation model.
+        """ Computes the Free Energy of an HMM depending on observation model.
         
         Parameters:
         -----------

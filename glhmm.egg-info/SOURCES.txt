@@ -4,6 +4,7 @@ pyproject.toml
 setup.py
 glhmm/auxiliary.py
 glhmm/glhmm.py
+glhmm/graphics.py
 glhmm/io_glhmm.py
 glhmm/preproc.py
 glhmm/utils.py

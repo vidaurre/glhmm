@@ -11,6 +11,7 @@ from sklearn.decomposition import PCA
 from scipy import signal
 
 from . import auxiliary
+# import auxiliary
 
 def apply_pca(X,d,whitening=False,exact=True):
     """Applies PCA to the input data X.
@@ -64,7 +65,7 @@ def preprocess_data(data,indices,
         fs = 1, # frequency of the data
         standardise=True, # True / False
         filter=None, # Tuple with low-pass high-pass thresholds, or None
-        detrend=True, # True / False
+        detrend=False, # True / False
         onpower=False, # True / False
         pca=None, # Number of components, % explained variance, or None
         whitening=False, # True / False

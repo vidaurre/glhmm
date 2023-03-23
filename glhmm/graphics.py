@@ -10,6 +10,8 @@ import matplotlib.pyplot as plt
 import pandas as pd
 
 from . import utils
+# import utils
+
 
 
 def show_trans_prob_mat(hmm,only_active_states=False,show_diag=True,show_colorbar=True):
@@ -41,8 +43,6 @@ def show_trans_prob_mat(hmm,only_active_states=False,show_diag=True,show_colorba
 
 def show_Gamma(Gamma,tlim=None,Hz=1,palette='Oranges'):
 
-    Hz = 100
-
     T,K = Gamma.shape
 
     x = np.round(np.linspace(0.0, 256-1, K)).astype(int)
@@ -57,7 +57,8 @@ def show_Gamma(Gamma,tlim=None,Hz=1,palette='Oranges'):
         T = tlim[1] - tlim[0]
         df = pd.DataFrame(Gamma[tlim[0]:tlim[1],:], index=np.arange(T)/Hz)
     df = df.divide(df.sum(axis=1), axis=0)
-    ax = df.plot(kind='area', stacked=True,ylim=(0,1),legend=False,color=cols)
+    ax = df.plot(kind='area', stacked=True,ylim=(0,1),legend=False,
+            color=cols)
 
     ax.set_ylabel('Percent (%)')
     ax.margins(0,0)
@@ -74,8 +75,8 @@ def show_temporal_statistic(Gamma,indices,statistic='FO',type_plot='barplot'):
     # """
 
     s = eval("utils.get_" + statistic)(Gamma,indices)
-    if statistic not in ["FO","switching_rate","life_times","entropy"]:
-        raise Exception("statistic has to be 'FO','switching_rate','life_times' or 'entropy'") 
+    if statistic not in ["FO","switching_rate","FO_entropy"]:
+        raise Exception("statistic has to be 'FO','switching_rate' or 'FO_entropy'") 
     N,K = s.shape
 
     sb.set(style='whitegrid')
@@ -110,7 +111,7 @@ def show_beta(hmm,only_active_states=False,X=None,Y=None,show_average=None):
     beta = hmm.get_betas()
 
     if only_active_states:
-        idx,_ = np.where(hmm.active_states)
+        idx = np.where(hmm.active_states)[0]
         beta = beta[:,:,idx]
     else:
         idx = np.arange(K)
@@ -165,3 +166,42 @@ def show_beta(hmm,only_active_states=False,X=None,Y=None,show_average=None):
         palette='cool', 
         height=8)
     
+
+    def show_r2(r2=None,hmm=None,Gamma=None,X=None,Y=None,indices=None,show_average=False):
+
+        if r2 is None:
+            if (Y is None) or (indices is None):
+                raise Exception("Y and indices (and maybe X) has to be specified if r2 is not provided")
+            r2 = hmm.get_r2(X,Y,Gamma,indices)
+
+        if show_average:
+            if (Y is None) or (indices is None):
+                raise Exception("Y and indices (and maybe X) has to be specified if the average is to computed") 
+
+                r20 = hmm.get_r2(X,Y,Gamma,indices)
+
+                for j in range(N):
+
+                    tt_j = range(indices[j,0],indices[j,1])
+
+                    if X is not None:
+                        Xj = np.copy(X[tt_j,:])
+
+                    d = np.copy(Y[tt_j,:])
+                    if self.hyperparameters["model_mean"] == 'shared':
+                        d -= np.expand_dims(self.mean[0]['Mu'],axis=0)
+                    if self.hyperparameters["model_beta"] == 'shared':
+                        d -= (Xj @ self.beta[0]['Mu'])
+                    for k in range(K):
+                        if self.hyperparameters["model_mean"] == 'state': 
+                            d -= np.expand_dims(self.mean[k]['Mu'],axis=0) * np.expand_dims(Gamma[:,k],axis=1)
+                        if self.hyperparameters["model_beta"] == 'state':
+                            d -= (Xj @ self.beta[k]['Mu']) * np.expand_dims(Gamma[:,k],axis=1)
+                    d = np.sum(d**2,axis=0)
+
+                    d0 = np.copy(Y[tt_j,:])
+                    if self.hyperparameters["model_mean"] != 'no':
+                        d0 -= np.expand_dims(m,axis=0)
+                    d0 = np.sum(d0**2,axis=0)
+
+                    r2[j,:] = 1 - (d / d0)

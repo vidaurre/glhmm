@@ -390,6 +390,10 @@ def dirichlet_kl(alpha_q,alpha_p):
 
     """
 
+    ind = (alpha_q>0) & (alpha_p>0)
+    alpha_q = np.copy(alpha_q[ind])
+    alpha_p = np.copy(alpha_p[ind])
+
     sum_alpha_q = np.sum(alpha_q)
     sum_alpha_p = np.sum(alpha_p)
     t1 = + scipy.special.gammaln(sum_alpha_q) - scipy.special.gammaln(sum_alpha_p) \

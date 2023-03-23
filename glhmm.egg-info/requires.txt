@@ -3,3 +3,9 @@ numpy
 scikit-learn
 matplotlib
 numba
+
+[doc]
+sphinx~=4.2.0
+myst_parser
+furo
+nbsphinx
