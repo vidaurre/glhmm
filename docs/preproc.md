@@ -1,4 +1,4 @@
-# preproc module
+# glhmm.preproc
 
 ```{eval-rst}
 .. automodule:: glhmm.preproc

@@ -1,4 +1,4 @@
-# io_glhmm module
+# glhmm.io_glhmm
 
 ```{eval-rst}
 .. automodule:: glhmm.io_glhmm

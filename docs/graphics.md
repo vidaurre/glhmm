@@ -1,7 +1,7 @@
-# glhmm.auxiliary
+# glhmm.graphics
 
 ```{eval-rst}
-.. automodule:: glhmm.auxiliary
+.. automodule:: glhmm.graphics
    :members:
    :undoc-members:
    :show-inheritance:
