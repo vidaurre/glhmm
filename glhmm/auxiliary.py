@@ -180,6 +180,7 @@ def compute_alpha_beta(L,Pi,P):
     return a,b,sc
 
 
+@njit
 def compute_qstar(L,Pi,P):
     """Compute the most probable state sequence.
 

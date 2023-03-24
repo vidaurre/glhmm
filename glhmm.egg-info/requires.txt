@@ -3,6 +3,8 @@ numpy
 scikit-learn
 matplotlib
 numba
+seaborn
+pandas
 
 [doc]
 sphinx~=4.2.0

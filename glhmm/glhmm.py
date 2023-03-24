@@ -133,6 +133,18 @@ class glhmm():
                 np.expand_dims((b[1:,:] * L[tt[1:],:]),axis=1)) * self.P
             Xi[tt_xi,:,:] = Xi[tt_xi,:,:] / np.expand_dims(np.sum(Xi[tt_xi,:,:],axis=(1,2)),axis=(1,2))
 
+            # repeat if a Nan is produced, scaling the loglikelood
+            if np.any(np.isnan(Gamma)) or np.any(np.isnan(Xi)):
+                LL = np.log(L[tt,:])
+                t = np.all(LL<0,axis=1)
+                LL[t,:] = LL[t,:] -  np.expand_dims(np.max(LL[t,:],axis=1), axis=1)
+                a,b,_ = auxiliary.compute_alpha_beta(np.exp(LL,self.Pi,self.P))
+                Gamma[tt,:] = b * a
+                Gamma[tt,:] = Gamma[tt,:] / np.expand_dims(np.sum(Gamma[tt,:],axis=1), axis=1)
+                Xi[tt_xi,:,:] = np.matmul( np.expand_dims(a[0:-1,:],axis=2), \
+                    np.expand_dims((b[1:,:] * L[tt[1:],:]),axis=1)) * self.P
+                Xi[tt_xi,:,:] = Xi[tt_xi,:,:] / np.expand_dims(np.sum(Xi[tt_xi,:,:],axis=(1,2)),axis=(1,2))
+
         return Gamma,Xi,scale
 
 
@@ -1101,8 +1113,15 @@ class glhmm():
             If the model has not been trained.
         """
 
+
+        if (files is not None) and (Y is not None):
+            raise Exception("Argument 'files' cannot be used if the data (Y) is also provided")
+
         if not self.trained: 
             raise Exception("The model has not yet been trained") 
+
+        if files is not None:
+            X,Y,indices,_ = io.load_files(files)
 
         if indices is None: 
             indices = np.zeros((1,2)).astype(int)
