@@ -100,20 +100,19 @@ def show_temporal_statistic(Gamma,indices,statistic='FO',type_plot='barplot'):
 
     Parameters:
     -----------
-        Gamma : array of shape (n_samples, n_states)
-            The state timeseries probabilities.
-        indices: numpy.ndarray of shape (n_sessions,)
-            The session indices to plot, .
-        statistic:  str, default='FO'
-            The statistic to compute and plot. Can be 'FO', 'switching_rate', 'life_times' or 'entropy'.
-        type_plot: str, default='barplot'
-            The type of plot to generate. Can be 'barplot', 'boxplot' or 'matrix'.
+    Gamma : array of shape (n_samples, n_states)
+        The state timeseries probabilities.
+    indices: numpy.ndarray of shape (n_sessions,)
+        The session indices to plot.
+    statistic: str, default='FO'
+        The statistic to compute and plot. Can be 'FO', 'switching_rate' or 'FO_entropy'.
+    type_plot: str, default='barplot'
+        The type of plot to generate. Can be 'barplot', 'boxplot' or 'matrix'.
 
     Raises:
     -------
     Exception
-        If any of the following:
-        - Statistic is not one of 'FO', 'switching_rate', 'life_times' or 'entropy'.
+        - Statistic is not one of 'FO', 'switching_rate' or 'FO_entropy'.
         - type_plot is 'boxplot' and there are less than 10 sessions.
         - type_plot is 'matrix' and there is only one session.
     """
