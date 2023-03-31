@@ -16,7 +16,7 @@ import copy
 import time
 
 # import auxiliary
-# import io
+# import io_glhmm
 # import utils
 
 from . import auxiliary
@@ -1111,6 +1111,7 @@ class glhmm():
         -------
         Exception
             If the model has not been trained.
+            If both 'files' and 'Y' arguments are provided.
         """
 
 
@@ -1292,17 +1293,12 @@ class glhmm():
 
 
     def get_active_K(self):
-        """ Returns the number of active states
-
-        Parameters:
-        -----------
-        None
+        """Returns the number of active states
 
         Returns:
         --------
-
-        K_active : Number of active states
-        
+        K_active : int
+            Number of active states.
         """
 
         K_active = np.sum(self.active_states)
@@ -1310,7 +1306,7 @@ class glhmm():
     
 
     def get_r2(self,X,Y,Gamma,indices=None):
-        """ Computes the explained variance per session/trial and per column of Y
+        """Computes the explained variance per session/trial and per column of Y
 
         Parameters:
         -----------
@@ -1325,7 +1321,8 @@ class glhmm():
                 
         Returns:
         --------
-        r2 : array of shape (n_sessions, n_variables_2) containing explained variances
+        r2 : array of shape (n_sessions, n_variables_2)
+            The R-squared (proportion of the variance explained) for each session and each variable in Y.
             
         Raises:
         --------
@@ -1378,7 +1375,7 @@ class glhmm():
 
             
     def get_fe(self,X,Y,Gamma,Xi,scale=None,indices=None,todo=None):
-        """ Computes the Free Energy of an HMM depending on observation model.
+        """Computes the Free Energy of an HMM depending on observation model.
         
         Parameters:
         -----------
@@ -1604,23 +1601,22 @@ class glhmm():
 
 
     def get_beta(self,k=0):
-        """Returns a (n_variables_1 x n_variables_2) array of beta for the specified state.
+        """Returns the regression coefficients (beta) for the specified state.
 
         Parameters:
         -----------
-        k : int, optional
-            The index of the state for which to retrieve the beta value. Default=0.
+        k : int, optional, default=0
+            The index of the state for which to retrieve the beta value.
 
         Returns:
         --------
-        numpy.ndarray
-            A (n_variables_1 x n_variables_2) beta array for the specified state.
-
+        beta: ndarray of shape (n_variables_1 x n_variables_2)
+            The regression coefficients of each variable in X on each variable in Y for the specified state.
+            
         Raises:
         -------
         Exception
             If the model has not yet been trained.
-        Exception
             If the model has no beta.
         """
 
@@ -1635,21 +1631,17 @@ class glhmm():
 
 
     def get_betas(self):
-        """Returns a (n_variables_1 x n_variables_2 x n_states) array with beta for all states.
-
-        Parameters:
-        -----------
+        """Returns the regression coefficients (beta) for all states.
 
         Returns:
         --------
-        numpy.ndarray
-            A (n_variables_1 x n_variables_2 x n_states) array of betas for all states.
+        betas: ndarray of shape (n_variables_1 x n_variables_2 x n_states)
+            The regression coefficients of each variable in X on each variable in Y for all states.
 
         Raises:
         -------
         Exception
             If the model has not yet been trained.
-        Exception
             If the model has no beta.
         """
 
@@ -1672,19 +1664,18 @@ class glhmm():
 
         Parameters:
         -----------
-        k : int, optional
-            The index of the state for which to retrieve the mean. Default=0.
+        k : int, optional, default=0
+            The index of the state for which to retrieve the mean.
 
         Returns:
         --------
-        numpy.ndarray
-            The mean value of the specified state.
+        mean: ndarray of shape (n_variables_2,)
+            The mean value of each variable in Y for the specified state.
 
         Raises:
         -------
         Exception
             If the model has not yet been trained.
-        Exception
             If the model has no mean.
         """
 
@@ -1699,21 +1690,17 @@ class glhmm():
 
     def get_means(self):
 
-        """Returns a (n_variables_2 x n_states) array of means for all states.
-
-        Parameters:
-        -----------
+        """Returns the means for all states.
 
         Returns:
         --------
-        numpy.ndarray
-            The mean value of the specified component.
+        means: ndarray of shape (n_variables_2, n_states)
+            The mean value of each variable in Y for all states.
 
         Raises:
         -------
         Exception
             If the model has not yet been trained.
-        Exception
             If the model has no mean.
         """
 
@@ -1740,19 +1727,16 @@ class glhmm():
         Y : array-like of shape (n_samples, n_variables_2)
             The timeseries of set of variables 2.
         indices : array-like of shape (n_sessions, 2), optional
-            The start and end indices of each trial/session in the input data. If None, a single
-            segment spanning the entire sequence is used.
+            The start and end indices of each trial/session in the input data. If None, a single segment spanning the entire sequence is used.
         Gamma : array-like of shape (n_samples, n_states), optional
-            The state probabilities. If None, it is computed from the input
-            observations.
+            The state probabilities. If None, it is computed from the input observations.
         Xi : array-like of shape (n_samples - n_sessions, n_states, n_states), optional
             The joint probabilities of past and future states conditioned on data. If None, it is computed from the input observations.
 
         Returns:
         ---------
         hmm_dual : object
-            A copy of the HMM object with updated dynamics and observation
-            distributions.
+            A copy of the HMM object with updated dynamics and observation distributions.
         """
         
         if not self.trained: 
@@ -1797,11 +1781,9 @@ class glhmm():
         Y : array-like of shape (n_samples, n_variables_2)
             The timeseries of set of variables 2.
         indices : array-like of shape (n_sessions, 2), optional
-            The start and end indices of each trial/session in the input data.
-            If None, one big segment with no cuts is assumed.
+            The start and end indices of each trial/session in the input data. If None, one big segment with no cuts is assumed.
         files : str or list of str, optional
-            The filename(s) containing the data to load. If not None,
-            X, Y, and indices are ignored.
+            The filename(s) containing the data to load. If not None, X, Y, and indices are ignored.
         Gamma : array-like of shape (n_samples, n_states), optional
             The initial values of the state probabilities.
         Xi : array-like of shape (n_samples - n_sessions, n_states, n_states), optional
