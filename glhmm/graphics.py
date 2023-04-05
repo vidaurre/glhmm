@@ -7,6 +7,7 @@ Basic graphics - Gaussian Linear Hidden Markov Model
 import numpy as np
 import seaborn as sb
 import matplotlib.pyplot as plt
+import matplotlib.ticker as mtick
 import pandas as pd
 
 from . import utils
@@ -54,7 +55,7 @@ def show_trans_prob_mat(hmm,only_active_states=False,show_diag=True,show_colorba
     ax.axvline(x=K, color='k',linewidth=4)
 
 
-def show_Gamma(Gamma,tlim=None,Hz=1,palette='Oranges'):
+def show_Gamma(Gamma, line_overlay=None, tlim=None, Hz=1, palette='Oranges'):
     """Displays the activity of the hidden states as a function of time.
     
     Parameters:
@@ -69,8 +70,6 @@ def show_Gamma(Gamma,tlim=None,Hz=1,palette='Oranges'):
     palette : str, default = 'Oranges'
         The name of the color palette to use.
     """
-    
-    Hz = 100
 
     T,K = Gamma.shape
 
@@ -80,16 +79,26 @@ def show_Gamma(Gamma,tlim=None,Hz=1,palette='Oranges'):
     for k in range(K):
         cols[k,:] = cmap[x[k]]
 
-    if tlim is None:
-        df = pd.DataFrame(Gamma, index=np.arange(T)/Hz)
-    else:
+    if tlim is not None:
         T = tlim[1] - tlim[0]
-        df = pd.DataFrame(Gamma[tlim[0]:tlim[1],:], index=np.arange(T)/Hz)
+        data = Gamma[tlim[0] : tlim[1], :].copy()
+    
+    df = pd.DataFrame(data, index=np.arange(T)/Hz)
     df = df.divide(df.sum(axis=1), axis=0)
-    ax = df.plot(kind='area', stacked=True,ylim=(0,1),legend=False,
-            color=cols)
+    
+    ax = df.plot(
+        kind='area',
+        stacked=True,
+        ylim=(0,1),
+        legend=False,
+        color=cols
+    )
 
-    ax.set_ylabel('Percent (%)')
+    ax.yaxis.set_major_formatter(mtick.PercentFormatter(1))
+    ax.set(
+        title  = "",
+        xlabel = 'Time [s]',
+        ylabel = 'State probability')
     ax.margins(0,0)
 
     plt.show()
