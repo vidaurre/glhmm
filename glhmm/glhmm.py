@@ -1103,9 +1103,10 @@ class glhmm():
                 The state probability timeseries.
             Xi : array of shape (n_samples - n_sessions, n_states, n_states)
                 The joint probabilities of past and future states conditioned on data.
-            scale : array-like of shape (n_samples,), optional
-                The scaling factors used to compute the free energy of the
-                dataset. If None, scaling is automatically computed.
+            scale : array-like of shape (n_samples,)
+                The scaling factors from the inference, used to compute the free energy.
+                In normal use, we would do
+                    Gamma,Xi,_ = hmm.decode(X,Y,indices)
                 
         Raises:
         -------
@@ -1816,8 +1817,14 @@ class glhmm():
         --------
         Gamma : array-like of shape (n_samples, n_states)
             The state probabilities.
+            To avoid unnecessary use of memory, Gamma is only returned if learning is non-stochastic;
+            otherwise it is returned as an empty numpy array. 
+            To get Gamma after stochastic learning, use the decode method. 
         Xi : array-like of shape (n_samples - n_sessions, n_states, n_states)
             The joint probabilities of past and future states conditioned on data.
+            To avoid unnecessary use of memory, Xi is only returned if learning is non-stochastic;
+            otherwise it is returned as an empty numpy array. 
+            To get Xi after stochastic learning, use the decode method. 
         fe : array-like
             The free energy computed at each iteration of the training process.
         """
@@ -1833,7 +1840,7 @@ class glhmm():
 
         if (options is not None) and ("stochastic" in options) and (options["stochastic"]):
             fe = self.__train_stochastic(files,Gamma,options)
-            return fe
+            return np.empty(0),np.empty(0),fe
 
         options = self.__check_options(options)
         K = self.hyperparameters["K"]
