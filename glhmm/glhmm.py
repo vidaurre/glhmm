@@ -1802,6 +1802,12 @@ class glhmm():
             The joint probabilities of past and future states conditioned on data.
         fe : array-like
             The free energy computed at each iteration of the training process.
+            
+        Raises:
+        -------
+        Exception
+	        If `files` and `Y` are both provided or if neither are provided.
+	        If `X` is not provided and the hyperparameter 'model_beta' is True.
         """
 
         if (files is not None) and (Y is not None):
