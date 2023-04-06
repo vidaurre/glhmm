@@ -138,7 +138,7 @@ class glhmm():
                 LL = np.log(L[tt,:])
                 t = np.all(LL<0,axis=1)
                 LL[t,:] = LL[t,:] -  np.expand_dims(np.max(LL[t,:],axis=1), axis=1)
-                a,b,_ = auxiliary.compute_alpha_beta(np.exp(LL,self.Pi,self.P))
+                a,b,_ = auxiliary.compute_alpha_beta(np.exp(LL),self.Pi,self.P)
                 Gamma[tt,:] = b * a
                 Gamma[tt,:] = Gamma[tt,:] / np.expand_dims(np.sum(Gamma[tt,:],axis=1), axis=1)
                 Xi[tt_xi,:,:] = np.matmul( np.expand_dims(a[0:-1,:],axis=2), \
@@ -1827,6 +1827,9 @@ class glhmm():
 
         if (files is None) and (Y is None):
             raise Exception("Training needs data")
+        
+        if (X is None) and self.hyperparameters["model_beta"]:
+            raise Exception("If you want to model beta, X is needed as an argument")
 
         if (options is not None) and ("stochastic" in options) and (options["stochastic"]):
             fe = self.__train_stochastic(files,Gamma,options)
