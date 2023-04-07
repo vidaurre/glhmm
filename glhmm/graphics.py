@@ -7,6 +7,7 @@ Basic graphics - Gaussian Linear Hidden Markov Model
 import numpy as np
 import seaborn as sb
 import matplotlib.pyplot as plt
+import matplotlib.ticker as mtick
 import pandas as pd
 
 from . import utils
@@ -54,13 +55,15 @@ def show_trans_prob_mat(hmm,only_active_states=False,show_diag=True,show_colorba
     ax.axvline(x=K, color='k',linewidth=4)
 
 
-def show_Gamma(Gamma,tlim=None,Hz=1,palette='Oranges'):
+def show_Gamma(Gamma, line_overlay=None, tlim=None, Hz=1, palette='viridis'):
     """Displays the activity of the hidden states as a function of time.
     
     Parameters:
     -----------
     Gamma : array of shape (n_samples, n_states)
         The state timeseries probabilities.
+    line_overlay : array of shape (n_samples, 1)
+        A secondary related data type to overlay as a line.
     tlim : 2x1 array or None, default=None
         The time interval to be displayed. If None (default), displays the 
         entire sequence.
@@ -69,29 +72,54 @@ def show_Gamma(Gamma,tlim=None,Hz=1,palette='Oranges'):
     palette : str, default = 'Oranges'
         The name of the color palette to use.
     """
-    
-    Hz = 100
 
     T,K = Gamma.shape
 
+    # Setup colors
     x = np.round(np.linspace(0.0, 256-1, K)).astype(int)
     cmap = plt.get_cmap('plasma').colors
-    cols = np.zeros((K,3))
+    cmap = plt.get_cmap(palette)
+    cmap = cmap(np.arange(0, cmap.N))[:, :3]
+    
+    colors = np.zeros((K,3))
     for k in range(K):
-        cols[k,:] = cmap[x[k]]
+        colors[k,:] = cmap[x[k]]
 
-    if tlim is None:
-        df = pd.DataFrame(Gamma, index=np.arange(T)/Hz)
-    else:
+    # Setup data according to given limits
+    if tlim is not None:
         T = tlim[1] - tlim[0]
-        df = pd.DataFrame(Gamma[tlim[0]:tlim[1],:], index=np.arange(T)/Hz)
+        data = Gamma[tlim[0] : tlim[1], :].copy()
+        
+        if line_overlay is not None:
+            line = line_overlay[tlim[0] : tlim[1]].copy()
+    
+    df = pd.DataFrame(data, index=np.arange(T)/Hz)
     df = df.divide(df.sum(axis=1), axis=0)
-    ax = df.plot(kind='area', stacked=True,ylim=(0,1),legend=False,
-            color=cols)
-
-    ax.set_ylabel('Percent (%)')
+    
+    # Plot Gamma area
+    ax = df.plot(
+        kind='area',
+        stacked=True,
+        ylim=(0,1),
+        legend=False,
+        color=colors
+    )
+    
+    # Overlay line if given
+    if line_overlay is not None:
+        df2 = pd.DataFrame(line, index=np.arange(T)/Hz)
+        ax2 = ax.twinx()
+        df2.plot(ax=ax2, legend=False, color="black")
+        ax2.set(ylabel = '')
+    
+    # Adjust axis specifications
+    ax.yaxis.set_major_formatter(mtick.PercentFormatter(1))
+    ax.set(
+        title  = "",
+        xlabel = 'Time [s]',
+        ylabel = 'State probability')
     ax.margins(0,0)
-
+    
     plt.show()
 
 

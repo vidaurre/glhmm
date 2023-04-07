@@ -202,7 +202,7 @@ def compute_qstar(L,Pi,P):
     T,K = L.shape
 
     delta = np.zeros((T,K))
-    psi = np.zeros((T,K)).astype(int)
+    psi = np.zeros((T,K)).astype(np.int64)
     qstar = np.zeros((T,K))
 
     delta[0,:] = Pi * L[0,:]
