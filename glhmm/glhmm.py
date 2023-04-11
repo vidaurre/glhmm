@@ -1757,8 +1757,8 @@ class glhmm():
             Gamma,Xi,_ = self.decode(X,Y,indices)
 
         hmm_dual = copy.deepcopy(self)
-        hmm_dual.update_dynamics(Gamma,Xi,indices)
-        hmm_dual.update_obsdist(X,Y,Gamma)
+        hmm_dual.__update_dynamics(Gamma,Xi,indices)
+        hmm_dual.__update_obsdist(X,Y,Gamma)
 
         # for j in range(N):
         #     tt = np.arange(indices[j,0],indices[j,1])
