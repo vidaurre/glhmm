@@ -31,9 +31,11 @@ class glhmm():
     -----------
     K : int, default=10
         number of states in the model.
-    covtype : str, {'shareddiag', 'diag', 'full'}, default 'shareddiag'
+    covtype : str, {'shareddiag', 'diag','sharedfull','full'}, default 'shareddiag'
         Type of covariance matrix. Choose 'shareddiag' to have one diagonal covariance matrix for all states, 
-        or 'diag' to have a diagonal full covariance matrix for each state, or 'full' to have a full covariance matrix for each state.
+        or 'diag' to have a diagonal full covariance matrix for each state, 
+        or 'sharedfull' to have a shared full covariance matrix for all states,
+        or 'full' to have a full covariance matrix for each state.
     model_mean : str, {'state', 'no'}, default 'state'
         Model for the mean. If `no` the mean of the timeseries will not be used to drive the states.
     model_beta : str, {'state', 'no'}, default 'state'
@@ -937,8 +939,10 @@ class glhmm():
         Dir_alpha_each = np.zeros((K,N))
         Dir2d_alpha_each = np.zeros((K,K,N))
         warm_up = True
+        rho = 1
+        it = 0
 
-        for it in range(options["cyc"]):
+        while it < options["cyc"]: 
 
             I = np.random.choice(np.arange(N), size=options["Nbatch"], replace=False, p=sampling_prob)
             n_used[I] += 1
@@ -950,8 +954,6 @@ class glhmm():
 
             sampling_prob = options["base_weights"] ** n_used
             sampling_prob = sampling_prob / np.sum(sampling_prob)
-            rho = (it + 1)**(-options["forget_rate"])
-            rho = 1
             Tfactor = N / np.sum(ever_used)
 
             X,Y,indices,indices_individual = io.load_files(files,I)
@@ -1025,9 +1027,11 @@ class glhmm():
                 else:
                     if options["verbose"]: print("Cycle " + str(it+1) + " free energy = " + str(fe_it))
 
+                it += 1
+                rho = (it + 1)**(-options["forget_rate"])
+
             else:
-                if options["verbose"]: 
-                    print("Cycle " + str(it+1) + ", rho = " + str(rho))
+                if options["verbose"]: print("Warming up, went through = " + str(100*np.mean(ever_used)) + "% of the sessions")
 
         K_active = np.sum(self.active_states)
         if options["verbose"]:
