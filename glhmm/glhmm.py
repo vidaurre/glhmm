@@ -1711,14 +1711,18 @@ class glhmm():
         if self.hyperparameters["model_mean"] == 'no':
             raise Exception("The model has no mean")
 
-        q = self.beta[0]["Mu"].shape
+        if self.hyperparameters["model_beta"] != 'no':
+            q = self.beta[0]["Mu"].shape
+        else:
+            q = self.Sigma[0]["rate"].shape[0]
+
         K = self.hyperparameters["K"]
         means = np.zeros((q,K))
         for k in range(K): means[:,k] = self.mean[k]["Mu"]
         return means    
 
 
-    def dual_estimate(self,X,Y,indices=None,Gamma=None,Xi=None):
+    def dual_estimate(self,X,Y,indices=None,Gamma=None,Xi=None,for_kernel=False):
         """Dual estimation of HMM parameters.
 
         Parameters:
@@ -1768,8 +1772,10 @@ class glhmm():
         #     hmm_dual.append = copy.deepcopy(self)
         #     hmm_dual[j].update_dynamics(Gamma[tt,:],Xi[tt_xi,:,:],indices_j)
         #     hmm_dual[j].update_obsdist(X[tt,:],Y[tt,:],Gamma[tt,:])
-
-        return hmm_dual
+        if for_kernel:
+            return hmm_dual,Gamma,Xi
+        else:
+            return hmm_dual
 
 
     def train(self,X=None,Y=None,indices=None,files=None,Gamma=None,Xi=None,scale=None,options=None):
@@ -1823,7 +1829,7 @@ class glhmm():
         if (files is None) and (Y is None):
             raise Exception("Training needs data")
         
-        if (X is None) and self.hyperparameters["model_beta"] != 'no':
+        if (X is None) and (self.hyperparameters["model_beta"] != 'no'):
             raise Exception("If you want to model beta, X is needed as an argument")
 
         if (options is not None) and ("stochastic" in options) and (options["stochastic"]):
