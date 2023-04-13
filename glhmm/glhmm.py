@@ -31,9 +31,9 @@ class glhmm():
     -----------
     K : int, default=10
         number of states in the model.
-    covtype : str, {'shareddiag', 'diag'}, default 'shareddiag'
+    covtype : str, {'shareddiag', 'diag', 'full'}, default 'shareddiag'
         Type of covariance matrix. Choose 'shareddiag' to have one diagonal covariance matrix for all states, 
-        or 'diag' to have a diagonal full covariance matrix for each state.
+        or 'diag' to have a diagonal full covariance matrix for each state, or 'full' to have a full covariance matrix for each state.
     model_mean : str, {'state', 'no'}, default 'state'
         Model for the mean. If `no` the mean of the timeseries will not be used to drive the states.
     model_beta : str, {'state', 'no'}, default 'state'
@@ -1757,8 +1757,8 @@ class glhmm():
             Gamma,Xi,_ = self.decode(X,Y,indices)
 
         hmm_dual = copy.deepcopy(self)
-        hmm_dual.update_dynamics(Gamma,Xi,indices)
-        hmm_dual.update_obsdist(X,Y,Gamma)
+        hmm_dual.__update_dynamics(Gamma,Xi,indices)
+        hmm_dual.__update_obsdist(X,Y,Gamma)
 
         # for j in range(N):
         #     tt = np.arange(indices[j,0],indices[j,1])
@@ -1823,7 +1823,7 @@ class glhmm():
         if (files is None) and (Y is None):
             raise Exception("Training needs data")
         
-        if (X is None) and self.hyperparameters["model_beta"]:
+        if (X is None) and self.hyperparameters["model_beta"] != 'no':
             raise Exception("If you want to model beta, X is needed as an argument")
 
         if (options is not None) and ("stochastic" in options) and (options["stochastic"]):
