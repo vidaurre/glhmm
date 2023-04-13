@@ -1737,6 +1737,9 @@ class glhmm():
             The state probabilities. If None, it is computed from the input observations.
         Xi : array-like of shape (n_samples - n_sessions, n_states, n_states), optional
             The joint probabilities of past and future states conditioned on data. If None, it is computed from the input observations.
+        for_kernel : bool, optional 
+            Whether purpose of dual estimation is kernel (gradient) computation, or not
+            If True, function will also return Gamma and Xi (default False)
 
         Returns:
         ---------
