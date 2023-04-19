@@ -940,6 +940,7 @@ class glhmm():
         Dir_alpha_each = np.zeros((K,N))
         Dir2d_alpha_each = np.zeros((K,K,N))
         warm_up = True
+        cyc_to_go =  options["cyc_to_go_under_th"]
         rho = 1
         it = 0
 
@@ -1030,8 +1031,9 @@ class glhmm():
 
             if fe.shape[0] > 1:
                 chgFrEn = abs((fe[-1]-fe[-2]) / (fe[-1]-fe[0]))
-                if np.abs(chgFrEn) < options["tol"]: cyc_to_go -= 1
-                else: cyc_to_go =  options["cyc_to_go_under_th"]
+                if not warm_up:
+                    if np.abs(chgFrEn) < options["tol"]: cyc_to_go -= 1
+                    else: cyc_to_go =  options["cyc_to_go_under_th"]
                 if options["verbose"]: 
                     if warm_up: 
                         print("Cycle " + str(it+1) + ", free energy = " + str(fe_it) + \
@@ -1040,9 +1042,10 @@ class glhmm():
                     else:
                         print("Cycle " + str(it+1) + ", free energy = " + str(fe_it) + \
                             ", relative change = " + str(chgFrEn) + ", rho = " + str(rho))
-                if cyc_to_go == 0 and not warm_up: 
-                    if options["verbose"]: print("Reached early convergence")
-                    break
+                if not warm_up:
+                    if cyc_to_go == 0: 
+                        if options["verbose"]: print("Reached early convergence")
+                        break
             else:
                 if options["verbose"]: print("Cycle " + str(it+1) + " free energy = " + str(fe_it))
             
