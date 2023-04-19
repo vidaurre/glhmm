@@ -9,4 +9,5 @@ preproc
 auxiliary
 utils
 graphics
+predict
 ```
