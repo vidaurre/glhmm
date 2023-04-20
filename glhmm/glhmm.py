@@ -941,8 +941,7 @@ class glhmm():
         Dir2d_alpha_each = np.zeros((K,K,N))
         warm_up = True
         cyc_to_go =  options["cyc_to_go_under_th"]
-        rho = 1
-        it = 0
+        it,itw,rho = 0,0,1
 
         # collect subject specific free energy terms
         for j in range(N):
@@ -1036,8 +1035,8 @@ class glhmm():
                     else: cyc_to_go =  options["cyc_to_go_under_th"]
                 if options["verbose"]: 
                     if warm_up: 
-                        print("Cycle " + str(it+1) + ", free energy = " + str(fe_it) + \
-                            ", relative change = " + str(chgFrEn) + ", rho = " + str(rho) + \
+                        print("Warm up cycle " + str(itw+1) + ", free energy = " + str(fe_it) + \
+                            ", relative change = " + str(chgFrEn) + \
                             ", went through = " + str(100*np.mean(ever_used)) + "% of the sessions")
                     else:
                         print("Cycle " + str(it+1) + ", free energy = " + str(fe_it) + \
@@ -1047,10 +1046,15 @@ class glhmm():
                         if options["verbose"]: print("Reached early convergence")
                         break
             else:
-                if options["verbose"]: print("Cycle " + str(it+1) + " free energy = " + str(fe_it))
+                if warm_up:
+                    if options["verbose"]: print("Warm up cycle " + str(itw+1) + " free energy = " + str(fe_it))
+                else:
+                    if options["verbose"]: print("Cycle " + str(it+1) + " free energy = " + str(fe_it))
             
-            it += 1
-            if not warm_up: rho = (it + 1)**(-options["forget_rate"])
+            if not warm_up: 
+                it += 1
+                rho = (it + 1)**(-options["forget_rate"])
+            else: itw += 1
 
         K_active = np.sum(self.active_states)
         if options["verbose"]:
