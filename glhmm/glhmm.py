@@ -940,8 +940,8 @@ class glhmm():
         Dir_alpha_each = np.zeros((K,N))
         Dir2d_alpha_each = np.zeros((K,K,N))
         warm_up = True
-        rho = 1
-        it = 0
+        cyc_to_go =  options["cyc_to_go_under_th"]
+        it,itw,rho = 0,0,1
 
         # collect subject specific free energy terms
         for j in range(N):
@@ -1030,24 +1030,31 @@ class glhmm():
 
             if fe.shape[0] > 1:
                 chgFrEn = abs((fe[-1]-fe[-2]) / (fe[-1]-fe[0]))
-                if np.abs(chgFrEn) < options["tol"]: cyc_to_go -= 1
-                else: cyc_to_go =  options["cyc_to_go_under_th"]
+                if not warm_up:
+                    if np.abs(chgFrEn) < options["tol"]: cyc_to_go -= 1
+                    else: cyc_to_go =  options["cyc_to_go_under_th"]
                 if options["verbose"]: 
                     if warm_up: 
-                        print("Cycle " + str(it+1) + ", free energy = " + str(fe_it) + \
-                            ", relative change = " + str(chgFrEn) + ", rho = " + str(rho) + \
+                        print("Warm up cycle " + str(itw+1) + ", free energy = " + str(fe_it) + \
+                            ", relative change = " + str(chgFrEn) + \
                             ", went through = " + str(100*np.mean(ever_used)) + "% of the sessions")
                     else:
                         print("Cycle " + str(it+1) + ", free energy = " + str(fe_it) + \
                             ", relative change = " + str(chgFrEn) + ", rho = " + str(rho))
-                if cyc_to_go == 0 and not warm_up: 
-                    if options["verbose"]: print("Reached early convergence")
-                    break
+                if not warm_up:
+                    if cyc_to_go == 0: 
+                        if options["verbose"]: print("Reached early convergence")
+                        break
             else:
-                if options["verbose"]: print("Cycle " + str(it+1) + " free energy = " + str(fe_it))
+                if warm_up:
+                    if options["verbose"]: print("Warm up cycle " + str(itw+1) + " free energy = " + str(fe_it))
+                else:
+                    if options["verbose"]: print("Cycle " + str(it+1) + " free energy = " + str(fe_it))
             
-            it += 1
-            if not warm_up: rho = (it + 1)**(-options["forget_rate"])
+            if not warm_up: 
+                it += 1
+                rho = (it + 1)**(-options["forget_rate"])
+            else: itw += 1
 
         K_active = np.sum(self.active_states)
         if options["verbose"]:
