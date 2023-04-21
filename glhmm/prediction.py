@@ -41,8 +41,8 @@ def compute_gradient(hmm, Y, incl_Pi=True, incl_P=True, incl_Mu=False, incl_Sigm
         If the model has not been trained or if requested parameters do not exist
         (e.g. if Mu is requested but state means were not estimated)
 
-    Note:
-    ----
+    Notes:
+    ------
     Does not include gradient computation for X and beta
 
     """
@@ -193,8 +193,8 @@ def hmm_kernel(hmm, Y, indices, type='Fisher', shape='linear', incl_Pi=True, inc
         (e.g. if Mu is requested but state means were not estimated)
         If kernel other than Fisher kernel is requested
 
-    Note:
-    ----
+    Notes:
+    ------
     Does not include X and beta in kernel construction
     Only Fisher kernel implemented at this point
     """
