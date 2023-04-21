@@ -9,5 +9,5 @@ preproc
 auxiliary
 utils
 graphics
-predict
+prediction
 ```
