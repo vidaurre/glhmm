@@ -1,7 +1,7 @@
-# glhmm.predict
+# glhmm.prediction
 
 ```{eval-rst}
-.. automodule:: glhmm.predict
+.. automodule:: glhmm.prediction
    :members:
    :undoc-members:
    :show-inheritance:
