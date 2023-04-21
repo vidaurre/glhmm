@@ -964,9 +964,6 @@ class glhmm():
             n_used[I] += 1
             n_used = n_used - np.min(n_used) + 1
             ever_used[I] = True
-            if warm_up and np.all(ever_used):
-                if options["verbose"]: print("Warm up finished") 
-                warm_up = False
 
             sampling_prob = options["base_weights"] ** n_used
             sampling_prob = sampling_prob / np.sum(sampling_prob)
@@ -1054,7 +1051,11 @@ class glhmm():
             if not warm_up: 
                 it += 1
                 rho = (it + 1)**(-options["forget_rate"])
-            else: itw += 1
+            elif np.all(ever_used):
+                if options["verbose"]: print("Warm up finished") 
+                warm_up = False
+            else: 
+                itw += 1
 
         K_active = np.sum(self.active_states)
         if options["verbose"]:
