@@ -328,7 +328,7 @@ class GLHMM():
 
 
     @staticmethod
-    def _check_options_stochastic(options,files):
+    def _check_options_stochastic(options, files):
 
         if options is None: options = {}
         if not "Nbatch" in options: options["Nbatch"] = int(min(len(files)/2,10))
@@ -344,7 +344,7 @@ class GLHMM():
         if ("updateDyn" in options) and (not options["updateDyn"]): 
             options["updateDyn"] = True
             warnings.warn('updateDyn has to be True for stochastic learning')
-        options = glhmm._check_options(options)
+        options = GLHMM._check_options(options)
         return options
 
 
@@ -1997,4 +1997,4 @@ class GLHMM():
         return Gamma,Xi,fe
 
     def fit(self):
-        pass
+        raise NotImplementedError("Not implemented yet")
