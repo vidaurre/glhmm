@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Gaussian Linear Hidden Markov Model
 @author: Diego Vidaurre 2023
@@ -26,6 +24,7 @@ from . import utils
 COVARIANCE_TYPES = frozenset(("diag", "shareddiag", "full", "sharedfull"))
 MODEL_MEAN_TYPES = frozenset(("state", "shared", None))
 MODEL_BETA_TYPES = frozenset(("state", "shared", None))
+
 
 class GLHMM():
     """ Gaussian Linear Hidden Markov Model class to decode stimulus from data.

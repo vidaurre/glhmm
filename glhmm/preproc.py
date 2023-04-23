@@ -1,17 +1,16 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Preprocessing functions - General/Gaussian Linear Hidden Markov Model
 @author: Diego Vidaurre 2023
 """
 
-import numpy as np
 import warnings
-from sklearn.decomposition import PCA
+
+import numpy as np
 from scipy import signal
+from sklearn.decomposition import PCA
 
 from . import auxiliary
-# import auxiliary
+
 
 def apply_pca(X,d,whitening=False,exact=True):
     """Applies PCA to the input data X.

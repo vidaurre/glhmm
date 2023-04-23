@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Input/output functions - Gaussian Linear Hidden Markov Model
 @author: Diego Vidaurre 2023
@@ -9,8 +7,9 @@ import numpy as np
 import scipy.special
 import scipy.io
 
-from . import glhmm
 from . import auxiliary
+from . import glhmm
+
 
 def load_files(files,I=None,do_only_indices=False):
     """Loads data from files and returns the loaded data, indices, and individual indices for each file.

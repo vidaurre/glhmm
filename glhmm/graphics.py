@@ -1,18 +1,15 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Basic graphics - Gaussian Linear Hidden Markov Model
 @author: Diego Vidaurre 2023
 """
-import numpy as np
-import seaborn as sb
+
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mtick
+import numpy as np
 import pandas as pd
+import seaborn as sb
 
 from . import utils
-# import utils
-
 
 
 def show_trans_prob_mat(hmm,only_active_states=False,show_diag=True,show_colorbar=True):

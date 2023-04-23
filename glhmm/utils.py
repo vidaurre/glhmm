@@ -1,13 +1,13 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Some public useful functions - Gaussian Linear Hidden Markov Model
 @author: Diego Vidaurre 2023
 """
 
-import numpy as np
-import statistics
 import math
+import statistics
+
+import numpy as np
+
 
 def get_FO(Gamma,indices,summation=False):
     """Calculates the fractional occupancy of each state.

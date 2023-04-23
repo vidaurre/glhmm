@@ -1,13 +1,11 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Kernel prediction from Gaussian Linear Hidden Markov Model
 @author: Christine Ahrends 2023
 """
 
-import numpy as np
 import sys
-from . import glhmm
+
+import numpy as np
 
 
 def compute_gradient(hmm, Y, incl_Pi=True, incl_P=True, incl_Mu=False, incl_Sigma=False):

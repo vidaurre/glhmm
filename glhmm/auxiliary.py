@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Auxiliary functions - Gaussian Linear Hidden Markov Model
 @author: Diego Vidaurre 2022
