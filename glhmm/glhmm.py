@@ -23,7 +23,7 @@ from . import io_glhmm as io
 from . import utils
 
 
-class glhmm():
+class GLHMM():
     """ Gaussian Linear Hidden Markov Model class to decode stimulus from data.
     
     Attributes:
