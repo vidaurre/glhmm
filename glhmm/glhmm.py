@@ -76,21 +76,20 @@ class GLHMM():
             warnings.warn('Parameter connectivity can only be used with a diagonal covariance matrix')
             connectivity = None
 
-        self.hyperparameters = {}
-        self.hyperparameters["K"] = K
-        self.hyperparameters["covtype"] = covtype
-        self.hyperparameters["model_mean"] = model_mean
-        self.hyperparameters["model_beta"] = model_beta
-        self.hyperparameters["dirichlet_diag"] = dirichlet_diag
-        self.hyperparameters["connectivity"] = connectivity
+        self.K = K
+        self.covtype = covtype
+        self.model_mean = model_mean
+        self.model_beta = model_beta
+        self.dirichlet_diag = dirichlet_diag
+        self.connectivity = connectivity
         if Pstructure is None:
-            self.hyperparameters["Pstructure"] = np.ones((K,K), dtype=bool)
+            self.Pstructure = np.ones((K,K), dtype=bool)
         else:
-            self.hyperparameters["Pstructure"] = Pstructure
+            self.Pstructure = Pstructure
         if Pistructure is None:
-            self.hyperparameters["Pistructure"] = np.ones((K,), dtype=bool)       
+            self.Pistructure = np.ones((K,), dtype=bool)       
         else:
-            self.hyperparameters["Pistructure"] = Pistructure
+            self.Pistructure = Pistructure
 
 
         self.beta = None
@@ -184,12 +183,12 @@ class GLHMM():
     def _loglikelihood_k(self,X,Y,L,k,cache):
 
         T,q = Y.shape
-        if self.hyperparameters["model_beta"] != 'no': p = X.shape[1]
+        if self.model_beta != 'no': p = X.shape[1]
         else: p = 0
         
         k_mean,k_beta = k,k
-        if self.hyperparameters["model_mean"] == 'shared': k_mean = 0
-        if self.hyperparameters["model_beta"] == 'shared': k_beta = 0
+        if self.model_mean == 'shared': k_mean = 0
+        if self.model_beta == 'shared': k_beta = 0
 
         constant = - q / 2 * math.log(2*math.pi) #+ q / 2 
 
@@ -256,8 +255,8 @@ class GLHMM():
             if self._is_diagonal_covmat():
                 jj = np.arange(p)
                 for j in range(q):
-                    if self.hyperparameters["connectivity"] is not None:
-                        jj = np.where(self.hyperparameters["connectivity"][:,j]==1)[0]
+                    if self.connectivity is not None:
+                        jj = np.where(self.connectivity[:,j]==1)[0]
                     Cb = self.beta[k_beta]['Sigma'][jj,jj[:,np.newaxis],j]
                     norm_wish_trace_W -= 0.5 * C[j] * np.sum(((X[:,jj] @ Cb)) * X[:,jj], axis=1)
             else:
@@ -359,7 +358,7 @@ class GLHMM():
                 
                 
     def _update_Pi(self):
-        K = self.hyperparameters["K"]
+        K = self.K
         self.Pi = np.zeros((K,))
         PsiSum0 = scipy.special.psi(sum(self.Dir_alpha))
         for k in range(K):
@@ -369,7 +368,7 @@ class GLHMM():
 
 
     def _update_P(self):
-        K = self.hyperparameters["K"]
+        K = self.K
         self.P = np.zeros((K,K))
         for j in range(K):
             PsiSum = scipy.special.psi(sum(self.Dir2d_alpha[j,:]))
@@ -380,7 +379,7 @@ class GLHMM():
 
 
     def _Gamma_loglikelihood(self,Gamma,Xi,indices):
-        K = self.hyperparameters["K"]
+        K = self.K
         minreal = sys.float_info.min
         Gamma_0 = Gamma[indices[:,0]]
         Gamma_0[Gamma_0 < minreal] = minreal
@@ -398,15 +397,15 @@ class GLHMM():
 
     def _update_priors(self):
 
-        K = self.hyperparameters["K"]
+        K = self.K
            
-        shared_beta = self.hyperparameters["model_beta"] == 'shared'
-        shared_mean = self.hyperparameters["model_mean"] == 'shared'
+        shared_beta = self.model_beta == 'shared'
+        shared_mean = self.model_mean == 'shared'
         K_mean,K_beta = K,K
         if shared_mean: K_mean = 1
         if shared_beta: K_beta = 1
 
-        if self.hyperparameters["model_mean"] != 'no':
+        if self.model_mean != 'no':
             for k in range(K_mean):
                 if self._is_diagonal_covmat():
                     self.alpha_mean[k]["rate"] = self.priors["alpha_mean"]["rate"] \
@@ -416,15 +415,15 @@ class GLHMM():
                         + 0.5 * np.diag(self.mean[k]["Sigma"]) + self.mean[k]["Mu"] ** 2
                 self.alpha_mean[k]["shape"] = self.priors["alpha_mean"]["shape"] + 0.5
 
-        if self.hyperparameters["model_beta"] != 'no':
+        if self.model_beta != 'no':
             p,q = self.beta[0]["Mu"].shape
             jj = np.arange(p)
             for k in range(K_beta):
                 self.alpha_beta[k]["rate"] = self.priors["alpha_beta"]["rate"] + 0.5 * self.beta[k]["Mu"] ** 2
                 if self._is_diagonal_covmat():
                     for j in range(q):
-                        if self.hyperparameters["connectivity"] is not None:
-                            jj = np.where(self.hyperparameters["connectivity"][:,j]==1)[0]
+                        if self.connectivity is not None:
+                            jj = np.where(self.connectivity[:,j]==1)[0]
                         self.alpha_beta[k]["rate"][jj,j] += \
                                 0.5 * np.diag(np.squeeze(self.beta[k]["Sigma"][jj,jj[:,np.newaxis],j]))
                 else:
@@ -448,9 +447,9 @@ class GLHMM():
 
     def _init_priors_sub(self,prior_rate,prior_shape,p,q):
 
-        K = self.hyperparameters["K"]
-        shared_beta = self.hyperparameters["model_beta"] == 'shared'
-        shared_mean = self.hyperparameters["model_mean"] == 'shared'
+        K = self.K
+        shared_beta = self.model_beta == 'shared'
+        shared_mean = self.model_mean == 'shared'
         
         K_mean,K_beta = K,K
         if shared_mean: K_mean = 1
@@ -469,30 +468,29 @@ class GLHMM():
             self.priors["Sigma"]["irate"] = np.linalg.inv(self.priors["Sigma"]["rate"])
 
         # alpha (state betas and mean priors)
-        if self.hyperparameters["model_mean"] != 'no':
+        if self.model_mean != 'no':
             self.alpha_mean = []
             for k in range(K_mean):
                 self.alpha_mean.append({})
                 self.alpha_mean[k] = {}
-        if self.hyperparameters["model_beta"] != 'no':
+        if self.model_beta != 'no':
             self.alpha_beta = []
             for k in range(K_beta):
                 self.alpha_beta.append({})
                 self.alpha_beta[k] = {}
 
-        if self.hyperparameters["model_mean"] != 'no':
+        if self.model_mean != 'no':
                 self.priors["alpha_mean"] = {}
                 self.priors["alpha_mean"]["rate"] = 0.1 * np.ones(q)
                 self.priors["alpha_mean"]["shape"] = 0.1
-        if self.hyperparameters["model_beta"] != 'no':
+        if self.model_beta != 'no':
                 self.priors["alpha_beta"] = {}
                 self.priors["alpha_beta"]["rate"] = 0.1 * np.ones((p,q))
                 self.priors["alpha_beta"]["shape"] = 0.1        
 
 
     def _init_prior_P_Pi(self):
-
-        K = self.hyperparameters["K"]
+        K = self.K
         # priors for dynamics
         self.priors = {}
         self.priors["Dir_alpha"] = np.ones(K)
@@ -500,14 +498,14 @@ class GLHMM():
         self.priors["Dir2d_alpha"] = np.ones((K,K))
         for k in range(K):
             #self.priors["Dir2d_alpha"][self.Pstructure[k,],:] = 1
-            self.priors["Dir2d_alpha"][k,k] = self.hyperparameters["dirichlet_diag"]
+            self.priors["Dir2d_alpha"][k,k] = self.dirichlet_diag
 
 
     def _compute_prior_covmat(self,X=None,Y=None,files=None):
 
         if not files is None: # iterative calculation
             N = len(files)
-            if self.hyperparameters["model_mean"] != 'no':
+            if self.model_mean != 'no':
                 for j in range(N):
                     _,Yj,_,_ = io.load_files(files,j)
                     if j == 0: 
@@ -517,7 +515,7 @@ class GLHMM():
                         m += np.sum(Yj,axis=0)
                         nt += Yj.shape[0]
                 m /= nt
-            if self.hyperparameters["model_beta"] != 'no':
+            if self.model_beta != 'no':
                 for j in range(N):
                     Xj,Yj,_,_ = io.load_files(files,j)
                     if j == 0: 
@@ -530,9 +528,9 @@ class GLHMM():
             for j in range(N):
                 Xj,Yj,_,_ = io.load_files(files,j)
                 if j == 0: q = Yj.shape[1]
-                if self.hyperparameters["model_mean"] != 'no':
+                if self.model_mean != 'no':
                     Yj -= np.expand_dims(m,axis=0)
-                if self.hyperparameters["model_beta"] != 'no':
+                if self.model_beta != 'no':
                     Yj -= Xj @ beta
                 rj = np.max(Yj,axis=0) - np.min(Yj,axis=0)                
                 if j == 0: r = np.copy(rj)
@@ -540,11 +538,11 @@ class GLHMM():
 
         else:
             T,q = Y.shape
-            if self.hyperparameters["model_mean"] != 'no': 
+            if self.model_mean != 'no': 
                 Yr = Y - np.expand_dims(np.mean(Y,axis=0),axis=0)
             else: 
                 Yr = np.copy(Y)
-            if self.hyperparameters["model_beta"] != 'no':
+            if self.model_beta != 'no':
                 p = X.shape[1]
                 beta = np.linalg.inv(X.T @ X + 0.1 * np.eye(p)) @ (X.T @ Yr)
                 Yr -= X @ beta
@@ -567,8 +565,8 @@ class GLHMM():
         Update transition prob matrix and initial probabilities
         """
 
-        Pistructure = self.hyperparameters["Pistructure"]
-        Pstructure = self.hyperparameters["Pstructure"]
+        Pistructure = self.Pistructure
+        Pstructure = self.Pstructure
 
         # Transition probability matrix
         if (Xi is None) and (Gamma is None) and (Dir2d_alpha is None):
@@ -614,16 +612,16 @@ class GLHMM():
         Update state distributions
         """        
         
-        K = self.hyperparameters["K"]
+        K = self.K
         T,q = Y.shape
-        if self.hyperparameters["model_beta"] != 'no': p = X.shape[1]
+        if self.model_beta != 'no': p = X.shape[1]
         
-        shared_beta = self.hyperparameters["model_beta"] == 'shared'
-        shared_mean = self.hyperparameters["model_mean"] == 'shared'
+        shared_beta = self.model_beta == 'shared'
+        shared_mean = self.model_mean == 'shared'
         K_mean,K_beta = K,K
         if shared_mean: K_mean = 1
         if shared_beta: K_beta = 1
-        if self.hyperparameters["model_beta"] != 'no':
+        if self.model_beta != 'no':
             XGX = np.zeros((p,p,K))
             for k in range(K): XGX[:,:,k] = (X * np.expand_dims(Gamma[:,k],axis=1)).T @ X
             XGXb = np.expand_dims(np.sum(XGX,axis=2),axis=2) if shared_beta else XGX
@@ -631,9 +629,9 @@ class GLHMM():
         Gm = np.ones((T,1)) if shared_mean else Gamma
 
         # Mean
-        if self.hyperparameters["model_mean"] != 'no':
+        if self.model_mean != 'no':
 
-            if self.hyperparameters["model_beta"] != 'no':
+            if self.model_beta != 'no':
                 Yr = np.copy(Y)
                 for k in range(K_beta): 
                     Yr -= (X @ self.beta[k]["Mu"]) * np.expand_dims(Gb[:,k], axis=1)                    
@@ -670,9 +668,9 @@ class GLHMM():
                     self.mean[k]["Mu"] = rho * mu + (1-rho) * self.mean[k]["Mu"]
 
         # betas 
-        if self.hyperparameters["model_beta"] != 'no':
+        if self.model_beta != 'no':
 
-            if self.hyperparameters["model_mean"] != 'no':
+            if self.model_mean != 'no':
                 Yr = np.copy(Y)
                 for k in range(K_mean): 
                     Yr -= np.expand_dims(self.mean[k]["Mu"], axis=0) * np.expand_dims(Gm[:,k], axis=1)                  
@@ -689,8 +687,8 @@ class GLHMM():
                 if self._is_diagonal_covmat():
                     jj = np.arange(p)
                     for j in range(q):
-                        if self.hyperparameters["connectivity"] is not None:
-                            jj = np.where(self.hyperparameters["connectivity"][:,j]==1)[0]
+                        if self.connectivity is not None:
+                            jj = np.where(self.connectivity[:,j]==1)[0]
                         alpha = np.diag(self.alpha_beta[k]["shape"] / self.alpha_beta[k]["rate"][jj,j])
                         isigma = self.Sigma[k_sigma]["shape"] / self.Sigma[k_sigma]["rate"][j]
                         iS = Tfactor * isigma * XGXb[jj,jj[:,np.newaxis],k] + alpha
@@ -729,21 +727,21 @@ class GLHMM():
             d = np.copy(Y) 
 
             sm = np.zeros(q) if self._is_diagonal_covmat() else np.zeros((q,q))
-            if self.hyperparameters["model_mean"] != 'no': 
+            if self.model_mean != 'no': 
                 kk = 0 if shared_mean else k
                 d -= np.expand_dims(self.mean[kk]["Mu"], axis=0)
                 sm = self.mean[kk]["Sigma"] * np.sum(Gamma[:,k])
 
             sb = np.zeros(q) if self._is_diagonal_covmat() else np.zeros((q,q))
-            if self.hyperparameters["model_beta"] != 'no': 
+            if self.model_beta != 'no': 
                 kk = 0 if shared_beta else k
                 d -= (X @ self.beta[kk]["Mu"])
                 if self._is_diagonal_covmat():
                     sb = np.zeros((T,q))
                     jj = np.arange(p)
                     for j in range(q):
-                        if self.hyperparameters["connectivity"] is not None:
-                            jj = np.where(self.hyperparameters["connectivity"][:,j]==1)[0]
+                        if self.connectivity is not None:
+                            jj = np.where(self.connectivity[:,j]==1)[0]
                         sb[:,j] += np.sum((X[:,jj] @ \
                             self.beta[kk]["Sigma"][jj,jj[:,np.newaxis],j]) *  X[:,jj],axis=1)
                     sb = np.sum(sb * np.expand_dims(Gamma[:,k], axis=1), axis=0)
@@ -811,25 +809,25 @@ class GLHMM():
 
     def _init_obsdist(self,X,Y,Gamma):
         
-        K = self.hyperparameters["K"]
+        K = self.K
         q = Y.shape[1]
-        if self.hyperparameters["model_beta"] != 'no': p = X.shape[1]
+        if self.model_beta != 'no': p = X.shape[1]
         
-        shared_beta = self.hyperparameters["model_beta"] == 'shared'
-        shared_mean = self.hyperparameters["model_mean"] == 'shared'
+        shared_beta = self.model_beta == 'shared'
+        shared_mean = self.model_mean == 'shared'
         K_mean,K_beta = K,K
         if shared_mean: K_mean = 1
         if shared_beta: K_beta = 1
 
         # alpha (keep it unregularised)
-        if self.hyperparameters["model_mean"] != 'no':
+        if self.model_mean != 'no':
             self.alpha_mean = []
             for k in range(K_mean):
                 self.alpha_mean.append({})
                 self.alpha_mean[k]["rate"] = 0.1 * np.ones(q)
                 self.alpha_mean[k]["shape"] = 0.0001 # mild-regularised start
 
-        if self.hyperparameters["model_beta"] != 'no':
+        if self.model_beta != 'no':
             self.alpha_beta = []
             for k in range(K_beta):
                 self.alpha_beta.append({})
@@ -862,7 +860,7 @@ class GLHMM():
                 self.Sigma[k]["shape"] = self.priors["Sigma"]["shape"]
 
         # create initial values for mean and beta
-        if self.hyperparameters["model_beta"] != 'no':
+        if self.model_beta != 'no':
             self.beta = []
             for k in range(K_beta):
                 self.beta.append({})
@@ -871,7 +869,7 @@ class GLHMM():
                     self.beta[k]["Sigma"] = np.zeros((p,p,q))
                     for j in range(q): self.beta[k]["Sigma"][:,:,j] = 0.01 * np.eye(p)
                 else: self.beta[k]["Sigma"] = 0.01 * np.eye(p*q)
-        if self.hyperparameters["model_mean"] != 'no':
+        if self.model_mean != 'no':
             self.mean = []
             for k in range(K_mean):
                 self.mean.append({})  
@@ -906,7 +904,7 @@ class GLHMM():
         options = self._check_options_stochastic(options,files)
         
         N = len(files)
-        K = self.hyperparameters["K"]
+        K = self.K
 
         if options["verbose"]: start = time.time()
 
@@ -1087,7 +1085,7 @@ class GLHMM():
         if not self.trained: 
             raise Exception("The model has not yet been trained") 
 
-        K = self.hyperparameters["K"]
+        K = self.K
         T = Y.shape[0]
 
         L = np.zeros((T,K))
@@ -1158,7 +1156,7 @@ class GLHMM():
         X_sliced = X
         Y_sliced = Y
         if set is not None:
-            if self.hyperparameters["model_beta"] != 'no':
+            if self.model_beta != 'no':
                 X_sliced = auxiliary.slice_matrix(X,indices[set,:])
             Y_sliced = auxiliary.slice_matrix(Y,indices[set,:])
             indices_sliced = indices[set,:]
@@ -1202,7 +1200,7 @@ class GLHMM():
         #if not self.trained: 
         #    raise Exception("The model has not yet been trained") 
 
-        K = self.hyperparameters["K"]
+        K = self.K
         if len(size.shape)==1: # T
             T = size
             indices = auxiliary.make_indices_from_T(T)
@@ -1257,7 +1255,7 @@ class GLHMM():
         if not self.trained: 
             raise Exception("The model has not yet been trained") 
 
-        K = self.hyperparameters["K"]
+        K = self.K
 
         if len(np.zeros(100).shape)==1: # T
             T = size
@@ -1276,21 +1274,21 @@ class GLHMM():
 
         rng = np.random.default_rng()
 
-        if (self.hyperparameters["model_beta"] != 'no') and (X is None):
+        if (self.model_beta != 'no') and (X is None):
             p = self.beta[0]["Mu"].shape[1]
             X = np.random.normal(size=(np.sum(T),p))
 
         # Y, mean
         Y = np.zeros((np.sum(T),q))
-        if self.hyperparameters["model_mean"] == 'shared':
+        if self.model_mean == 'shared':
             Y += np.expand_dims(self.mean[0]['Mu'],axis=0)
-        if self.hyperparameters["model_beta"] == 'shared':
+        if self.model_beta == 'shared':
             Y += X @ self.beta[0]["Mu"]
             
         for k in range(K):
-            if self.hyperparameters["model_mean"] == 'state': 
+            if self.model_mean == 'state': 
                 Y += np.expand_dims(self.mean[k]["Mu"],axis=0) * np.expand_dims(Gamma[:,k],axis=1)
-            if self.hyperparameters["model_beta"] == 'state':
+            if self.model_beta == 'state':
                 Y += (X @ self.beta[k]["Mu"]) * np.expand_dims(Gamma[:,k],axis=1)
 
         # Y, covariance
@@ -1358,7 +1356,7 @@ class GLHMM():
         if not self.trained: 
             raise Exception("The model has not yet been trained") 
 
-        K = self.hyperparameters["K"]
+        K = self.K
         q = Y.shape[1]
         N = indices.shape[0]
 
@@ -1373,19 +1371,19 @@ class GLHMM():
                 Xj = np.copy(X[tt_j,:])
 
             d = np.copy(Y[tt_j,:])
-            if self.hyperparameters["model_mean"] == 'shared':
+            if self.model_mean == 'shared':
                 d -= np.expand_dims(self.mean[0]['Mu'],axis=0)
-            if self.hyperparameters["model_beta"] == 'shared':
+            if self.model_beta == 'shared':
                 d -= (Xj @ self.beta[0]['Mu'])
             for k in range(K):
-                if self.hyperparameters["model_mean"] == 'state': 
+                if self.model_mean == 'state': 
                     d -= np.expand_dims(self.mean[k]['Mu'],axis=0) * np.expand_dims(Gamma[:,k],axis=1)
-                if self.hyperparameters["model_beta"] == 'state':
+                if self.model_beta == 'state':
                     d -= (Xj @ self.beta[k]['Mu']) * np.expand_dims(Gamma[:,k],axis=1)
             d = np.sum(d**2,axis=0)
 
             d0 = np.copy(Y[tt_j,:])
-            if self.hyperparameters["model_mean"] != 'no':
+            if self.model_mean != 'no':
                 d0 -= np.expand_dims(m,axis=0)
             d0 = np.sum(d0**2,axis=0)
 
@@ -1446,10 +1444,10 @@ class GLHMM():
         if todo is None: # Gamma_entropy, data loglik, Gamma loglik, P/Pi KL, state KL 
             todo = (True,True,True,True,True)
 
-        K = self.hyperparameters["K"]
+        K = self.K
         
-        shared_beta = self.hyperparameters["model_beta"] == 'shared'
-        shared_mean = self.hyperparameters["model_mean"] == 'shared'
+        shared_beta = self.model_beta == 'shared'
+        shared_mean = self.model_mean == 'shared'
         K_mean,K_beta = K,K
         if shared_mean: K_mean = 1
         if shared_beta: K_beta = 1
@@ -1485,7 +1483,7 @@ class GLHMM():
         klobs = []
         if todo[4]:
             q = self.Sigma[0]["rate"].shape[0]
-            if self.hyperparameters["model_mean"] != 'no':
+            if self.model_mean != 'no':
                 for k in range(K_mean):
                     if self._is_diagonal_covmat():
                         for j in range(q):
@@ -1507,14 +1505,14 @@ class GLHMM():
                             self.priors["alpha_mean"]["shape"],self.priors["alpha_mean"]["rate"] \
                         )))   
 
-            if self.hyperparameters["model_beta"] != 'no':
+            if self.model_beta != 'no':
                 p = self.beta[0]["Mu"].shape[0]
                 jj = np.arange(p)
                 for k in range(K_beta):
                     if self._is_diagonal_covmat():
                         for j in range(q):
-                            if self.hyperparameters["connectivity"] is not None:
-                                jj = np.where(self.hyperparameters["connectivity"][:,j]==1)[0]
+                            if self.connectivity is not None:
+                                jj = np.where(self.connectivity[:,j]==1)[0]
                             pj = len(jj)
                             klobs.append(kl_multivariate_normal_distribution( \
                                 self.beta[k]["Mu"][jj,j], self.beta[k]["Sigma"][jj,jj[:,np.newaxis],j], \
@@ -1640,7 +1638,7 @@ class GLHMM():
         if not self.trained: 
             raise Exception("The model has not yet been trained") 
 
-        if self.hyperparameters["model_beta"] == 'no':
+        if self.model_beta == 'no':
             raise Exception("The model has no beta")
 
         return self.beta[k]["Mu"]
@@ -1665,11 +1663,11 @@ class GLHMM():
         if not self.trained: 
             raise Exception("The model has not yet been trained") 
 
-        if self.hyperparameters["model_beta"] == 'no':
+        if self.model_beta == 'no':
             raise Exception("The model has no beta")
 
         (p,q) = self.beta[0]["Mu"].shape
-        K = self.hyperparameters["K"]
+        K = self.K
         betas = np.zeros((p,q,K))
         for k in range(K): betas[:,:,k] = self.beta[k]["Mu"]
         return betas
@@ -1699,7 +1697,7 @@ class GLHMM():
         if not self.trained: 
             raise Exception("The model has not yet been trained") 
 
-        if self.hyperparameters["model_mean"] == 'no':
+        if self.model_mean == 'no':
             raise Exception("The model has no mean")
 
         return self.mean[k]["Mu"]
@@ -1724,15 +1722,15 @@ class GLHMM():
         if not self.trained: 
             raise Exception("The model has not yet been trained") 
 
-        if self.hyperparameters["model_mean"] == 'no':
+        if self.model_mean == 'no':
             raise Exception("The model has no mean")
 
-        if self.hyperparameters["model_beta"] != 'no':
+        if self.model_beta != 'no':
             q = self.beta[0]["Mu"].shape
         else:
             q = self.Sigma[0]["rate"].shape[0]
 
-        K = self.hyperparameters["K"]
+        K = self.K
         means = np.zeros((q,K))
         for k in range(K): means[:,k] = self.mean[k]["Mu"]
         return means    
@@ -1853,7 +1851,7 @@ class GLHMM():
         if (files is None) and (Y is None):
             raise Exception("Training needs data")
         
-        if (X is None) and (self.hyperparameters["model_beta"] != 'no'):
+        if (X is None) and (self.model_beta != 'no'):
             raise Exception("If you want to model beta, X is needed as an argument")
 
         if stochastic:
@@ -1865,7 +1863,7 @@ class GLHMM():
             return np.empty(0),np.empty(0),fe
 
         options = self._check_options(options)
-        K = self.hyperparameters["K"]
+        K = self.K
 
         if files is not None:
             X,Y,indices,_ = io.load_files(files)
