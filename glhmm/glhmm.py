@@ -82,14 +82,7 @@ class GLHMM():
         self.connectivity = connectivity
         self.Pstructure = Pstructure
         self.Pistructure = Pistructure
-
-
-        self.beta = None
-        self.mean = None
-        self.alpha_beta = None
-        self.alpha_mean = None
-        self.Sigma = None
-        self.active_states = np.ones(n_components,dtype=bool)
+        
         self.trained = False
         
     # Utility functions
@@ -231,21 +224,21 @@ class GLHMM():
         if (k==0) and self._is_shared_covmat():
 
             if self._is_diagonal_covmat():
-                PsiWish_alphasum = 0.5 * q * scipy.special.psi(self.Sigma[0]['shape']) 
+                PsiWish_alphasum = 0.5 * q * scipy.special.psi(self.sigma_[0]['shape']) 
                 ldetWishB = 0
                 for j in range(q):
-                    ldetWishB += np.log(self.Sigma[0]['rate'][j])
+                    ldetWishB += np.log(self.sigma_[0]['rate'][j])
                 ldetWishB = - 0.5 * ldetWishB
-                C = self.Sigma[0]['shape'] / self.Sigma[0]['rate']
+                C = self.sigma_[0]['shape'] / self.sigma_[0]['rate']
                 
             else:
                 PsiWish_alphasum = 0
                 for j in range(1,q+1):
-                    PsiWish_alphasum += scipy.special.psi(0.5 * (self.Sigma[0]['shape'] + 1 - j))
+                    PsiWish_alphasum += scipy.special.psi(0.5 * (self.sigma_[0]['shape'] + 1 - j))
                 PsiWish_alphasum = 0.5 * PsiWish_alphasum
-                (s, logdet) = np.linalg.slogdet(self.Sigma[0]['rate'])
+                (s, logdet) = np.linalg.slogdet(self.sigma_[0]['rate'])
                 ldetWishB = - 0.5 * s * logdet
-                C = self.Sigma[0]['shape'] * self.Sigma[0]['irate']
+                C = self.sigma_[0]['shape'] * self.sigma_[0]['irate']
 
             cache["PsiWish_alphasum"] = PsiWish_alphasum
             cache["ldetWishB"] = ldetWishB
@@ -259,59 +252,59 @@ class GLHMM():
 
         elif self._is_diagonal_covmat(): # not shared_covmat
 
-            PsiWish_alphasum = 0.5 * q * scipy.special.psi(self.Sigma[k]['shape']) 
+            PsiWish_alphasum = 0.5 * q * scipy.special.psi(self.sigma_[k]['shape']) 
             ldetWishB = 0
             for j in range(q):
-                ldetWishB += np.log(self.Sigma[k]['rate'][j])
+                ldetWishB += np.log(self.sigma_[k]['rate'][j])
             ldetWishB = - 0.5 * ldetWishB
-            C = self.Sigma[k]['shape'] / self.Sigma[k]['rate']
+            C = self.sigma_[k]['shape'] / self.sigma_[k]['rate']
 
         else: # not shared_covmat, full matrix
 
             PsiWish_alphasum = 0
             for j in range(1,q+1): 
-                PsiWish_alphasum += scipy.special.psi(0.5 * (self.Sigma[k]['shape'] + 1 - j))
+                PsiWish_alphasum += scipy.special.psi(0.5 * (self.sigma_[k]['shape'] + 1 - j))
             PsiWish_alphasum = 0.5 * PsiWish_alphasum
-            (s, logdet) = np.linalg.slogdet(self.Sigma[k]['rate'])
+            (s, logdet) = np.linalg.slogdet(self.sigma_[k]['rate'])
             ldetWishB = - 0.5 * s * logdet
-            C = self.Sigma[k]['shape'] * self.Sigma[k]['irate']
+            C = self.sigma_[k]['shape'] * self.sigma_[k]['irate']
 
         # distance
         dist = np.zeros((T,))
         d = np.copy(Y)
-        if self.mean is not None: d -= np.expand_dims(self.mean[k_mean]['Mu'],axis=0)
-        if self.beta is not None: d -= (X @ self.beta[k_beta]['Mu'])
+        if self.mean_ is not None: d -= np.expand_dims(self.mean_[k_mean]['Mu'],axis=0)
+        if self.beta_ is not None: d -= (X @ self.beta_[k_beta]['Mu'])
         if self._is_diagonal_covmat(): Cd = d * C
         else: Cd = d @ C
         for j in range(q): dist -= 0.5 * d[:,j] * Cd[:,j]
 
         # cov trace for beta
         norm_wish_trace_W = np.zeros((T,))
-        if self.beta is not None:
+        if self.beta_ is not None:
             if self._is_diagonal_covmat():
                 jj = np.arange(p)
                 for j in range(q):
                     if self.connectivity is not None:
                         jj = np.where(self.connectivity[:,j]==1)[0]
-                    Cb = self.beta[k_beta]['Sigma'][jj,jj[:,np.newaxis],j]
+                    Cb = self.beta_[k_beta]['Sigma'][jj,jj[:,np.newaxis],j]
                     norm_wish_trace_W -= 0.5 * C[j] * np.sum(((X[:,jj] @ Cb)) * X[:,jj], axis=1)
             else:
                 ind = np.arange(p) * q
                 for j1 in range(q):
                     ind1 = ind + j1
-                    tmp = X @ self.beta[k_beta]['Sigma'][ind1,:]
+                    tmp = X @ self.beta_[k_beta]['Sigma'][ind1,:]
                     for j2 in range(q):
                         ind2 = ind + j2
                         norm_wish_trace_W -= 0.5 * C[j1,j2] * np.sum(tmp[:,ind2] * X, axis=1)
 
         # cov trace for mean
         norm_wish_trace_mean = np.zeros(T)
-        if self.mean is not None:
+        if self.mean_ is not None:
             if self._is_diagonal_covmat():
                 for j in range(q):
-                    norm_wish_trace_mean -= 0.5 * C[j] * self.mean[k_mean]['Sigma'][j]
+                    norm_wish_trace_mean -= 0.5 * C[j] * self.mean_[k_mean]['Sigma'][j]
             else:
-                norm_wish_trace_mean = - 0.5 * np.trace(self.mean[k_mean]['Sigma'] @ C)
+                norm_wish_trace_mean = - 0.5 * np.trace(self.mean_[k_mean]['Sigma'] @ C)
 
         L[:,k] = constant + dist + norm_wish_trace_W + norm_wish_trace_mean + ldetWishB + PsiWish_alphasum
 
@@ -396,10 +389,10 @@ class GLHMM():
     def _update_Pi(self):
         n_components = self.n_components
         self.Pi = np.zeros((n_components,))
-        PsiSum0 = scipy.special.psi(sum(self.Dir_alpha))
+        PsiSum0 = scipy.special.psi(sum(self.initial_state_prior_))
         for k in range(n_components):
-            if self.Dir_alpha[k] == 0: continue
-            self.Pi[k] = math.exp(scipy.special.psi(self.Dir_alpha[k])-PsiSum0)
+            if self.initial_state_prior_[k] == 0: continue
+            self.Pi[k] = math.exp(scipy.special.psi(self.initial_state_prior_[k])-PsiSum0)
         self.Pi = self.Pi / np.sum(self.Pi)
 
 
@@ -407,10 +400,10 @@ class GLHMM():
         n_components = self.n_components
         self.P = np.zeros((n_components,n_components))
         for j in range(n_components):
-            PsiSum = scipy.special.psi(sum(self.Dir2d_alpha[j,:]))
+            PsiSum = scipy.special.psi(sum(self.transition_matrix_prior_[j,:]))
             for k in range(n_components):    
-                if self.Dir2d_alpha[j,k] == 0: continue
-                self.P[j,k] = math.exp(scipy.special.psi(self.Dir2d_alpha[j,k])-PsiSum)
+                if self.transition_matrix_prior_[j,k] == 0: continue
+                self.P[j,k] = math.exp(scipy.special.psi(self.transition_matrix_prior_[j,k])-PsiSum)
             self.P[j,:] = self.P[j,:] / np.sum(self.P[j,:])
 
 
@@ -419,15 +412,15 @@ class GLHMM():
         minreal = sys.float_info.min
         Gamma_0 = Gamma[indices[:,0]]
         Gamma_0[Gamma_0 < minreal] = minreal
-        PsiDir_alphasum = scipy.special.psi(sum(self.Dir_alpha))
+        PsiDir_alphasum = scipy.special.psi(sum(self.initial_state_prior_))
         L = 0
         for k in range(n_components):
-            L += np.sum(Gamma_0[:,k]) * (scipy.special.psi(self.Dir_alpha[k]) - PsiDir_alphasum)
+            L += np.sum(Gamma_0[:,k]) * (scipy.special.psi(self.initial_state_prior_[k]) - PsiDir_alphasum)
         PsiDir2d_alphasum = np.zeros(n_components)
-        for l in range(n_components): PsiDir2d_alphasum[l] = scipy.special.psi(sum(self.Dir2d_alpha[l,:]))
+        for l in range(n_components): PsiDir2d_alphasum[l] = scipy.special.psi(sum(self.transition_matrix_prior_[l,:]))
         for k in range(n_components):
             for l in range(n_components):
-                L += np.sum(Xi[:,l,k]) * (scipy.special.psi(self.Dir2d_alpha[l,k]) - PsiDir2d_alphasum[l])
+                L += np.sum(Xi[:,l,k]) * (scipy.special.psi(self.transition_matrix_prior_[l,k]) - PsiDir2d_alphasum[l])
         return L
 
 
@@ -444,27 +437,27 @@ class GLHMM():
         if self.model_mean is not None:
             for k in range(K_mean):
                 if self._is_diagonal_covmat():
-                    self.alpha_mean[k]["rate"] = self.priors["alpha_mean"]["rate"] \
-                        + 0.5 * self.mean[k]["Sigma"] + self.mean[k]["Mu"] ** 2
+                    self.alpha_mean_[k]["rate"] = self.priors["alpha_mean"]["rate"] \
+                        + 0.5 * self.mean_[k]["Sigma"] + self.mean_[k]["Mu"] ** 2
                 else:
-                    self.alpha_mean[k]["rate"] = self.priors["alpha_mean"]["rate"] \
-                        + 0.5 * np.diag(self.mean[k]["Sigma"]) + self.mean[k]["Mu"] ** 2
-                self.alpha_mean[k]["shape"] = self.priors["alpha_mean"]["shape"] + 0.5
+                    self.alpha_mean_[k]["rate"] = self.priors["alpha_mean"]["rate"] \
+                        + 0.5 * np.diag(self.mean_[k]["Sigma"]) + self.mean_[k]["Mu"] ** 2
+                self.alpha_mean_[k]["shape"] = self.priors["alpha_mean"]["shape"] + 0.5
 
         if self.model_beta is not None:
-            p,q = self.beta[0]["Mu"].shape
+            p,q = self.beta_[0]["Mu"].shape
             jj = np.arange(p)
             for k in range(K_beta):
-                self.alpha_beta[k]["rate"] = self.priors["alpha_beta"]["rate"] + 0.5 * self.beta[k]["Mu"] ** 2
+                self.alpha_beta_[k]["rate"] = self.priors["alpha_beta"]["rate"] + 0.5 * self.beta_[k]["Mu"] ** 2
                 if self._is_diagonal_covmat():
                     for j in range(q):
                         if self.connectivity is not None:
                             jj = np.where(self.connectivity[:,j]==1)[0]
-                        self.alpha_beta[k]["rate"][jj,j] += \
-                                0.5 * np.diag(np.squeeze(self.beta[k]["Sigma"][jj,jj[:,np.newaxis],j]))
+                        self.alpha_beta_[k]["rate"][jj,j] += \
+                                0.5 * np.diag(np.squeeze(self.beta_[k]["Sigma"][jj,jj[:,np.newaxis],j]))
                 else:
-                    self.alpha_beta[k]["rate"] += 0.5 * np.reshape(np.diag(self.beta[k]["Sigma"]),(p,q))
-                self.alpha_beta[k]["shape"] = self.priors["alpha_beta"]["shape"] + 0.5
+                    self.alpha_beta_[k]["rate"] += 0.5 * np.reshape(np.diag(self.beta_[k]["Sigma"]),(p,q))
+                self.alpha_beta_[k]["shape"] = self.priors["alpha_beta"]["shape"] + 0.5
 
        
     def _init_priors(self,X=None,Y=None,files=None):
@@ -505,15 +498,15 @@ class GLHMM():
 
         # alpha (state betas and mean priors)
         if self.model_mean is not None:
-            self.alpha_mean = []
+            self.alpha_mean_ = []
             for k in range(K_mean):
-                self.alpha_mean.append({})
-                self.alpha_mean[k] = {}
+                self.alpha_mean_.append({})
+                self.alpha_mean_[k] = {}
         if self.model_beta is not None:
-            self.alpha_beta = []
+            self.alpha_beta_ = []
             for k in range(K_beta):
-                self.alpha_beta.append({})
-                self.alpha_beta[k] = {}
+                self.alpha_beta_.append({})
+                self.alpha_beta_[k] = {}
 
         if self.model_mean is not None:
                 self.priors["alpha_mean"] = {}
@@ -623,32 +616,32 @@ class GLHMM():
 
         # Transition probability matrix
         if (Xi is None) and (Gamma is None) and (Dir2d_alpha is None):
-            self.Dir2d_alpha = self.priors["Dir2d_alpha"]
+            self.transition_matrix_prior_ = self.priors["Dir2d_alpha"]
         else:
             if Dir2d_alpha is None:
                 if Xi is None:
                     Xi = auxiliary.approximate_Xi(Gamma,indices)
                 Dir2d_alpha = np.sum(Xi,axis=0)
             if init:
-                self.Dir2d_alpha = Dir2d_alpha + self.priors["Dir2d_alpha"]
+                self.transition_matrix_prior_ = Dir2d_alpha + self.priors["Dir2d_alpha"]
             else:
-                self.Dir2d_alpha = rho * (Dir2d_alpha + self.priors["Dir2d_alpha"]) \
-                    + (1-rho) * self.Dir2d_alpha
-        self.Dir2d_alpha[~Pstructure] = 0 
+                self.transition_matrix_prior_ = rho * (Dir2d_alpha + self.priors["Dir2d_alpha"]) \
+                    + (1-rho) * self.transition_matrix_prior_
+        self.transition_matrix_prior_[~Pstructure] = 0 
         self._update_P()
 
         # Initial probabilities
         if (Gamma is None) and (Dir_alpha is None):
-            self.Dir_alpha = self.priors["Dir_alpha"]
+            self.initial_state_prior_ = self.priors["Dir_alpha"]
         else:
             if Dir_alpha is None:
                 Dir_alpha = np.sum(Gamma[indices[:,0]],axis=0)
             if init:
-                self.Dir_alpha = Dir_alpha + self.priors["Dir_alpha"]
+                self.initial_state_prior_ = Dir_alpha + self.priors["Dir_alpha"]
             else:
-                self.Dir_alpha = rho * (Dir_alpha + self.priors["Dir_alpha"]) \
-                    + (1-rho) * self.Dir_alpha                
-        self.Dir_alpha[~Pistructure] = 0
+                self.initial_state_prior_ = rho * (Dir_alpha + self.priors["Dir_alpha"]) \
+                    + (1-rho) * self.initial_state_prior_                
+        self.initial_state_prior_[~Pistructure] = 0
         self._update_Pi()
 
 
@@ -687,12 +680,12 @@ class GLHMM():
             if self.model_beta is not None:
                 Yr = np.copy(Y)
                 for k in range(K_beta): 
-                    Yr -= (X @ self.beta[k]["Mu"]) * np.expand_dims(Gb[:,k], axis=1)                    
+                    Yr -= (X @ self.beta_[k]["Mu"]) * np.expand_dims(Gb[:,k], axis=1)                    
             else: Yr = Y
 
             for k in range(K_mean):
 
-                if (not shared_mean) and (not self.active_states[k]):
+                if (not shared_mean) and (not self.active_states_[k]):
                     continue
 
                 k_sigma = 0 if self._is_shared_covmat() else k 
@@ -700,25 +693,25 @@ class GLHMM():
                 Nk = np.sum(Gm[:,k])
 
                 if self._is_diagonal_covmat():
-                    alpha = self.alpha_mean[k]["shape"] / self.alpha_mean[k]["rate"]
-                    isigma = self.Sigma[k_sigma]["shape"] / self.Sigma[k_sigma]["rate"]
+                    alpha = self.alpha_mean_[k]["shape"] / self.alpha_mean_[k]["rate"]
+                    isigma = self.sigma_[k_sigma]["shape"] / self.sigma_[k_sigma]["rate"]
                     iS = Tfactor * isigma * Nk + alpha
                     S = 1 / iS
                     mu = np.squeeze(Tfactor * isigma * S * GY)
-                    self.mean[k]["Sigma"] = rho * S + (1-rho) * self.mean[k]["Sigma"]
-                    self.mean[k]["Mu"] = rho * mu + (1-rho) * self.mean[k]["Mu"]
+                    self.mean_[k]["Sigma"] = rho * S + (1-rho) * self.mean_[k]["Sigma"]
+                    self.mean_[k]["Mu"] = rho * mu + (1-rho) * self.mean_[k]["Mu"]
 
                 else:
-                    alpha = np.diag(self.alpha_mean[k]["shape"] / self.alpha_mean[k]["rate"])
-                    isigma = (self.Sigma[k_sigma]["shape"] * self.Sigma[k_sigma]["irate"]) 
+                    alpha = np.diag(self.alpha_mean_[k]["shape"] / self.alpha_mean_[k]["rate"])
+                    isigma = (self.sigma_[k_sigma]["shape"] * self.sigma_[k_sigma]["irate"]) 
                     gram = isigma * Nk
                     maxlik_mean = (GY / Nk).T
                     iS = Tfactor * gram + alpha
                     iS = (iS + iS.T) / 2
                     S = np.linalg.inv(iS)
                     mu = np.squeeze(Tfactor * S @ gram @ maxlik_mean)
-                    self.mean[k]["Sigma"] = rho * S + (1-rho) * self.mean[k]["Sigma"]
-                    self.mean[k]["Mu"] = rho * mu + (1-rho) * self.mean[k]["Mu"]
+                    self.mean_[k]["Sigma"] = rho * S + (1-rho) * self.mean_[k]["Sigma"]
+                    self.mean_[k]["Mu"] = rho * mu + (1-rho) * self.mean_[k]["Mu"]
 
         # betas 
         if self.model_beta is not None:
@@ -726,12 +719,12 @@ class GLHMM():
             if self.model_mean is not None:
                 Yr = np.copy(Y)
                 for k in range(K_mean): 
-                    Yr -= np.expand_dims(self.mean[k]["Mu"], axis=0) * np.expand_dims(Gm[:,k], axis=1)                  
+                    Yr -= np.expand_dims(self.mean_[k]["Mu"], axis=0) * np.expand_dims(Gm[:,k], axis=1)                  
             else: Yr = Y
 
             for k in range(K_beta):
 
-                if (not shared_beta) and (not self.active_states[k]):
+                if (not shared_beta) and (not self.active_states_[k]):
                     continue
 
                 k_sigma = 0 if self._is_shared_covmat() else k
@@ -742,20 +735,20 @@ class GLHMM():
                     for j in range(q):
                         if self.connectivity is not None:
                             jj = np.where(self.connectivity[:,j]==1)[0]
-                        alpha = np.diag(self.alpha_beta[k]["shape"] / self.alpha_beta[k]["rate"][jj,j])
-                        isigma = self.Sigma[k_sigma]["shape"] / self.Sigma[k_sigma]["rate"][j]
+                        alpha = np.diag(self.alpha_beta_[k]["shape"] / self.alpha_beta_[k]["rate"][jj,j])
+                        isigma = self.sigma_[k_sigma]["shape"] / self.sigma_[k_sigma]["rate"][j]
                         iS = Tfactor * isigma * XGXb[jj,jj[:,np.newaxis],k] + alpha
                         iS = (iS + iS.T) / 2
                         S = np.linalg.inv(iS) 
                         mu = np.squeeze(S @ np.expand_dims(Tfactor * isigma * XGY[jj,j],axis=1))
-                        self.beta[k]["Sigma"][jj,jj[:,np.newaxis],j] = rho * S +  \
-                            (1-rho) * self.beta[k]["Sigma"][jj,jj[:,np.newaxis],j]
-                        self.beta[k]["Mu"][jj,j] = rho * mu + (1-rho) * self.beta[k]["Mu"][jj,j]
+                        self.beta_[k]["Sigma"][jj,jj[:,np.newaxis],j] = rho * S +  \
+                            (1-rho) * self.beta_[k]["Sigma"][jj,jj[:,np.newaxis],j]
+                        self.beta_[k]["Mu"][jj,j] = rho * mu + (1-rho) * self.beta_[k]["Mu"][jj,j]
 
                 else:
-                    alpha = np.diag(self.alpha_beta[k]["shape"] \
-                        / np.reshape(self.alpha_beta[k]["rate"],p*q))
-                    isigma = self.Sigma[k_sigma]["shape"] * self.Sigma[k_sigma]["irate"]
+                    alpha = np.diag(self.alpha_beta_[k]["shape"] \
+                        / np.reshape(self.alpha_beta_[k]["rate"],p*q))
+                    isigma = self.sigma_[k_sigma]["shape"] * self.sigma_[k_sigma]["irate"]
                     gram = np.kron(XGXb[:,:,k],isigma)
                     maxlik_beta = np.reshape(np.linalg.lstsq(XGXb[:,:,k],XGY,rcond=None)[0],(p*q,1))
                     iS = Tfactor * gram + alpha
@@ -763,8 +756,8 @@ class GLHMM():
                     S = np.linalg.inv(iS)
                     mu = Tfactor * S @ gram @ maxlik_beta
                     mu = np.reshape(mu,(p,q)) 
-                    self.beta[k]["Sigma"] = rho * S + (1-rho) * self.beta[k]["Sigma"]
-                    self.beta[k]["Mu"] = rho * mu + (1-rho) * self.beta[k]["Mu"]
+                    self.beta_[k]["Sigma"] = rho * S + (1-rho) * self.beta_[k]["Sigma"]
+                    self.beta_[k]["Mu"] = rho * mu + (1-rho) * self.beta_[k]["Mu"]
            
         # Sigma
         if self._is_shared_covmat():
@@ -782,13 +775,13 @@ class GLHMM():
             sm = np.zeros(q) if self._is_diagonal_covmat() else np.zeros((q,q))
             if self.model_mean is not None: 
                 kk = 0 if shared_mean else k
-                d -= np.expand_dims(self.mean[kk]["Mu"], axis=0)
-                sm = self.mean[kk]["Sigma"] * np.sum(Gamma[:,k])
+                d -= np.expand_dims(self.mean_[kk]["Mu"], axis=0)
+                sm = self.mean_[kk]["Sigma"] * np.sum(Gamma[:,k])
 
             sb = np.zeros(q) if self._is_diagonal_covmat() else np.zeros((q,q))
             if self.model_beta is not None: 
                 kk = 0 if shared_beta else k
-                d -= (X @ self.beta[kk]["Mu"])
+                d -= (X @ self.beta_[kk]["Mu"])
                 if self._is_diagonal_covmat():
                     sb = np.zeros((T,q))
                     jj = np.arange(p)
@@ -796,7 +789,7 @@ class GLHMM():
                         if self.connectivity is not None:
                             jj = np.where(self.connectivity[:,j]==1)[0]
                         sb[:,j] += np.sum((X[:,jj] @ \
-                            self.beta[kk]["Sigma"][jj,jj[:,np.newaxis],j]) *  X[:,jj],axis=1)
+                            self.beta_[kk]["Sigma"][jj,jj[:,np.newaxis],j]) *  X[:,jj],axis=1)
                     sb = np.sum(sb * np.expand_dims(Gamma[:,k], axis=1), axis=0)
 
                 else:
@@ -804,10 +797,10 @@ class GLHMM():
                         ind1 = np.arange(p) * q + j1
                         for j2 in range(j1,q):
                             ind2 = np.arange(p) * q + j2
-                            sb[j1,j2] = np.sum(self.beta[kk]["Sigma"][ind1,ind2[:,np.newaxis]] * XGX[:,:,k])
+                            sb[j1,j2] = np.sum(self.beta_[kk]["Sigma"][ind1,ind2[:,np.newaxis]] * XGX[:,:,k])
                             sb[j2,j1] = sb[j1,j2]
 
-            if self._is_shared_covmat(): # self.Sigma[0]["rate"] 
+            if self._is_shared_covmat(): # self.sigma_[0]["rate"] 
                 if self._is_diagonal_covmat():
                     rate += 0.5 * Tfactor * \
                         ( (np.sum((d ** 2) * np.expand_dims(Gamma[:,k], axis=1),axis=0)) \
@@ -827,9 +820,9 @@ class GLHMM():
                             ) 
                     shape = self.priors["Sigma"]["shape"] + \
                             0.5 * Tfactor * np.sum(Gamma[:,k])
-                    self.Sigma[k]["rate"] = rho * rate + (1-rho) * self.Sigma[k]["rate"]
-                    self.Sigma[k]["shape"] = rho * shape + (1-rho) * self.Sigma[k]["shape"] 
-                    self.Sigma[k]["irate"] = 1 / self.Sigma[k]["rate"]
+                    self.sigma_[k]["rate"] = rho * rate + (1-rho) * self.sigma_[k]["rate"]
+                    self.sigma_[k]["shape"] = rho * shape + (1-rho) * self.sigma_[k]["shape"] 
+                    self.sigma_[k]["irate"] = 1 / self.sigma_[k]["rate"]
                     
                 else:
                     rate =  self.priors["Sigma"]["rate"] + Tfactor * \
@@ -838,17 +831,17 @@ class GLHMM():
                         )
                     shape = self.priors["Sigma"]["shape"] + \
                         Tfactor * np.sum(Gamma[:,k])
-                    self.Sigma[k]["rate"] = rho * rate + (1-rho) * self.Sigma[k]["rate"]
-                    self.Sigma[k]["shape"] = rho * shape + (1-rho) * self.Sigma[k]["shape"] 
-                    self.Sigma[k]["irate"] = np.linalg.inv(self.Sigma[k]["rate"])   
+                    self.sigma_[k]["rate"] = rho * rate + (1-rho) * self.sigma_[k]["rate"]
+                    self.sigma_[k]["shape"] = rho * shape + (1-rho) * self.sigma_[k]["shape"] 
+                    self.sigma_[k]["irate"] = np.linalg.inv(self.sigma_[k]["rate"])   
 
         if self._is_shared_covmat():
-            self.Sigma[0]["rate"] = rho * rate + (1-rho) * self.Sigma[0]["rate"]
-            self.Sigma[0]["shape"] = rho * shape + (1-rho) * self.Sigma[0]["shape"] 
+            self.sigma_[0]["rate"] = rho * rate + (1-rho) * self.sigma_[0]["rate"]
+            self.sigma_[0]["shape"] = rho * shape + (1-rho) * self.sigma_[0]["shape"] 
             if self._is_diagonal_covmat():
-                self.Sigma[0]["irate"] = 1 / self.Sigma[0]["irate"]
+                self.sigma_[0]["irate"] = 1 / self.sigma_[0]["irate"]
             else:
-                 self.Sigma[0]["irate"] = np.linalg.inv(self.Sigma[0]["rate"])    
+                 self.sigma_[0]["irate"] = np.linalg.inv(self.sigma_[0]["rate"])    
 
         self._update_priors()
 
@@ -874,61 +867,61 @@ class GLHMM():
 
         # alpha (keep it unregularised)
         if self.model_mean is not None:
-            self.alpha_mean = []
+            self.alpha_mean_ = []
             for k in range(K_mean):
-                self.alpha_mean.append({})
-                self.alpha_mean[k]["rate"] = 0.1 * np.ones(q)
-                self.alpha_mean[k]["shape"] = 0.0001 # mild-regularised start
+                self.alpha_mean_.append({})
+                self.alpha_mean_[k]["rate"] = 0.1 * np.ones(q)
+                self.alpha_mean_[k]["shape"] = 0.0001 # mild-regularised start
 
         if self.model_beta is not None:
-            self.alpha_beta = []
+            self.alpha_beta_ = []
             for k in range(K_beta):
-                self.alpha_beta.append({})
-                self.alpha_beta[k]["rate"] = 0.1 * np.ones((p,q))
-                self.alpha_beta[k]["shape"] = 0.0001 # mild-regularised start  
+                self.alpha_beta_.append({})
+                self.alpha_beta_[k]["rate"] = 0.1 * np.ones((p,q))
+                self.alpha_beta_[k]["shape"] = 0.0001 # mild-regularised start  
 
         # Sigma (set to priors)
-        self.Sigma = []
+        self.sigma_ = []
         if self._is_diagonal_covmat() and self._is_shared_covmat():
-            self.Sigma.append({})
-            self.Sigma[0]["rate"] = np.copy(self.priors["Sigma"]["rate"])
-            self.Sigma[0]["irate"] = 1 / self.Sigma[0]["rate"]
-            self.Sigma[0]["shape"] = self.priors["Sigma"]["shape"]
+            self.sigma_.append({})
+            self.sigma_[0]["rate"] = np.copy(self.priors["Sigma"]["rate"])
+            self.sigma_[0]["irate"] = 1 / self.sigma_[0]["rate"]
+            self.sigma_[0]["shape"] = self.priors["Sigma"]["shape"]
         elif self._is_diagonal_covmat() and not self._is_shared_covmat():
             for k in range(n_components):
-                self.Sigma.append({})
-                self.Sigma[k]["rate"] = np.copy(self.priors["Sigma"]["rate"])
-                self.Sigma[k]["irate"] = 1 / self.Sigma[k]["rate"]
-                self.Sigma[k]["shape"] = self.priors["Sigma"]["shape"]
+                self.sigma_.append({})
+                self.sigma_[k]["rate"] = np.copy(self.priors["Sigma"]["rate"])
+                self.sigma_[k]["irate"] = 1 / self.sigma_[k]["rate"]
+                self.sigma_[k]["shape"] = self.priors["Sigma"]["shape"]
         elif not self._is_diagonal_covmat() and self._is_shared_covmat():
-            self.Sigma.append({})
-            self.Sigma[0]["rate"] = np.copy(self.priors["Sigma"]["rate"])
-            self.Sigma[0]["irate"] = np.linalg.inv(self.Sigma[0]["rate"])
-            self.Sigma[0]["shape"] = self.priors["Sigma"]["shape"] 
+            self.sigma_.append({})
+            self.sigma_[0]["rate"] = np.copy(self.priors["Sigma"]["rate"])
+            self.sigma_[0]["irate"] = np.linalg.inv(self.sigma_[0]["rate"])
+            self.sigma_[0]["shape"] = self.priors["Sigma"]["shape"] 
         else: # not diagonal_covmat and not shared_covmat
             for k in range(n_components):
-                self.Sigma.append({})
-                self.Sigma[k]["rate"] = np.copy(self.priors["Sigma"]["rate"])
-                self.Sigma[k]["irate"] = np.linalg.inv(self.Sigma[k]["rate"])
-                self.Sigma[k]["shape"] = self.priors["Sigma"]["shape"]
+                self.sigma_.append({})
+                self.sigma_[k]["rate"] = np.copy(self.priors["Sigma"]["rate"])
+                self.sigma_[k]["irate"] = np.linalg.inv(self.sigma_[k]["rate"])
+                self.sigma_[k]["shape"] = self.priors["Sigma"]["shape"]
 
         # create initial values for mean and beta
         if self.model_beta is not None:
-            self.beta = []
+            self.beta_ = []
             for k in range(K_beta):
-                self.beta.append({})
-                self.beta[k]["Mu"] = np.zeros((p,q))
+                self.beta_.append({})
+                self.beta_[k]["Mu"] = np.zeros((p,q))
                 if self._is_diagonal_covmat(): 
-                    self.beta[k]["Sigma"] = np.zeros((p,p,q))
-                    for j in range(q): self.beta[k]["Sigma"][:,:,j] = 0.01 * np.eye(p)
-                else: self.beta[k]["Sigma"] = 0.01 * np.eye(p*q)
+                    self.beta_[k]["Sigma"] = np.zeros((p,p,q))
+                    for j in range(q): self.beta_[k]["Sigma"][:,:,j] = 0.01 * np.eye(p)
+                else: self.beta_[k]["Sigma"] = 0.01 * np.eye(p*q)
         if self.model_mean is not None:
-            self.mean = []
+            self.mean_ = []
             for k in range(K_mean):
-                self.mean.append({})  
-                self.mean[k]["Mu"] = np.zeros(q)
-                if self._is_diagonal_covmat(): self.mean[k]["Sigma"] = 0.01 * np.ones(q)
-                else: self.mean[k]["Sigma"] = 0.01 * np.eye(q)
+                self.mean_.append({})  
+                self.mean_[k]["Mu"] = np.zeros(q)
+                if self._is_diagonal_covmat(): self.mean_[k]["Sigma"] = 0.01 * np.ones(q)
+                else: self.mean_[k]["Sigma"] = 0.01 * np.eye(q)
 
         # do beta and mean conventionally, and redo alpha and Sigma
         self._update_obsdist(X,Y,Gamma)
@@ -1026,12 +1019,12 @@ class GLHMM():
             if not warm_up and options["deactivate_states"]:
                 for k in range(n_components):
                     FO = np.sum(sum_Gamma[k,:])
-                    active_state = self.active_states[k]
-                    self.active_states[k] = FO > options["threshold_active"]
+                    active_state = self.active_states_[k]
+                    self.active_states_[k] = FO > options["threshold_active"]
                     if options["verbose"]:
-                        if (not active_state) and self.active_states[k]:
+                        if (not active_state) and self.active_states_[k]:
                             print("State " + str(k) + " is reactivated")
-                        if active_state and (not self.active_states[k]):
+                        if active_state and (not self.active_states_[k]):
                             print("State " + str(k) + " is deactivated")
 
             # M-step            
@@ -1103,7 +1096,7 @@ class GLHMM():
             else: 
                 itw += 1
 
-        K_active = np.sum(self.active_states)
+        K_active = np.sum(self.active_states_)
         if options["verbose"]:
             end = time.time()
             elapsed = end - start
@@ -1320,7 +1313,7 @@ class GLHMM():
             T = size[:,1] - size[:,0]
 
         N = indices.shape[0]
-        q = self.Sigma[0]["rate"].shape[0]
+        q = self.sigma_[0]["rate"].shape[0]
         
         if Gamma is None:
             Gamma = self.sample_Gamma(size)
@@ -1328,25 +1321,25 @@ class GLHMM():
         rng = np.random.default_rng()
 
         if (self.model_beta is not None) and (X is None):
-            p = self.beta[0]["Mu"].shape[1]
+            p = self.beta_[0]["Mu"].shape[1]
             X = np.random.normal(size=(np.sum(T),p))
 
         # Y, mean
         Y = np.zeros((np.sum(T),q))
         if self.model_mean == 'shared':
-            Y += np.expand_dims(self.mean[0]['Mu'],axis=0)
+            Y += np.expand_dims(self.mean_[0]['Mu'],axis=0)
         if self.model_beta == 'shared':
-            Y += X @ self.beta[0]["Mu"]
+            Y += X @ self.beta_[0]["Mu"]
             
         for k in range(n_components):
             if self.model_mean == 'state': 
-                Y += np.expand_dims(self.mean[k]["Mu"],axis=0) * np.expand_dims(Gamma[:,k],axis=1)
+                Y += np.expand_dims(self.mean_[k]["Mu"],axis=0) * np.expand_dims(Gamma[:,k],axis=1)
             if self.model_beta == 'state':
-                Y += (X @ self.beta[k]["Mu"]) * np.expand_dims(Gamma[:,k],axis=1)
+                Y += (X @ self.beta_[k]["Mu"]) * np.expand_dims(Gamma[:,k],axis=1)
 
         # Y, covariance
         if self._is_shared_covmat():
-            C = self.Sigma[0]["rate"] / self.Sigma[0]["shape"]
+            C = self.sigma_[0]["rate"] / self.sigma_[0]["shape"]
             if self._is_diagonal_covmat():
                 Y += rng.normal(loc=np.zeros(q),scale=C,size=Y.shape)
             else:
@@ -1372,7 +1365,7 @@ class GLHMM():
             Number of active states.
         """
 
-        K_active = np.sum(self.active_states)
+        K_active = np.sum(self.active_states_)
         return K_active
     
 
@@ -1425,14 +1418,14 @@ class GLHMM():
 
             d = np.copy(Y[tt_j,:])
             if self.model_mean == 'shared':
-                d -= np.expand_dims(self.mean[0]['Mu'],axis=0)
+                d -= np.expand_dims(self.mean_[0]['Mu'],axis=0)
             if self.model_beta == 'shared':
-                d -= (Xj @ self.beta[0]['Mu'])
+                d -= (Xj @ self.beta_[0]['Mu'])
             for k in range(n_components):
                 if self.model_mean == 'state': 
-                    d -= np.expand_dims(self.mean[k]['Mu'],axis=0) * np.expand_dims(Gamma[:,k],axis=1)
+                    d -= np.expand_dims(self.mean_[k]['Mu'],axis=0) * np.expand_dims(Gamma[:,k],axis=1)
                 if self.model_beta == 'state':
-                    d -= (Xj @ self.beta[k]['Mu']) * np.expand_dims(Gamma[:,k],axis=1)
+                    d -= (Xj @ self.beta_[k]['Mu']) * np.expand_dims(Gamma[:,k],axis=1)
             d = np.sum(d**2,axis=0)
 
             d0 = np.copy(Y[tt_j,:])
@@ -1529,37 +1522,37 @@ class GLHMM():
 
         kldyn = []
         if todo[3]:
-            kldyn.append(kl_dirichlet(self.Dir_alpha,self.priors["Dir_alpha"]))
+            kldyn.append(kl_dirichlet(self.initial_state_prior_,self.priors["Dir_alpha"]))
             for k in range(n_components):
-                kldyn.append(kl_dirichlet(self.Dir2d_alpha[k,:],self.priors["Dir2d_alpha"][k,:]))
+                kldyn.append(kl_dirichlet(self.transition_matrix_prior_[k,:],self.priors["Dir2d_alpha"][k,:]))
 
         klobs = []
         if todo[4]:
-            q = self.Sigma[0]["rate"].shape[0]
+            q = self.sigma_[0]["rate"].shape[0]
             if self.model_mean is not None:
                 for k in range(K_mean):
                     if self._is_diagonal_covmat():
                         for j in range(q):
                             klobs.append(kl_normal_distribution( \
-                                self.mean[k]["Mu"][j], self.mean[k]["Sigma"][j], \
-                                0,self.alpha_mean[k]["rate"][j] / self.alpha_mean[k]["shape"] \
+                                self.mean_[k]["Mu"][j], self.mean_[k]["Sigma"][j], \
+                                0,self.alpha_mean_[k]["rate"][j] / self.alpha_mean_[k]["shape"] \
                             ))
                             klobs.append(kl_gamma_distribution(
-                                self.alpha_mean[k]["shape"],self.alpha_mean[k]["rate"][j], \
+                                self.alpha_mean_[k]["shape"],self.alpha_mean_[k]["rate"][j], \
                                 self.priors["alpha_mean"]["shape"],self.priors["alpha_mean"]["rate"][j] \
                             ))
                     else:
                         klobs.append(kl_multivariate_normal_distribution( \
-                            self.mean[k]["Mu"],self.mean[k]["Sigma"], \
-                            np.zeros(q),np.diag(self.alpha_mean[k]["rate"] / self.alpha_mean[k]["shape"]) \
+                            self.mean_[k]["Mu"],self.mean_[k]["Sigma"], \
+                            np.zeros(q),np.diag(self.alpha_mean_[k]["rate"] / self.alpha_mean_[k]["shape"]) \
                         ))
                         klobs.append(np.sum(kl_gamma_distribution( \
-                            self.alpha_mean[k]["shape"],self.alpha_mean[k]["rate"],\
+                            self.alpha_mean_[k]["shape"],self.alpha_mean_[k]["rate"],\
                             self.priors["alpha_mean"]["shape"],self.priors["alpha_mean"]["rate"] \
                         )))   
 
             if self.model_beta is not None:
-                p = self.beta[0]["Mu"].shape[0]
+                p = self.beta_[0]["Mu"].shape[0]
                 jj = np.arange(p)
                 for k in range(K_beta):
                     if self._is_diagonal_covmat():
@@ -1568,40 +1561,40 @@ class GLHMM():
                                 jj = np.where(self.connectivity[:,j]==1)[0]
                             pj = len(jj)
                             klobs.append(kl_multivariate_normal_distribution( \
-                                self.beta[k]["Mu"][jj,j], self.beta[k]["Sigma"][jj,jj[:,np.newaxis],j], \
-                                np.zeros((pj,)), np.diag(self.alpha_beta[k]["rate"][jj,j] / self.alpha_beta[k]["shape"]) \
+                                self.beta_[k]["Mu"][jj,j], self.beta_[k]["Sigma"][jj,jj[:,np.newaxis],j], \
+                                np.zeros((pj,)), np.diag(self.alpha_beta_[k]["rate"][jj,j] / self.alpha_beta_[k]["shape"]) \
                             ))
                             klobs.append(np.sum(kl_gamma_distribution( \
-                                self.alpha_beta[k]["shape"],self.alpha_beta[k]["rate"][jj,j], \
+                                self.alpha_beta_[k]["shape"],self.alpha_beta_[k]["rate"][jj,j], \
                                 self.priors["alpha_beta"]["shape"],self.priors["alpha_beta"]["rate"][jj,j] \
                             )))
                     else:
                         klobs.append(kl_multivariate_normal_distribution(
-                            np.reshape(self.beta[k]["Mu"],(p*q,)),\
-                            self.beta[k]["Sigma"],\
+                            np.reshape(self.beta_[k]["Mu"],(p*q,)),\
+                            self.beta_[k]["Sigma"],\
                             np.zeros(p*q),
-                            np.diag(np.reshape(self.alpha_beta[k]["rate"],(p*q,)) / self.alpha_beta[k]["shape"]) \
+                            np.diag(np.reshape(self.alpha_beta_[k]["rate"],(p*q,)) / self.alpha_beta_[k]["shape"]) \
                         ))
                         klobs.append(np.sum(kl_gamma_distribution( \
-                                self.alpha_beta[k]["shape"],\
-                                np.reshape(self.alpha_beta[k]["rate"],(p*q,)),\
+                                self.alpha_beta_[k]["shape"],\
+                                np.reshape(self.alpha_beta_[k]["rate"],(p*q,)),\
                                 self.priors["alpha_beta"]["shape"],\
                                 np.reshape(self.priors["alpha_beta"]["rate"],(p*q,)) \
                         )))      
 
             if self._is_shared_covmat() and (not self._is_diagonal_covmat()):
-                klobs.append(kl_wishart_distribution(self.Sigma[0]["shape"],self.Sigma[0]["rate"],\
+                klobs.append(kl_wishart_distribution(self.sigma_[0]["shape"],self.sigma_[0]["rate"],\
                     self.priors["Sigma"]["shape"],self.priors["Sigma"]["rate"]))
             elif (not self._is_shared_covmat()) and (not self._is_diagonal_covmat()):
                 for k in range(n_components):
-                    klobs.append(kl_wishart_distribution(self.Sigma[k]["shape"],self.Sigma[k]["rate"],\
+                    klobs.append(kl_wishart_distribution(self.sigma_[k]["shape"],self.sigma_[k]["rate"],\
                         self.priors["Sigma"]["shape"],self.priors["Sigma"]["rate"]))
             elif self._is_shared_covmat() and self._is_diagonal_covmat():
-                klobs.append(np.sum(kl_gamma_distribution(self.Sigma[0]["shape"],self.Sigma[0]["rate"],\
+                klobs.append(np.sum(kl_gamma_distribution(self.sigma_[0]["shape"],self.sigma_[0]["rate"],\
                     self.priors["Sigma"]["shape"],self.priors["Sigma"]["rate"])))
             elif (not self._is_shared_covmat()) and self._is_diagonal_covmat():
                 for k in range(n_components):
-                    klobs.append(np.sum(kl_gamma_distribution(self.Sigma[k]["shape"],self.Sigma[k]["rate"],\
+                    klobs.append(np.sum(kl_gamma_distribution(self.sigma_[k]["shape"],self.sigma_[k]["rate"],\
                         self.priors["Sigma"]["shape"],self.priors["Sigma"]["rate"])))
 
         if use_scale:
@@ -1640,7 +1633,7 @@ class GLHMM():
         if not self.trained: 
             raise Exception("The model has not yet been trained") 
 
-        return self.Sigma[k]["rate"] / self.Sigma[k]["shape"]
+        return self.sigma_[k]["rate"] / self.sigma_[k]["shape"]
 
 
     def get_inverse_covariance_matrix(self,k=0):
@@ -1665,7 +1658,7 @@ class GLHMM():
         if not self.trained: 
             raise Exception("The model has not yet been trained") 
 
-        return self.Sigma[k]["irate"] * self.Sigma[k]["shape"]
+        return self.sigma_[k]["irate"] * self.sigma_[k]["shape"]
 
 
     def get_beta(self,k=0):
@@ -1694,7 +1687,7 @@ class GLHMM():
         if self.model_beta is None:
             raise Exception("The model has no beta")
 
-        return self.beta[k]["Mu"]
+        return self.beta_[k]["Mu"]
     
 
 
@@ -1719,10 +1712,10 @@ class GLHMM():
         if self.model_beta is None:
             raise Exception("The model has no beta")
 
-        (p,q) = self.beta[0]["Mu"].shape
+        (p,q) = self.beta_[0]["Mu"].shape
         n_components = self.n_components
         betas = np.zeros((p,q,n_components))
-        for k in range(n_components): betas[:,:,k] = self.beta[k]["Mu"]
+        for k in range(n_components): betas[:,:,k] = self.beta_[k]["Mu"]
         return betas
 
 
@@ -1753,7 +1746,7 @@ class GLHMM():
         if self.model_mean is None:
             raise Exception("The model has no mean")
 
-        return self.mean[k]["Mu"]
+        return self.mean_[k]["Mu"]
     
 
     def get_means(self):
@@ -1779,13 +1772,13 @@ class GLHMM():
             raise Exception("The model has no mean")
 
         if self.model_beta is not None:
-            q = self.beta[0]["Mu"].shape
+            q = self.beta_[0]["Mu"].shape
         else:
-            q = self.Sigma[0]["rate"].shape[0]
+            q = self.sigma_[0]["rate"].shape[0]
 
         n_components = self.n_components
         means = np.zeros((q,n_components))
-        for k in range(n_components): means[:,k] = self.mean[k]["Mu"]
+        for k in range(n_components): means[:,k] = self.mean_[k]["Mu"]
         return means    
 
 
@@ -1896,6 +1889,12 @@ class GLHMM():
             If 'files' is not provided and stochastic learning is called upon
         """
         self._check()
+        self.mean_ = None
+        self.beta_ = None
+        self.alpha_mean_ = None
+        self.alpha_beta_ = None
+        self.sigma_ = None
+        self.active_states_ = np.ones(n_components,dtype=bool)
 
         stochastic = (options is not None) and ("stochastic" in options) and (options["stochastic"])
         
@@ -1955,12 +1954,12 @@ class GLHMM():
                 if options["deactivate_states"]:
                     FO = np.sum(Gamma,axis=0)
                     for k in range(n_components):
-                        active_state = self.active_states[k]
-                        self.active_states[k] = FO[k] > options["threshold_active"]
+                        active_state = self.active_states_[k]
+                        self.active_states_[k] = FO[k] > options["threshold_active"]
                         if options["verbose"]:
-                            if (not active_state) and self.active_states[k]:
+                            if (not active_state) and self.active_states_[k]:
                                 print("State " + str(k) + " is reactivated")
-                            if active_state and (not self.active_states[k]):
+                            if active_state and (not self.active_states_[k]):
                                 print("State " + str(k) + " is deactivated")
 
                 # epsilon = 1
@@ -1994,7 +1993,7 @@ class GLHMM():
             if options["updateObs"]:
                 self._update_obsdist(X,Y,Gamma)
                 
-        K_active = np.sum(self.active_states)
+        K_active = np.sum(self.active_states_)
         if options["verbose"]:
             end = time.time()
             elapsed = end - start
