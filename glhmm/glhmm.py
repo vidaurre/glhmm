@@ -101,9 +101,20 @@ class glhmm():
         self.active_states = np.ones(K,dtype=bool)
         self.trained = False
         
+    # Utility functions
+    def _is_diagonal_covmat(self):
+        diagonal_covmat = (self.covtype == 'shareddiag') or (self.covtype == 'diag')
+        
+        return diagonal_covmat
+    
+    def _is_shared_covmat(self):
+        shared_covmat = (self.covtype == 'shareddiag') or (self.covtype == 'sharedfull')
+        
+        return shared_covmat
+    
     ## Private methods
 
-    def __forward_backward(self,L,indices):
+    def _forward_backward(self,L,indices):
         """
         Calculate state time courses for a collection of segments
         """        
@@ -149,7 +160,7 @@ class glhmm():
         return Gamma,Xi,scale
 
 
-    def __forward_backward_vp(self,L,indices):
+    def _forward_backward_vp(self,L,indices):
         """
         Calculate viterbi path for a collection of segments
         """        
@@ -170,24 +181,21 @@ class glhmm():
         return vpath   
     
 
-    def __loglikelihood_k(self,X,Y,L,k,cache):
+    def _loglikelihood_k(self,X,Y,L,k,cache):
 
         T,q = Y.shape
         if self.hyperparameters["model_beta"] != 'no': p = X.shape[1]
         else: p = 0
-        shared_covmat = (self.hyperparameters["covtype"] == 'shareddiag') or \
-                        (self.hyperparameters["covtype"] == 'sharedfull')
-        diagonal_covmat = (self.hyperparameters["covtype"] == 'shareddiag') or \
-                        (self.hyperparameters["covtype"] == 'diag')
+        
         k_mean,k_beta = k,k
         if self.hyperparameters["model_mean"] == 'shared': k_mean = 0
         if self.hyperparameters["model_beta"] == 'shared': k_beta = 0
 
         constant = - q / 2 * math.log(2*math.pi) #+ q / 2 
 
-        if (k==0) and shared_covmat:
+        if (k==0) and self._is_shared_covmat():
 
-            if diagonal_covmat:
+            if self._is_diagonal_covmat():
                 PsiWish_alphasum = 0.5 * q * scipy.special.psi(self.Sigma[0]['shape']) 
                 ldetWishB = 0
                 for j in range(q):
@@ -208,13 +216,13 @@ class glhmm():
             cache["ldetWishB"] = ldetWishB
             cache["C"] = C
 
-        elif shared_covmat:
+        elif self._is_shared_covmat():
 
             PsiWish_alphasum = cache["PsiWish_alphasum"]
             ldetWishB = cache["ldetWishB"]
             C = cache["C"]
 
-        elif diagonal_covmat: # not shared_covmat
+        elif self._is_diagonal_covmat(): # not shared_covmat
 
             PsiWish_alphasum = 0.5 * q * scipy.special.psi(self.Sigma[k]['shape']) 
             ldetWishB = 0
@@ -222,7 +230,6 @@ class glhmm():
                 ldetWishB += np.log(self.Sigma[k]['rate'][j])
             ldetWishB = - 0.5 * ldetWishB
             C = self.Sigma[k]['shape'] / self.Sigma[k]['rate']
-            diagonal_covmat = True
 
         else: # not shared_covmat, full matrix
 
@@ -239,14 +246,14 @@ class glhmm():
         d = np.copy(Y)
         if self.mean is not None: d -= np.expand_dims(self.mean[k_mean]['Mu'],axis=0)
         if self.beta is not None: d -= (X @ self.beta[k_beta]['Mu'])
-        if diagonal_covmat: Cd = d * C
+        if self._is_diagonal_covmat(): Cd = d * C
         else: Cd = d @ C
         for j in range(q): dist -= 0.5 * d[:,j] * Cd[:,j]
 
         # cov trace for beta
         norm_wish_trace_W = np.zeros((T,))
         if self.beta is not None:
-            if diagonal_covmat:
+            if self._is_diagonal_covmat():
                 jj = np.arange(p)
                 for j in range(q):
                     if self.hyperparameters["connectivity"] is not None:
@@ -265,7 +272,7 @@ class glhmm():
         # cov trace for mean
         norm_wish_trace_mean = np.zeros(T)
         if self.mean is not None:
-            if diagonal_covmat:
+            if self._is_diagonal_covmat():
                 for j in range(q):
                     norm_wish_trace_mean -= 0.5 * C[j] * self.mean[k_mean]['Sigma'][j]
             else:
@@ -275,7 +282,7 @@ class glhmm():
 
 
     @staticmethod
-    def __check_options(options):
+    def _check_options(options):
 
         if options is None: options = {}
         if not "cyc" in options: options["cyc"] = 100
@@ -294,7 +301,7 @@ class glhmm():
 
 
     @staticmethod
-    def __check_options_stochastic(options,files):
+    def _check_options_stochastic(options,files):
 
         if options is None: options = {}
         if not "Nbatch" in options: options["Nbatch"] = int(min(len(files)/2,10))
@@ -310,12 +317,12 @@ class glhmm():
         if ("updateDyn" in options) and (not options["updateDyn"]): 
             options["updateDyn"] = True
             warnings.warn('updateDyn has to be True for stochastic learning')
-        options = glhmm.__check_options(options)
+        options = glhmm._check_options(options)
         return options
 
 
     @staticmethod
-    def __check_Gamma(Gamma):
+    def _check_Gamma(Gamma):
         K = Gamma.shape[1]
         if np.any(np.isnan(Gamma)):
             raise Exception("NaN were generated in the state time courses, probably due to an artifacts") 
@@ -324,11 +331,11 @@ class glhmm():
         return status
 
         
-    def __init_Gamma(self,X,Y,indices,options):
+    def _init_Gamma(self,X,Y,indices,options):
 
         if options["initrep"] == 0:
-            self.__init_prior_P_Pi() # init P,Pi priors
-            self.__update_dynamics() # make P,Pi based on priors
+            self._init_prior_P_Pi() # init P,Pi priors
+            self._update_dynamics() # make P,Pi based on priors
             Gamma = self.sample_Gamma(indices)
             return Gamma
 
@@ -351,7 +358,7 @@ class glhmm():
         return Gamma
                 
                 
-    def __update_Pi(self):
+    def _update_Pi(self):
         K = self.hyperparameters["K"]
         self.Pi = np.zeros((K,))
         PsiSum0 = scipy.special.psi(sum(self.Dir_alpha))
@@ -361,7 +368,7 @@ class glhmm():
         self.Pi = self.Pi / np.sum(self.Pi)
 
 
-    def __update_P(self):
+    def _update_P(self):
         K = self.hyperparameters["K"]
         self.P = np.zeros((K,K))
         for j in range(K):
@@ -372,7 +379,7 @@ class glhmm():
             self.P[j,:] = self.P[j,:] / np.sum(self.P[j,:])
 
 
-    def __Gamma_loglikelihood(self,Gamma,Xi,indices):
+    def _Gamma_loglikelihood(self,Gamma,Xi,indices):
         K = self.hyperparameters["K"]
         minreal = sys.float_info.min
         Gamma_0 = Gamma[indices[:,0]]
@@ -389,11 +396,10 @@ class glhmm():
         return L
 
 
-    def __update_priors(self):
+    def _update_priors(self):
 
         K = self.hyperparameters["K"]
-        diagonal_covmat = (self.hyperparameters["covtype"] == 'shareddiag') or \
-                        (self.hyperparameters["covtype"] == 'diag')      
+           
         shared_beta = self.hyperparameters["model_beta"] == 'shared'
         shared_mean = self.hyperparameters["model_mean"] == 'shared'
         K_mean,K_beta = K,K
@@ -402,7 +408,7 @@ class glhmm():
 
         if self.hyperparameters["model_mean"] != 'no':
             for k in range(K_mean):
-                if diagonal_covmat:
+                if self._is_diagonal_covmat():
                     self.alpha_mean[k]["rate"] = self.priors["alpha_mean"]["rate"] \
                         + 0.5 * self.mean[k]["Sigma"] + self.mean[k]["Mu"] ** 2
                 else:
@@ -415,7 +421,7 @@ class glhmm():
             jj = np.arange(p)
             for k in range(K_beta):
                 self.alpha_beta[k]["rate"] = self.priors["alpha_beta"]["rate"] + 0.5 * self.beta[k]["Mu"] ** 2
-                if diagonal_covmat:
+                if self._is_diagonal_covmat():
                     for j in range(q):
                         if self.hyperparameters["connectivity"] is not None:
                             jj = np.where(self.hyperparameters["connectivity"][:,j]==1)[0]
@@ -426,39 +432,38 @@ class glhmm():
                 self.alpha_beta[k]["shape"] = self.priors["alpha_beta"]["shape"] + 0.5
 
        
-    def __init_priors(self,X=None,Y=None,files=None):
+    def _init_priors(self,X=None,Y=None,files=None):
 
         if Y is None: X,Y,_,_ = io.load_files(files,0)
         p = X.shape[1] if X is not None else None
         q = Y.shape[1]
 
         if files is None:
-            prior_shape,prior_rate = self.__compute_prior_covmat(X,Y)
+            prior_shape,prior_rate = self._compute_prior_covmat(X,Y)
         else:
-            prior_shape,prior_rate = self.__compute_prior_covmat(files=files)       
+            prior_shape,prior_rate = self._compute_prior_covmat(files=files)       
 
-        self.__init_priors_sub(prior_rate,prior_shape,p,q)
+        self._init_priors_sub(prior_rate,prior_shape,p,q)
         
 
-    def __init_priors_sub(self,prior_rate,prior_shape,p,q):
+    def _init_priors_sub(self,prior_rate,prior_shape,p,q):
 
         K = self.hyperparameters["K"]
         shared_beta = self.hyperparameters["model_beta"] == 'shared'
         shared_mean = self.hyperparameters["model_mean"] == 'shared'
-        diagonal_covmat = (self.hyperparameters["covtype"] == 'shareddiag') or \
-                        (self.hyperparameters["covtype"] == 'diag')  
+        
         K_mean,K_beta = K,K
         if shared_mean: K_mean = 1
         if shared_beta: K_beta = 1
         
         # priors for dynamics
-        self.__init_prior_P_Pi()
+        self._init_prior_P_Pi()
 
         # Covariance matrix, use the range of the global error to set the prior
         self.priors["Sigma"] = {}
         self.priors["Sigma"]["shape"] = prior_shape
         self.priors["Sigma"]["rate"] = prior_rate
-        if diagonal_covmat: 
+        if self._is_diagonal_covmat(): 
             self.priors["Sigma"]["irate"] = 1 / self.priors["Sigma"]["rate"]
         else:
             self.priors["Sigma"]["irate"] = np.linalg.inv(self.priors["Sigma"]["rate"])
@@ -485,7 +490,7 @@ class glhmm():
                 self.priors["alpha_beta"]["shape"] = 0.1        
 
 
-    def __init_prior_P_Pi(self):
+    def _init_prior_P_Pi(self):
 
         K = self.hyperparameters["K"]
         # priors for dynamics
@@ -498,10 +503,7 @@ class glhmm():
             self.priors["Dir2d_alpha"][k,k] = self.hyperparameters["dirichlet_diag"]
 
 
-    def __compute_prior_covmat(self,X=None,Y=None,files=None):
-
-        diagonal_covmat = (self.hyperparameters["covtype"] == 'shareddiag') or \
-                        (self.hyperparameters["covtype"] == 'diag')  
+    def _compute_prior_covmat(self,X=None,Y=None,files=None):
 
         if not files is None: # iterative calculation
             N = len(files)
@@ -548,7 +550,7 @@ class glhmm():
                 Yr -= X @ beta
             r = np.max(Yr,axis=0) - np.min(Yr,axis=0)
 
-        if diagonal_covmat:
+        if self._is_diagonal_covmat():
             shape = 0.5 * (q+0.1-1)
             #shape = 0.5 * T
             rate = 0.5 * r
@@ -559,7 +561,7 @@ class glhmm():
         return shape,rate
 
   
-    def __update_dynamics(self,Gamma=None,Xi=None,indices=None,
+    def _update_dynamics(self,Gamma=None,Xi=None,indices=None,
             Dir_alpha=None,Dir2d_alpha=None,rho=1,init=False):
         """
         Update transition prob matrix and initial probabilities
@@ -582,7 +584,7 @@ class glhmm():
                 self.Dir2d_alpha = rho * (Dir2d_alpha + self.priors["Dir2d_alpha"]) \
                     + (1-rho) * self.Dir2d_alpha
         self.Dir2d_alpha[~Pstructure] = 0 
-        self.__update_P()
+        self._update_P()
 
         # Initial probabilities
         if (Gamma is None) and (Dir_alpha is None):
@@ -596,18 +598,18 @@ class glhmm():
                 self.Dir_alpha = rho * (Dir_alpha + self.priors["Dir_alpha"]) \
                     + (1-rho) * self.Dir_alpha                
         self.Dir_alpha[~Pistructure] = 0
-        self.__update_Pi()
+        self._update_Pi()
 
 
-    def __init_dynamics(self,Gamma=None,indices=None):
+    def _init_dynamics(self,Gamma=None,indices=None):
         """
         Initialise transition prob matrix and initial probabilities
         """
 
-        self.__update_dynamics(Gamma,None,indices,init=True)
+        self._update_dynamics(Gamma,None,indices,init=True)
 
 
-    def __update_obsdist(self,X,Y,Gamma,Tfactor=1,rho=1):
+    def _update_obsdist(self,X,Y,Gamma,Tfactor=1,rho=1):
         """
         Update state distributions
         """        
@@ -615,10 +617,7 @@ class glhmm():
         K = self.hyperparameters["K"]
         T,q = Y.shape
         if self.hyperparameters["model_beta"] != 'no': p = X.shape[1]
-        shared_covmat = (self.hyperparameters["covtype"] == 'shareddiag') or \
-                        (self.hyperparameters["covtype"] == 'sharedfull')
-        diagonal_covmat = (self.hyperparameters["covtype"] == 'shareddiag') or \
-                        (self.hyperparameters["covtype"] == 'diag')  
+        
         shared_beta = self.hyperparameters["model_beta"] == 'shared'
         shared_mean = self.hyperparameters["model_mean"] == 'shared'
         K_mean,K_beta = K,K
@@ -645,11 +644,11 @@ class glhmm():
                 if (not shared_mean) and (not self.active_states[k]):
                     continue
 
-                k_sigma = 0 if shared_covmat else k 
+                k_sigma = 0 if self._is_shared_covmat() else k 
                 GY = np.expand_dims(Gm[:,k],axis=1).T @ Yr 
                 Nk = np.sum(Gm[:,k])
 
-                if diagonal_covmat:
+                if self._is_diagonal_covmat():
                     alpha = self.alpha_mean[k]["shape"] / self.alpha_mean[k]["rate"]
                     isigma = self.Sigma[k_sigma]["shape"] / self.Sigma[k_sigma]["rate"]
                     iS = Tfactor * isigma * Nk + alpha
@@ -684,10 +683,10 @@ class glhmm():
                 if (not shared_beta) and (not self.active_states[k]):
                     continue
 
-                k_sigma = 0 if shared_covmat else k
+                k_sigma = 0 if self._is_shared_covmat() else k
                 XGY = (X * np.expand_dims(Gb[:,k],axis=1)).T @ Yr
 
-                if diagonal_covmat:
+                if self._is_diagonal_covmat():
                     jj = np.arange(p)
                     for j in range(q):
                         if self.hyperparameters["connectivity"] is not None:
@@ -717,8 +716,8 @@ class glhmm():
                     self.beta[k]["Mu"] = rho * mu + (1-rho) * self.beta[k]["Mu"]
            
         # Sigma
-        if shared_covmat:
-            if diagonal_covmat:
+        if self._is_shared_covmat():
+            if self._is_diagonal_covmat():
                 rate = np.copy(self.priors["Sigma"]["rate"])
                 shape = self.priors["Sigma"]["shape"] + 0.5 * Tfactor * T
             else:
@@ -729,17 +728,17 @@ class glhmm():
 
             d = np.copy(Y) 
 
-            sm = np.zeros(q) if diagonal_covmat else np.zeros((q,q))
+            sm = np.zeros(q) if self._is_diagonal_covmat() else np.zeros((q,q))
             if self.hyperparameters["model_mean"] != 'no': 
                 kk = 0 if shared_mean else k
                 d -= np.expand_dims(self.mean[kk]["Mu"], axis=0)
                 sm = self.mean[kk]["Sigma"] * np.sum(Gamma[:,k])
 
-            sb = np.zeros(q) if diagonal_covmat else np.zeros((q,q))
+            sb = np.zeros(q) if self._is_diagonal_covmat() else np.zeros((q,q))
             if self.hyperparameters["model_beta"] != 'no': 
                 kk = 0 if shared_beta else k
                 d -= (X @ self.beta[kk]["Mu"])
-                if diagonal_covmat:
+                if self._is_diagonal_covmat():
                     sb = np.zeros((T,q))
                     jj = np.arange(p)
                     for j in range(q):
@@ -757,8 +756,8 @@ class glhmm():
                             sb[j1,j2] = np.sum(self.beta[kk]["Sigma"][ind1,ind2[:,np.newaxis]] * XGX[:,:,k])
                             sb[j2,j1] = sb[j1,j2]
 
-            if shared_covmat: # self.Sigma[0]["rate"] 
-                if diagonal_covmat:
+            if self._is_shared_covmat(): # self.Sigma[0]["rate"] 
+                if self._is_diagonal_covmat():
                     rate += 0.5 * Tfactor * \
                         ( (np.sum((d ** 2) * np.expand_dims(Gamma[:,k], axis=1),axis=0)) \
                         + sm + sb
@@ -769,7 +768,7 @@ class glhmm():
                         + sm + sb)
                     
             else:
-                if diagonal_covmat:
+                if self._is_diagonal_covmat():
                     rate = self.priors["Sigma"]["rate"] \
                             + 0.5 * Tfactor * \
                             ( np.sum((d ** 2) * np.expand_dims(Gamma[:,k], axis=1),axis=0) \
@@ -792,33 +791,30 @@ class glhmm():
                     self.Sigma[k]["shape"] = rho * shape + (1-rho) * self.Sigma[k]["shape"] 
                     self.Sigma[k]["irate"] = np.linalg.inv(self.Sigma[k]["rate"])   
 
-        if shared_covmat:
+        if self._is_shared_covmat():
             self.Sigma[0]["rate"] = rho * rate + (1-rho) * self.Sigma[0]["rate"]
             self.Sigma[0]["shape"] = rho * shape + (1-rho) * self.Sigma[0]["shape"] 
-            if diagonal_covmat:
+            if self._is_diagonal_covmat():
                 self.Sigma[0]["irate"] = 1 / self.Sigma[0]["irate"]
             else:
                  self.Sigma[0]["irate"] = np.linalg.inv(self.Sigma[0]["rate"])    
 
-        self.__update_priors()
+        self._update_priors()
 
 
-    def __update_obsdist_stochastic(self,files,I,Gamma,rho):
+    def _update_obsdist_stochastic(self,files,I,Gamma,rho):
 
         Tfactor = len(files) / len(I)
         X,Y,_,_ = io.load_files(files,I)
-        self.__update_obsdist(X,Y,Gamma,Tfactor,rho)
+        self._update_obsdist(X,Y,Gamma,Tfactor,rho)
         
 
-    def __init_obsdist(self,X,Y,Gamma):
+    def _init_obsdist(self,X,Y,Gamma):
         
         K = self.hyperparameters["K"]
         q = Y.shape[1]
         if self.hyperparameters["model_beta"] != 'no': p = X.shape[1]
-        shared_covmat = (self.hyperparameters["covtype"] == 'shareddiag') or \
-                        (self.hyperparameters["covtype"] == 'sharedfull')
-        diagonal_covmat = (self.hyperparameters["covtype"] == 'shareddiag') or \
-                        (self.hyperparameters["covtype"] == 'diag') 
+        
         shared_beta = self.hyperparameters["model_beta"] == 'shared'
         shared_mean = self.hyperparameters["model_mean"] == 'shared'
         K_mean,K_beta = K,K
@@ -842,18 +838,18 @@ class glhmm():
 
         # Sigma (set to priors)
         self.Sigma = []
-        if diagonal_covmat and shared_covmat:
+        if self._is_diagonal_covmat() and self._is_shared_covmat():
             self.Sigma.append({})
             self.Sigma[0]["rate"] = np.copy(self.priors["Sigma"]["rate"])
             self.Sigma[0]["irate"] = 1 / self.Sigma[0]["rate"]
             self.Sigma[0]["shape"] = self.priors["Sigma"]["shape"]
-        elif diagonal_covmat and not shared_covmat:
+        elif self._is_diagonal_covmat() and not self._is_shared_covmat():
             for k in range(K):
                 self.Sigma.append({})
                 self.Sigma[k]["rate"] = np.copy(self.priors["Sigma"]["rate"])
                 self.Sigma[k]["irate"] = 1 / self.Sigma[k]["rate"]
                 self.Sigma[k]["shape"] = self.priors["Sigma"]["shape"]
-        elif not diagonal_covmat and shared_covmat:
+        elif not self._is_diagonal_covmat() and self._is_shared_covmat():
             self.Sigma.append({})
             self.Sigma[0]["rate"] = np.copy(self.priors["Sigma"]["rate"])
             self.Sigma[0]["irate"] = np.linalg.inv(self.Sigma[0]["rate"])
@@ -871,7 +867,7 @@ class glhmm():
             for k in range(K_beta):
                 self.beta.append({})
                 self.beta[k]["Mu"] = np.zeros((p,q))
-                if diagonal_covmat: 
+                if self._is_diagonal_covmat(): 
                     self.beta[k]["Sigma"] = np.zeros((p,p,q))
                     for j in range(q): self.beta[k]["Sigma"][:,:,j] = 0.01 * np.eye(p)
                 else: self.beta[k]["Sigma"] = 0.01 * np.eye(p*q)
@@ -880,34 +876,34 @@ class glhmm():
             for k in range(K_mean):
                 self.mean.append({})  
                 self.mean[k]["Mu"] = np.zeros(q)
-                if diagonal_covmat: self.mean[k]["Sigma"] = 0.01 * np.ones(q)
+                if self._is_diagonal_covmat(): self.mean[k]["Sigma"] = 0.01 * np.ones(q)
                 else: self.mean[k]["Sigma"] = 0.01 * np.eye(q)
 
         # do beta and mean conventionally, and redo alpha and Sigma
-        self.__update_obsdist(X,Y,Gamma)
+        self._update_obsdist(X,Y,Gamma)
 
 
-    def __init_obsdist_stochastic(self,files,I,Gamma):
+    def _init_obsdist_stochastic(self,files,I,Gamma):
 
         X,Y,_,_ = io.load_files(files,I)
-        self.__init_obsdist(X,Y,Gamma)
+        self._init_obsdist(X,Y,Gamma)
 
 
-    def __init_stochastic(self,files,options):
+    def _init_stochastic(self,files,options):
 
         N = len(files)
         I = np.random.choice(np.arange(N), size=options["initNbatch"], replace=False)
         X,Y,indices,_ = io.load_files(files,I)
-        Gamma = self.__init_Gamma(X,Y,indices,options)
-        self.__init_priors(files=files)
-        self.__init_dynamics(Gamma,indices=indices)
-        self.__init_obsdist_stochastic(files,I,Gamma)
-        self.__update_priors()
+        Gamma = self._init_Gamma(X,Y,indices,options)
+        self._init_priors(files=files)
+        self._init_dynamics(Gamma,indices=indices)
+        self._init_obsdist_stochastic(files,I,Gamma)
+        self._update_priors()
 
 
-    def __train_stochastic(self,files,Gamma,options):
+    def _train_stochastic(self,files,Gamma,options):
         
-        options = self.__check_options_stochastic(options,files)
+        options = self._check_options_stochastic(options,files)
         
         N = len(files)
         K = self.hyperparameters["K"]
@@ -917,16 +913,16 @@ class glhmm():
         # init model with a subset of subjects
         if not self.trained:
             if Gamma is None: 
-                self.__init_stochastic(files,options)
+                self._init_stochastic(files,options)
             else:
                 I = np.random.choice(np.arange(N), size=options["initNbatch"], replace=False)
                 X,Y,indices,_ = io.load_files(files,I)
                 _,_,indices_all,_ = io.load_files(files,do_only_indices=True)
                 Gamma_subset = auxiliary.slice_matrix(Gamma,indices)
-                self.__init_priors(files=files)
-                self.__init_dynamics(Gamma,indices=indices_all)
-                self.__update_obsdist_stochastic(files,I,Gamma_subset,1)
-                self.__update_priors()
+                self._init_priors(files=files)
+                self._init_dynamics(Gamma,indices=indices_all)
+                self._update_obsdist_stochastic(files,I,Gamma_subset,1)
+                self._update_priors()
             self.trained = True        
 
         fe = np.empty(0)
@@ -995,10 +991,10 @@ class glhmm():
                     Dir2d_alpha_each[:,:,I[j]] = np.sum(Xi[tt_j,:,:],axis=0)
                 Dir_alpha = Tfactor * np.sum(Dir_alpha_each[:,ever_used],axis=1)
                 Dir2d_alpha = Tfactor * np.sum(Dir2d_alpha_each[:,:,ever_used],axis=2)
-                self.__update_dynamics(Dir_alpha=Dir_alpha,Dir2d_alpha=Dir2d_alpha,rho=rho)
+                self._update_dynamics(Dir_alpha=Dir_alpha,Dir2d_alpha=Dir2d_alpha,rho=rho)
 
             if options["updateObs"]:
-                self.__update_obsdist(X,Y,Gamma,Tfactor,rho)
+                self._update_obsdist(X,Y,Gamma,Tfactor,rho)
 
             # collect subject specific free energy terms
             for j in range(options["Nbatch"]):
@@ -1097,7 +1093,7 @@ class glhmm():
         L = np.zeros((T,K))
         cache = {}
         for k in range(K):
-            self.__loglikelihood_k(X,Y,L,k,cache)
+            self._loglikelihood_k(X,Y,L,k,cache)
 
         return L
 
@@ -1179,10 +1175,10 @@ class glhmm():
         N = indices.shape[0]
 
         if viterbi: 
-            vpath = self.__forward_backward_vp(L,indices_sliced)
+            vpath = self._forward_backward_vp(L,indices_sliced)
             return vpath
         else:
-            Gamma,Xi,scale = self.__forward_backward(L,indices_sliced)
+            Gamma,Xi,scale = self._forward_backward(L,indices_sliced)
             return Gamma,Xi,scale
 
 
@@ -1262,10 +1258,6 @@ class glhmm():
             raise Exception("The model has not yet been trained") 
 
         K = self.hyperparameters["K"]
-        shared_covmat = (self.hyperparameters["covtype"] == 'shareddiag') or \
-                        (self.hyperparameters["covtype"] == 'sharedfull')
-        diagonal_covmat = (self.hyperparameters["covtype"] == 'shareddiag') or \
-                        (self.hyperparameters["covtype"] == 'diag')  
 
         if len(np.zeros(100).shape)==1: # T
             T = size
@@ -1302,15 +1294,15 @@ class glhmm():
                 Y += (X @ self.beta[k]["Mu"]) * np.expand_dims(Gamma[:,k],axis=1)
 
         # Y, covariance
-        if shared_covmat:
+        if self._is_shared_covmat():
             C = self.Sigma[0]["rate"] / self.Sigma[0]["shape"]
-            if diagonal_covmat:
+            if self._is_diagonal_covmat():
                 Y += rng.normal(loc=np.zeros(q),scale=C,size=Y.shape)
             else:
                 Y += rng.multivariate_normal(loc=np.zeros(q),cov=C,size=Y.shape)
         else:
             for k in range(K):
-                if diagonal_covmat:
+                if self._is_diagonal_covmat():
                     Y += rng.normal(loc=np.zeros(q),scale=C,size=Y.shape)  \
                         * np.expand_dims(Gamma[:,k],axis=1)
                 else:
@@ -1455,10 +1447,7 @@ class glhmm():
             todo = (True,True,True,True,True)
 
         K = self.hyperparameters["K"]
-        shared_covmat = (self.hyperparameters["covtype"] == 'shareddiag') or \
-                (self.hyperparameters["covtype"] == 'sharedfull')
-        diagonal_covmat = (self.hyperparameters["covtype"] == 'shareddiag') or \
-                        (self.hyperparameters["covtype"] == 'diag')  
+        
         shared_beta = self.hyperparameters["model_beta"] == 'shared'
         shared_mean = self.hyperparameters["model_mean"] == 'shared'
         K_mean,K_beta = K,K
@@ -1481,7 +1470,7 @@ class glhmm():
             if todo[1]:
                 fe_some_terms[1] = -np.sum(self.loglikelihood(X,Y) * Gamma)     
             if todo[2]:
-                fe_some_terms[2] = -self.__Gamma_loglikelihood(Gamma,Xi,indices)     
+                fe_some_terms[2] = -self._Gamma_loglikelihood(Gamma,Xi,indices)     
             
         else: # short way if we have the scale variables from the forward-backward algorithm 
             use_scale = True
@@ -1498,7 +1487,7 @@ class glhmm():
             q = self.Sigma[0]["rate"].shape[0]
             if self.hyperparameters["model_mean"] != 'no':
                 for k in range(K_mean):
-                    if diagonal_covmat:
+                    if self._is_diagonal_covmat():
                         for j in range(q):
                             klobs.append(kl_normal_distribution( \
                                 self.mean[k]["Mu"][j], self.mean[k]["Sigma"][j], \
@@ -1522,7 +1511,7 @@ class glhmm():
                 p = self.beta[0]["Mu"].shape[0]
                 jj = np.arange(p)
                 for k in range(K_beta):
-                    if diagonal_covmat:
+                    if self._is_diagonal_covmat():
                         for j in range(q):
                             if self.hyperparameters["connectivity"] is not None:
                                 jj = np.where(self.hyperparameters["connectivity"][:,j]==1)[0]
@@ -1549,17 +1538,17 @@ class glhmm():
                                 np.reshape(self.priors["alpha_beta"]["rate"],(p*q,)) \
                         )))      
 
-            if shared_covmat and (not diagonal_covmat):
+            if self._is_shared_covmat() and (not self._is_diagonal_covmat()):
                 klobs.append(kl_wishart_distribution(self.Sigma[0]["shape"],self.Sigma[0]["rate"],\
                     self.priors["Sigma"]["shape"],self.priors["Sigma"]["rate"]))
-            elif (not shared_covmat) and (not diagonal_covmat):
+            elif (not self._is_shared_covmat()) and (not self._is_diagonal_covmat()):
                 for k in range(K):
                     klobs.append(kl_wishart_distribution(self.Sigma[k]["shape"],self.Sigma[k]["rate"],\
                         self.priors["Sigma"]["shape"],self.priors["Sigma"]["rate"]))
-            elif shared_covmat and diagonal_covmat:
+            elif self._is_shared_covmat() and self._is_diagonal_covmat():
                 klobs.append(np.sum(kl_gamma_distribution(self.Sigma[0]["shape"],self.Sigma[0]["rate"],\
                     self.priors["Sigma"]["shape"],self.priors["Sigma"]["rate"])))
-            elif (not shared_covmat) and diagonal_covmat:
+            elif (not self._is_shared_covmat()) and self._is_diagonal_covmat():
                 for k in range(K):
                     klobs.append(np.sum(kl_gamma_distribution(self.Sigma[k]["shape"],self.Sigma[k]["rate"],\
                         self.priors["Sigma"]["shape"],self.priors["Sigma"]["rate"])))
@@ -1791,8 +1780,8 @@ class glhmm():
             Gamma,Xi,_ = self.decode(X,Y,indices)
 
         hmm_dual = copy.deepcopy(self)
-        hmm_dual.__update_dynamics(Gamma,Xi,indices)
-        hmm_dual.__update_obsdist(X,Y,Gamma)
+        hmm_dual._update_dynamics(Gamma,Xi,indices)
+        hmm_dual._update_obsdist(X,Y,Gamma)
 
         # for j in range(N):
         #     tt = np.arange(indices[j,0],indices[j,1])
@@ -1872,10 +1861,10 @@ class glhmm():
                 raise Exception("For stochastic learning, argument 'files' must be provided")
             if (X is not None) or (Y is not None):
                 warnings.warn("X and Y are not used in stochastic learning")
-            fe = self.__train_stochastic(files,Gamma,options)
+            fe = self._train_stochastic(files,Gamma,options)
             return np.empty(0),np.empty(0),fe
 
-        options = self.__check_options(options)
+        options = self._check_options(options)
         K = self.hyperparameters["K"]
 
         if files is not None:
@@ -1890,11 +1879,11 @@ class glhmm():
         if options["verbose"]: start = time.time()
 
         if not self.trained:
-            if Gamma is None: Gamma = self.__init_Gamma(X,Y,indices,options)
-            self.__init_priors(X,Y)
-            self.__init_dynamics(Gamma,indices=indices)
-            self.__init_obsdist(X,Y,Gamma)
-            self.__update_priors()
+            if Gamma is None: Gamma = self._init_Gamma(X,Y,indices,options)
+            self._init_priors(X,Y)
+            self._init_dynamics(Gamma,indices=indices)
+            self._init_obsdist(X,Y,Gamma)
+            self._update_priors()
             self.trained = True
 
         fe = np.empty(0)
@@ -1906,7 +1895,7 @@ class glhmm():
 
                 # E-step
                 Gamma,Xi,scale = self.decode(X,Y,indices)
-                status = self.__check_Gamma(Gamma)
+                status = self._check_Gamma(Gamma)
                 if status:
                     warnings.warn('Gamma has almost zero variance: stuck in a weird solution')
                 
@@ -1926,7 +1915,7 @@ class glhmm():
                 # while status:
                 #     self.perturb(epsilon)
                 #     Gamma,Xi,scale = self.decode(X,Y,indices)
-                #     status = self.__check_Gamma(Gamma)
+                #     status = self._check_Gamma(Gamma)
                 #     epsilon *= 2
 
             # if we use the scale to compute the FE, it's only valid after the E-step
@@ -1948,10 +1937,10 @@ class glhmm():
 
             # M-step
             if options["updateDyn"]:
-                self.__update_dynamics(Gamma,Xi,indices)
+                self._update_dynamics(Gamma,Xi,indices)
 
             if options["updateObs"]:
-                self.__update_obsdist(X,Y,Gamma)
+                self._update_obsdist(X,Y,Gamma)
                 
         K_active = np.sum(self.active_states)
         if options["verbose"]:
