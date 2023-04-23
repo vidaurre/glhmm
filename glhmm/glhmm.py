@@ -5,19 +5,18 @@ Gaussian Linear Hidden Markov Model
 @author: Diego Vidaurre 2023
 """
 
-import numpy as np
+import copy
 import math
+import sys
+import time
+import warnings
+
+from hmmlearn._kl_divergence import kl_dirichlet, kl_normal_distribution, kl_multivariate_normal_distribution
+from hmmlearn._kl_divergence import kl_gamma_distribution, kl_wishart_distribution
+import numpy as np
 import scipy
 import scipy.special
 import scipy.spatial
-import sys
-import warnings
-import copy
-import time
-
-# import auxiliary
-# import io_glhmm
-# import utils
 
 from . import auxiliary
 from . import io_glhmm as io
@@ -1490,9 +1489,9 @@ class glhmm():
 
         kldyn = []
         if todo[3]:
-            kldyn.append(auxiliary.dirichlet_kl(self.Dir_alpha,self.priors["Dir_alpha"]))
+            kldyn.append(kl_dirichlet(self.Dir_alpha,self.priors["Dir_alpha"]))
             for k in range(K):
-                kldyn.append(auxiliary.dirichlet_kl(self.Dir2d_alpha[k,:],self.priors["Dir2d_alpha"][k,:]))
+                kldyn.append(kl_dirichlet(self.Dir2d_alpha[k,:],self.priors["Dir2d_alpha"][k,:]))
 
         klobs = []
         if todo[4]:
@@ -1501,20 +1500,20 @@ class glhmm():
                 for k in range(K_mean):
                     if diagonal_covmat:
                         for j in range(q):
-                            klobs.append(auxiliary.gauss1d_kl( \
+                            klobs.append(kl_normal_distribution( \
                                 self.mean[k]["Mu"][j], self.mean[k]["Sigma"][j], \
                                 0,self.alpha_mean[k]["rate"][j] / self.alpha_mean[k]["shape"] \
                             ))
-                            klobs.append(auxiliary.gamma_kl(
+                            klobs.append(kl_gamma_distribution(
                                 self.alpha_mean[k]["shape"],self.alpha_mean[k]["rate"][j], \
                                 self.priors["alpha_mean"]["shape"],self.priors["alpha_mean"]["rate"][j] \
                             ))
                     else:
-                        klobs.append(auxiliary.gauss_kl( \
+                        klobs.append(kl_multivariate_normal_distribution( \
                             self.mean[k]["Mu"],self.mean[k]["Sigma"], \
                             np.zeros(q),np.diag(self.alpha_mean[k]["rate"] / self.alpha_mean[k]["shape"]) \
                         ))
-                        klobs.append(np.sum(auxiliary.gamma_kl( \
+                        klobs.append(np.sum(kl_gamma_distribution( \
                             self.alpha_mean[k]["shape"],self.alpha_mean[k]["rate"],\
                             self.priors["alpha_mean"]["shape"],self.priors["alpha_mean"]["rate"] \
                         )))   
@@ -1528,22 +1527,22 @@ class glhmm():
                             if self.hyperparameters["connectivity"] is not None:
                                 jj = np.where(self.hyperparameters["connectivity"][:,j]==1)[0]
                             pj = len(jj)
-                            klobs.append(auxiliary.gauss_kl( \
+                            klobs.append(kl_multivariate_normal_distribution( \
                                 self.beta[k]["Mu"][jj,j], self.beta[k]["Sigma"][jj,jj[:,np.newaxis],j], \
                                 np.zeros((pj,)), np.diag(self.alpha_beta[k]["rate"][jj,j] / self.alpha_beta[k]["shape"]) \
                             ))
-                            klobs.append(np.sum(auxiliary.gamma_kl( \
+                            klobs.append(np.sum(kl_gamma_distribution( \
                                 self.alpha_beta[k]["shape"],self.alpha_beta[k]["rate"][jj,j], \
                                 self.priors["alpha_beta"]["shape"],self.priors["alpha_beta"]["rate"][jj,j] \
                             )))
                     else:
-                        klobs.append(auxiliary.gauss_kl(
+                        klobs.append(kl_multivariate_normal_distribution(
                             np.reshape(self.beta[k]["Mu"],(p*q,)),\
                             self.beta[k]["Sigma"],\
                             np.zeros(p*q),
                             np.diag(np.reshape(self.alpha_beta[k]["rate"],(p*q,)) / self.alpha_beta[k]["shape"]) \
                         ))
-                        klobs.append(np.sum(auxiliary.gamma_kl( \
+                        klobs.append(np.sum(kl_gamma_distribution( \
                                 self.alpha_beta[k]["shape"],\
                                 np.reshape(self.alpha_beta[k]["rate"],(p*q,)),\
                                 self.priors["alpha_beta"]["shape"],\
@@ -1551,18 +1550,18 @@ class glhmm():
                         )))      
 
             if shared_covmat and (not diagonal_covmat):
-                klobs.append(auxiliary.wishart_kl(self.Sigma[0]["shape"],self.Sigma[0]["rate"],\
+                klobs.append(kl_wishart_distribution(self.Sigma[0]["shape"],self.Sigma[0]["rate"],\
                     self.priors["Sigma"]["shape"],self.priors["Sigma"]["rate"]))
             elif (not shared_covmat) and (not diagonal_covmat):
                 for k in range(K):
-                    klobs.append(auxiliary.wishart_kl(self.Sigma[k]["shape"],self.Sigma[k]["rate"],\
+                    klobs.append(kl_wishart_distribution(self.Sigma[k]["shape"],self.Sigma[k]["rate"],\
                         self.priors["Sigma"]["shape"],self.priors["Sigma"]["rate"]))
             elif shared_covmat and diagonal_covmat:
-                klobs.append(np.sum(auxiliary.gamma_kl(self.Sigma[0]["shape"],self.Sigma[0]["rate"],\
+                klobs.append(np.sum(kl_gamma_distribution(self.Sigma[0]["shape"],self.Sigma[0]["rate"],\
                     self.priors["Sigma"]["shape"],self.priors["Sigma"]["rate"])))
             elif (not shared_covmat) and diagonal_covmat:
                 for k in range(K):
-                    klobs.append(np.sum(auxiliary.gamma_kl(self.Sigma[k]["shape"],self.Sigma[k]["rate"],\
+                    klobs.append(np.sum(kl_gamma_distribution(self.Sigma[k]["shape"],self.Sigma[k]["rate"],\
                         self.priors["Sigma"]["shape"],self.priors["Sigma"]["rate"])))
 
         if use_scale:
