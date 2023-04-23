@@ -15,6 +15,7 @@ import numpy as np
 import scipy
 import scipy.special
 import scipy.spatial
+from sklearn.utils.validation import check_is_fitted
 
 from . import auxiliary
 from . import io_glhmm as io
@@ -82,8 +83,6 @@ class GLHMM():
         self.connectivity = connectivity
         self.Pstructure = Pstructure
         self.Pistructure = Pistructure
-        
-        self.trained = False
         
     # Utility functions
     def _check(self):
@@ -955,7 +954,16 @@ class GLHMM():
         if options["verbose"]: start = time.time()
 
         # init model with a subset of subjects
-        if not self.trained:
+        try:
+            check_is_fitted(self)
+        except:
+            self.mean_ = None
+            self.beta_ = None
+            self.alpha_mean_ = None
+            self.alpha_beta_ = None
+            self.sigma_ = None
+            self.active_states_ = np.ones(n_components,dtype=bool)
+            
             if Gamma is None: 
                 self._init_stochastic(files,options)
             else:
@@ -967,7 +975,6 @@ class GLHMM():
                 self._init_dynamics(Gamma,indices=indices_all)
                 self._update_obsdist_stochastic(files,I,Gamma_subset,1)
                 self._update_priors()
-            self.trained = True        
 
         fe = np.empty(0)
         loglik_entropy = np.zeros((N,2)) # data likelihood and Gamma likelihood & entropy
@@ -1128,8 +1135,7 @@ class GLHMM():
             If the model has not been trained.
         """
 
-        if not self.trained: 
-            raise Exception("The model has not yet been trained") 
+        check_is_fitted(self)
 
         n_components = self.n_components
         T = Y.shape[0]
@@ -1186,8 +1192,7 @@ class GLHMM():
         if (files is not None) and (Y is not None):
             raise Exception("Argument 'files' cannot be used if the data (Y) is also provided")
 
-        if not self.trained: 
-            raise Exception("The model has not yet been trained") 
+        check_is_fitted(self)
 
         if files is not None:
             X,Y,indices,_ = io.load_files(files)
@@ -1243,8 +1248,7 @@ class GLHMM():
 
         """ 
 
-        #if not self.trained: 
-        #    raise Exception("The model has not yet been trained") 
+        #check_is_fitted(self)
 
         n_components = self.n_components
         if len(size.shape)==1: # T
@@ -1296,10 +1300,7 @@ class GLHMM():
                The timeseries of set of variables 1.
 
         """
-
-
-        if not self.trained: 
-            raise Exception("The model has not yet been trained") 
+        check_is_fitted(self)
 
         n_components = self.n_components
 
@@ -1399,8 +1400,7 @@ class GLHMM():
         
         """
 
-        if not self.trained: 
-            raise Exception("The model has not yet been trained") 
+        check_is_fitted(self)
 
         n_components = self.n_components
         q = Y.shape[1]
@@ -1484,8 +1484,7 @@ class GLHMM():
         [^1] Smith, J. et al. "A variational approach to Bayesian learning of switching dynamics in dynamical systems." Journal of Machine Learning Research, vol. 18, no. 4, 2017.
         """
 
-        if not self.trained: 
-            raise Exception("The model has not yet been trained") 
+        check_is_fitted(self)
 
         if todo is None: # Gamma_entropy, data loglik, Gamma loglik, P/Pi KL, state KL 
             todo = (True,True,True,True,True)
@@ -1630,8 +1629,7 @@ class GLHMM():
             If the model has not been trained.
 
         """
-        if not self.trained: 
-            raise Exception("The model has not yet been trained") 
+        check_is_fitted(self)
 
         return self.sigma_[k]["rate"] / self.sigma_[k]["shape"]
 
@@ -1655,8 +1653,7 @@ class GLHMM():
             If the model has not been trained.
         
         """
-        if not self.trained: 
-            raise Exception("The model has not yet been trained") 
+        check_is_fitted(self)
 
         return self.sigma_[k]["irate"] * self.sigma_[k]["shape"]
 
@@ -1681,8 +1678,7 @@ class GLHMM():
             If the model has no beta.
         """
 
-        if not self.trained: 
-            raise Exception("The model has not yet been trained") 
+        check_is_fitted(self)
 
         if self.model_beta is None:
             raise Exception("The model has no beta")
@@ -1706,8 +1702,7 @@ class GLHMM():
             If the model has no beta.
         """
 
-        if not self.trained: 
-            raise Exception("The model has not yet been trained") 
+        check_is_fitted(self)
 
         if self.model_beta is None:
             raise Exception("The model has no beta")
@@ -1740,8 +1735,7 @@ class GLHMM():
             If the model has no mean.
         """
 
-        if not self.trained: 
-            raise Exception("The model has not yet been trained") 
+        check_is_fitted(self)
 
         if self.model_mean is None:
             raise Exception("The model has no mean")
@@ -1765,8 +1759,7 @@ class GLHMM():
             If the model has no mean.
         """
 
-        if not self.trained: 
-            raise Exception("The model has not yet been trained") 
+        check_is_fitted(self)
 
         if self.model_mean is None:
             raise Exception("The model has no mean")
@@ -1807,8 +1800,7 @@ class GLHMM():
             A copy of the HMM object with updated dynamics and observation distributions.
         """
         
-        if not self.trained: 
-            raise Exception("The model has not yet been trained") 
+        check_is_fitted(self)
 
         if indices is None: # one big chunk with no cuts
             indices = np.zeros((1,2)).astype(int)
@@ -1889,12 +1881,6 @@ class GLHMM():
             If 'files' is not provided and stochastic learning is called upon
         """
         self._check()
-        self.mean_ = None
-        self.beta_ = None
-        self.alpha_mean_ = None
-        self.alpha_beta_ = None
-        self.sigma_ = None
-        self.active_states_ = np.ones(n_components,dtype=bool)
 
         stochastic = (options is not None) and ("stochastic" in options) and (options["stochastic"])
         
@@ -1929,13 +1915,21 @@ class GLHMM():
 
         if options["verbose"]: start = time.time()
 
-        if not self.trained:
+        try:
+            check_is_fitted(self)
+        except:
+            self.mean_ = None
+            self.beta_ = None
+            self.alpha_mean_ = None
+            self.alpha_beta_ = None
+            self.sigma_ = None
+            self.active_states_ = np.ones(n_components,dtype=bool)
+            
             if Gamma is None: Gamma = self._init_Gamma(X,Y,indices,options)
             self._init_priors(X,Y)
             self._init_dynamics(Gamma,indices=indices)
             self._init_obsdist(X,Y,Gamma)
             self._update_priors()
-            self.trained = True
 
         fe = np.empty(0)
         cyc_to_go = options["cyc_to_go_under_th"]
@@ -2002,3 +1996,5 @@ class GLHMM():
 
         return Gamma,Xi,fe
 
+    def fit(self):
+        pass
