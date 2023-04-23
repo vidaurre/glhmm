@@ -28,8 +28,8 @@ class GLHMM():
     
     Attributes:
     -----------
-    K : int, default=10
-        number of states in the model.
+    n_components : int, default=10
+        Number of states.
     covtype : str, {'shareddiag', 'diag','sharedfull','full'}, default 'shareddiag'
         Type of covariance matrix. Choose 'shareddiag' to have one diagonal covariance matrix for all states, 
         or 'diag' to have a diagonal full covariance matrix for each state, 
@@ -62,7 +62,7 @@ class GLHMM():
     ### Private methods
 
     def __init__(self,
-        K=10, # model options
+        n_components=10, # model options
         covtype='shareddiag', 
         model_mean='state',
         model_beta='state',
@@ -76,18 +76,18 @@ class GLHMM():
             warnings.warn('Parameter connectivity can only be used with a diagonal covariance matrix')
             connectivity = None
 
-        self.K = K
+        self.n_components = n_components
         self.covtype = covtype
         self.model_mean = model_mean
         self.model_beta = model_beta
         self.dirichlet_diag = dirichlet_diag
         self.connectivity = connectivity
         if Pstructure is None:
-            self.Pstructure = np.ones((K,K), dtype=bool)
+            self.Pstructure = np.ones((n_components,n_components), dtype=bool)
         else:
             self.Pstructure = Pstructure
         if Pistructure is None:
-            self.Pistructure = np.ones((K,), dtype=bool)       
+            self.Pistructure = np.ones((n_components,), dtype=bool)       
         else:
             self.Pistructure = Pistructure
 
@@ -97,7 +97,7 @@ class GLHMM():
         self.alpha_beta = None
         self.alpha_mean = None
         self.Sigma = None
-        self.active_states = np.ones(K,dtype=bool)
+        self.active_states = np.ones(n_components,dtype=bool)
         self.trained = False
         
     # Utility functions
@@ -122,10 +122,10 @@ class GLHMM():
         if len(ind.shape) == 1:
             ind = np.expand_dims(indices,axis=0)
 
-        T,K = L.shape
+        T,n_components = L.shape
         N = ind.shape[0]
-        Gamma = np.zeros((T,K))
-        Xi = np.zeros((T-N,K,K))
+        Gamma = np.zeros((T,n_components))
+        Xi = np.zeros((T-N,n_components,n_components))
         scale = np.zeros(T)
         indices_Xi = auxiliary.Gamma_indices_to_Xi_indices(ind)
 
@@ -168,9 +168,9 @@ class GLHMM():
         if len(ind.shape) == 1:
             ind = np.expand_dims(indices,axis=0)
 
-        T,K = L.shape
+        T,n_components = L.shape
         N = ind.shape[0]
-        vpath = np.zeros((T,K))
+        vpath = np.zeros((T,n_components))
         
         for j in range(N):
             tt = range(ind[j,0],ind[j,1])
@@ -322,11 +322,11 @@ class GLHMM():
 
     @staticmethod
     def _check_Gamma(Gamma):
-        K = Gamma.shape[1]
+        n_components = Gamma.shape[1]
         if np.any(np.isnan(Gamma)):
             raise Exception("NaN were generated in the state time courses, probably due to an artifacts") 
         status = np.all(np.std(Gamma,axis=0)<0.001)
-        #status = (np.max(Gamma)<0.6) and (np.min(Gamma)>(1/K/2))
+        #status = (np.max(Gamma)<0.6) and (np.min(Gamma)>(1/n_components/2))
         return status
 
         
@@ -358,50 +358,50 @@ class GLHMM():
                 
                 
     def _update_Pi(self):
-        K = self.K
-        self.Pi = np.zeros((K,))
+        n_components = self.n_components
+        self.Pi = np.zeros((n_components,))
         PsiSum0 = scipy.special.psi(sum(self.Dir_alpha))
-        for k in range(K):
+        for k in range(n_components):
             if self.Dir_alpha[k] == 0: continue
             self.Pi[k] = math.exp(scipy.special.psi(self.Dir_alpha[k])-PsiSum0)
         self.Pi = self.Pi / np.sum(self.Pi)
 
 
     def _update_P(self):
-        K = self.K
-        self.P = np.zeros((K,K))
-        for j in range(K):
+        n_components = self.n_components
+        self.P = np.zeros((n_components,n_components))
+        for j in range(n_components):
             PsiSum = scipy.special.psi(sum(self.Dir2d_alpha[j,:]))
-            for k in range(K):    
+            for k in range(n_components):    
                 if self.Dir2d_alpha[j,k] == 0: continue
                 self.P[j,k] = math.exp(scipy.special.psi(self.Dir2d_alpha[j,k])-PsiSum)
             self.P[j,:] = self.P[j,:] / np.sum(self.P[j,:])
 
 
     def _Gamma_loglikelihood(self,Gamma,Xi,indices):
-        K = self.K
+        n_components = self.n_components
         minreal = sys.float_info.min
         Gamma_0 = Gamma[indices[:,0]]
         Gamma_0[Gamma_0 < minreal] = minreal
         PsiDir_alphasum = scipy.special.psi(sum(self.Dir_alpha))
         L = 0
-        for k in range(K):
+        for k in range(n_components):
             L += np.sum(Gamma_0[:,k]) * (scipy.special.psi(self.Dir_alpha[k]) - PsiDir_alphasum)
-        PsiDir2d_alphasum = np.zeros(K)
-        for l in range(K): PsiDir2d_alphasum[l] = scipy.special.psi(sum(self.Dir2d_alpha[l,:]))
-        for k in range(K):
-            for l in range(K):
+        PsiDir2d_alphasum = np.zeros(n_components)
+        for l in range(n_components): PsiDir2d_alphasum[l] = scipy.special.psi(sum(self.Dir2d_alpha[l,:]))
+        for k in range(n_components):
+            for l in range(n_components):
                 L += np.sum(Xi[:,l,k]) * (scipy.special.psi(self.Dir2d_alpha[l,k]) - PsiDir2d_alphasum[l])
         return L
 
 
     def _update_priors(self):
 
-        K = self.K
+        n_components = self.n_components
            
         shared_beta = self.model_beta == 'shared'
         shared_mean = self.model_mean == 'shared'
-        K_mean,K_beta = K,K
+        K_mean,K_beta = n_components,n_components
         if shared_mean: K_mean = 1
         if shared_beta: K_beta = 1
 
@@ -447,11 +447,11 @@ class GLHMM():
 
     def _init_priors_sub(self,prior_rate,prior_shape,p,q):
 
-        K = self.K
+        n_components = self.n_components
         shared_beta = self.model_beta == 'shared'
         shared_mean = self.model_mean == 'shared'
         
-        K_mean,K_beta = K,K
+        K_mean,K_beta = n_components,n_components
         if shared_mean: K_mean = 1
         if shared_beta: K_beta = 1
         
@@ -490,13 +490,13 @@ class GLHMM():
 
 
     def _init_prior_P_Pi(self):
-        K = self.K
+        n_components = self.n_components
         # priors for dynamics
         self.priors = {}
-        self.priors["Dir_alpha"] = np.ones(K)
+        self.priors["Dir_alpha"] = np.ones(n_components)
         #self.priors["Dir_alpha"][self.Pistructure] = 1
-        self.priors["Dir2d_alpha"] = np.ones((K,K))
-        for k in range(K):
+        self.priors["Dir2d_alpha"] = np.ones((n_components,n_components))
+        for k in range(n_components):
             #self.priors["Dir2d_alpha"][self.Pstructure[k,],:] = 1
             self.priors["Dir2d_alpha"][k,k] = self.dirichlet_diag
 
@@ -612,18 +612,18 @@ class GLHMM():
         Update state distributions
         """        
         
-        K = self.K
+        n_components = self.n_components
         T,q = Y.shape
         if self.model_beta != 'no': p = X.shape[1]
         
         shared_beta = self.model_beta == 'shared'
         shared_mean = self.model_mean == 'shared'
-        K_mean,K_beta = K,K
+        K_mean,K_beta = n_components,n_components
         if shared_mean: K_mean = 1
         if shared_beta: K_beta = 1
         if self.model_beta != 'no':
-            XGX = np.zeros((p,p,K))
-            for k in range(K): XGX[:,:,k] = (X * np.expand_dims(Gamma[:,k],axis=1)).T @ X
+            XGX = np.zeros((p,p,n_components))
+            for k in range(n_components): XGX[:,:,k] = (X * np.expand_dims(Gamma[:,k],axis=1)).T @ X
             XGXb = np.expand_dims(np.sum(XGX,axis=2),axis=2) if shared_beta else XGX
         Gb = np.ones((T,1)) if shared_beta else Gamma
         Gm = np.ones((T,1)) if shared_mean else Gamma
@@ -722,7 +722,7 @@ class GLHMM():
                 rate = np.copy(self.priors["Sigma"]["rate"])
                 shape = self.priors["Sigma"]["shape"] + Tfactor * T
 
-        for k in range(K):
+        for k in range(n_components):
 
             d = np.copy(Y) 
 
@@ -809,13 +809,13 @@ class GLHMM():
 
     def _init_obsdist(self,X,Y,Gamma):
         
-        K = self.K
+        n_components = self.n_components
         q = Y.shape[1]
         if self.model_beta != 'no': p = X.shape[1]
         
         shared_beta = self.model_beta == 'shared'
         shared_mean = self.model_mean == 'shared'
-        K_mean,K_beta = K,K
+        K_mean,K_beta = n_components,n_components
         if shared_mean: K_mean = 1
         if shared_beta: K_beta = 1
 
@@ -842,7 +842,7 @@ class GLHMM():
             self.Sigma[0]["irate"] = 1 / self.Sigma[0]["rate"]
             self.Sigma[0]["shape"] = self.priors["Sigma"]["shape"]
         elif self._is_diagonal_covmat() and not self._is_shared_covmat():
-            for k in range(K):
+            for k in range(n_components):
                 self.Sigma.append({})
                 self.Sigma[k]["rate"] = np.copy(self.priors["Sigma"]["rate"])
                 self.Sigma[k]["irate"] = 1 / self.Sigma[k]["rate"]
@@ -853,7 +853,7 @@ class GLHMM():
             self.Sigma[0]["irate"] = np.linalg.inv(self.Sigma[0]["rate"])
             self.Sigma[0]["shape"] = self.priors["Sigma"]["shape"] 
         else: # not diagonal_covmat and not shared_covmat
-            for k in range(K):
+            for k in range(n_components):
                 self.Sigma.append({})
                 self.Sigma[k]["rate"] = np.copy(self.priors["Sigma"]["rate"])
                 self.Sigma[k]["irate"] = np.linalg.inv(self.Sigma[k]["rate"])
@@ -904,7 +904,7 @@ class GLHMM():
         options = self._check_options_stochastic(options,files)
         
         N = len(files)
-        K = self.K
+        n_components = self.n_components
 
         if options["verbose"]: start = time.time()
 
@@ -929,9 +929,9 @@ class GLHMM():
         sampling_prob = np.ones(N) / N
         ever_used = np.zeros(N).astype(bool)
 
-        sum_Gamma = np.zeros((K,N))
-        Dir_alpha_each = np.zeros((K,N))
-        Dir2d_alpha_each = np.zeros((K,K,N))
+        sum_Gamma = np.zeros((n_components,N))
+        Dir_alpha_each = np.zeros((n_components,N))
+        Dir2d_alpha_each = np.zeros((n_components,n_components,N))
         warm_up = True
         cyc_to_go =  options["cyc_to_go_under_th"]
         it,itw,rho = 0,0,1
@@ -971,7 +971,7 @@ class GLHMM():
             
             # which states are active? 
             if not warm_up and options["deactivate_states"]:
-                for k in range(K):
+                for k in range(n_components):
                     FO = np.sum(sum_Gamma[k,:])
                     active_state = self.active_states[k]
                     self.active_states[k] = FO > options["threshold_active"]
@@ -1085,12 +1085,12 @@ class GLHMM():
         if not self.trained: 
             raise Exception("The model has not yet been trained") 
 
-        K = self.K
+        n_components = self.n_components
         T = Y.shape[0]
 
-        L = np.zeros((T,K))
+        L = np.zeros((T,n_components))
         cache = {}
-        for k in range(K):
+        for k in range(n_components):
             self._loglikelihood_k(X,Y,L,k,cache)
 
         return L
@@ -1200,7 +1200,7 @@ class GLHMM():
         #if not self.trained: 
         #    raise Exception("The model has not yet been trained") 
 
-        K = self.K
+        n_components = self.n_components
         if len(size.shape)==1: # T
             T = size
             indices = auxiliary.make_indices_from_T(T)
@@ -1210,13 +1210,13 @@ class GLHMM():
                 indices = np.expand_dims(indices,axis=0)
             T = size[:,1] - size[:,0]
 
-        Gamma = np.zeros((np.sum(T),K))
+        Gamma = np.zeros((np.sum(T),n_components))
         N = indices.shape[0]
         rng = np.random.default_rng()
 
         for j in range(N):
             tt = np.arange(indices[j,0],indices[j,1])
-            gamma = np.zeros((T[j],K))
+            gamma = np.zeros((T[j],n_components))
             gamma[0,:] = rng.multinomial(1,self.Pi)
             for t in range(1,T[j]):
                 k = np.where(gamma[t-1,:])[0][0]
@@ -1255,7 +1255,7 @@ class GLHMM():
         if not self.trained: 
             raise Exception("The model has not yet been trained") 
 
-        K = self.K
+        n_components = self.n_components
 
         if len(np.zeros(100).shape)==1: # T
             T = size
@@ -1285,7 +1285,7 @@ class GLHMM():
         if self.model_beta == 'shared':
             Y += X @ self.beta[0]["Mu"]
             
-        for k in range(K):
+        for k in range(n_components):
             if self.model_mean == 'state': 
                 Y += np.expand_dims(self.mean[k]["Mu"],axis=0) * np.expand_dims(Gamma[:,k],axis=1)
             if self.model_beta == 'state':
@@ -1299,7 +1299,7 @@ class GLHMM():
             else:
                 Y += rng.multivariate_normal(loc=np.zeros(q),cov=C,size=Y.shape)
         else:
-            for k in range(K):
+            for k in range(n_components):
                 if self._is_diagonal_covmat():
                     Y += rng.normal(loc=np.zeros(q),scale=C,size=Y.shape)  \
                         * np.expand_dims(Gamma[:,k],axis=1)
@@ -1356,7 +1356,7 @@ class GLHMM():
         if not self.trained: 
             raise Exception("The model has not yet been trained") 
 
-        K = self.K
+        n_components = self.n_components
         q = Y.shape[1]
         N = indices.shape[0]
 
@@ -1375,7 +1375,7 @@ class GLHMM():
                 d -= np.expand_dims(self.mean[0]['Mu'],axis=0)
             if self.model_beta == 'shared':
                 d -= (Xj @ self.beta[0]['Mu'])
-            for k in range(K):
+            for k in range(n_components):
                 if self.model_mean == 'state': 
                     d -= np.expand_dims(self.mean[k]['Mu'],axis=0) * np.expand_dims(Gamma[:,k],axis=1)
                 if self.model_beta == 'state':
@@ -1444,11 +1444,11 @@ class GLHMM():
         if todo is None: # Gamma_entropy, data loglik, Gamma loglik, P/Pi KL, state KL 
             todo = (True,True,True,True,True)
 
-        K = self.K
+        n_components = self.n_components
         
         shared_beta = self.model_beta == 'shared'
         shared_mean = self.model_mean == 'shared'
-        K_mean,K_beta = K,K
+        K_mean,K_beta = n_components,n_components
         if shared_mean: K_mean = 1
         if shared_beta: K_beta = 1
 
@@ -1477,7 +1477,7 @@ class GLHMM():
         kldyn = []
         if todo[3]:
             kldyn.append(kl_dirichlet(self.Dir_alpha,self.priors["Dir_alpha"]))
-            for k in range(K):
+            for k in range(n_components):
                 kldyn.append(kl_dirichlet(self.Dir2d_alpha[k,:],self.priors["Dir2d_alpha"][k,:]))
 
         klobs = []
@@ -1540,14 +1540,14 @@ class GLHMM():
                 klobs.append(kl_wishart_distribution(self.Sigma[0]["shape"],self.Sigma[0]["rate"],\
                     self.priors["Sigma"]["shape"],self.priors["Sigma"]["rate"]))
             elif (not self._is_shared_covmat()) and (not self._is_diagonal_covmat()):
-                for k in range(K):
+                for k in range(n_components):
                     klobs.append(kl_wishart_distribution(self.Sigma[k]["shape"],self.Sigma[k]["rate"],\
                         self.priors["Sigma"]["shape"],self.priors["Sigma"]["rate"]))
             elif self._is_shared_covmat() and self._is_diagonal_covmat():
                 klobs.append(np.sum(kl_gamma_distribution(self.Sigma[0]["shape"],self.Sigma[0]["rate"],\
                     self.priors["Sigma"]["shape"],self.priors["Sigma"]["rate"])))
             elif (not self._is_shared_covmat()) and self._is_diagonal_covmat():
-                for k in range(K):
+                for k in range(n_components):
                     klobs.append(np.sum(kl_gamma_distribution(self.Sigma[k]["shape"],self.Sigma[k]["rate"],\
                         self.priors["Sigma"]["shape"],self.priors["Sigma"]["rate"])))
 
@@ -1667,9 +1667,9 @@ class GLHMM():
             raise Exception("The model has no beta")
 
         (p,q) = self.beta[0]["Mu"].shape
-        K = self.K
-        betas = np.zeros((p,q,K))
-        for k in range(K): betas[:,:,k] = self.beta[k]["Mu"]
+        n_components = self.n_components
+        betas = np.zeros((p,q,n_components))
+        for k in range(n_components): betas[:,:,k] = self.beta[k]["Mu"]
         return betas
 
 
@@ -1730,9 +1730,9 @@ class GLHMM():
         else:
             q = self.Sigma[0]["rate"].shape[0]
 
-        K = self.K
-        means = np.zeros((q,K))
-        for k in range(K): means[:,k] = self.mean[k]["Mu"]
+        n_components = self.n_components
+        means = np.zeros((q,n_components))
+        for k in range(n_components): means[:,k] = self.mean[k]["Mu"]
         return means    
 
 
@@ -1863,7 +1863,7 @@ class GLHMM():
             return np.empty(0),np.empty(0),fe
 
         options = self._check_options(options)
-        K = self.K
+        n_components = self.n_components
 
         if files is not None:
             X,Y,indices,_ = io.load_files(files)
@@ -1900,7 +1900,7 @@ class GLHMM():
                 # which states are active? 
                 if options["deactivate_states"]:
                     FO = np.sum(Gamma,axis=0)
-                    for k in range(K):
+                    for k in range(n_components):
                         active_state = self.active_states[k]
                         self.active_states[k] = FO[k] > options["threshold_active"]
                         if options["verbose"]:
