@@ -23,6 +23,10 @@ from . import io_glhmm as io
 from . import utils
 
 
+COVARIANCE_TYPES = frozenset(("diag", "shareddiag", "full", "sharedfull"))
+MODEL_MEAN_TYPES = frozenset(("state", "shared", None))
+MODEL_BETA_TYPES = frozenset(("state", "shared", None))
+
 class GLHMM():
     """ Gaussian Linear Hidden Markov Model class to decode stimulus from data.
     
@@ -30,29 +34,29 @@ class GLHMM():
     -----------
     n_components : int, default=10
         Number of states.
-    covtype : str, {'shareddiag', 'diag','sharedfull','full'}, default 'shareddiag'
+    covariance_type : str, {'shareddiag', 'diag','sharedfull','full'}, default 'shareddiag'
         Type of covariance matrix. Choose 'shareddiag' to have one diagonal covariance matrix for all states, 
         or 'diag' to have a diagonal full covariance matrix for each state, 
         or 'sharedfull' to have a shared full covariance matrix for all states,
         or 'full' to have a full covariance matrix for each state.
-    model_mean : str, {'state', 'no'}, default 'state'
+    model_mean : str, {'state', 'shared', None}, default 'state'
         Model for the mean. If `no` the mean of the timeseries will not be used to drive the states.
-    model_beta : str, {'state', 'no'}, default 'state'
+    model_beta : str, {'state', 'shared', None}, default 'state'
         Model for the beta. If `no` the regression coefficients will not be used to drive the states.
     dirichlet_diag : int, default=10
         The value of the diagonal of the Dirichlet distribution for the transition probabilities. 
         The higher the value, the more persistent the states will be. 
         Note that this value is relative; the prior competes with the data, so if the timeseries is very long, 
         the `dirichlet_diag` may have little effect unless it is set to a very large value.  
-    connectivity : array_like of shape (n_states, n_states), optional
+    connectivity : array_like of shape (n_components, n_components), optional
         Matrix of binary values defining the connectivity of the states. 
-        This parameter can only be used with a diagonal covariance matrix (i.e., `covtype='diag'`).
+        This parameter can only be used with a diagonal covariance matrix (i.e., `covariance_type='diag'`).
     Pstructure : array_like, optional
-        Binary matrix defining the allowed transitions between states.
-        The default is a (n_states, n_states) matrix of all ones, allowing all possible transitions between states.
+        NumPy array with boolean values of size (n_components, n_components) that defines the allowed transitions between states.
+        If set to None, will allow all state transitions. Default is None.
     Pistructure : array_like, optional
-        Binary vector defining the allowed initial states.
-        The default is a (n_states,) vector of all ones, allowing all states to be used as initial states.
+        NumPy array with boolean values of size (n_components,) that defines the allowed initial states.
+        If set to None, all states are allowed to be initial states. Default is None.
 
     Notes:
     ------
@@ -63,7 +67,7 @@ class GLHMM():
 
     def __init__(self,
         n_components=10, # model options
-        covtype='shareddiag', 
+        covariance_type='shareddiag', 
         model_mean='state',
         model_beta='state',
         dirichlet_diag=10,
@@ -71,25 +75,14 @@ class GLHMM():
         Pstructure=None,
         Pistructure=None
     ):
-
-        if (connectivity is not None) and ((covtype == 'shareddiag') or (covtype == 'diag')):
-            warnings.warn('Parameter connectivity can only be used with a diagonal covariance matrix')
-            connectivity = None
-
         self.n_components = n_components
-        self.covtype = covtype
+        self.covariance_type = covariance_type
         self.model_mean = model_mean
         self.model_beta = model_beta
         self.dirichlet_diag = dirichlet_diag
         self.connectivity = connectivity
-        if Pstructure is None:
-            self.Pstructure = np.ones((n_components,n_components), dtype=bool)
-        else:
-            self.Pstructure = Pstructure
-        if Pistructure is None:
-            self.Pistructure = np.ones((n_components,), dtype=bool)       
-        else:
-            self.Pistructure = Pistructure
+        self.Pstructure = Pstructure
+        self.Pistructure = Pistructure
 
 
         self.beta = None
@@ -101,13 +94,57 @@ class GLHMM():
         self.trained = False
         
     # Utility functions
+    def _check(self):
+        if type(self.n_components) != int or self.n_components < 0:
+            raise ValueError(f"n_components must be a positive integer")
+        
+        if self.covariance_type not in COVARIANCE_TYPES:
+            raise ValueError(f"covariance_type must be one of {COVARIANCE_TYPES}")
+        
+        if self.model_mean not in MODEL_MEAN_TYPES:
+            raise ValueError(f"model_mean must be on of {MODEL_MEAN_TYPES}")
+        
+        if self.model_beta not in MODEL_BETA_TYPES:
+            raise ValueError(f"model_mean must be on of {MODEL_BETA_TYPES}")
+        
+        if type(self.dirichlet_diag) != int or self.dirichlet_diag < 0:
+            raise ValueError(f"dirichlet_diag must be a positive integer")
+        
+        if self.connectivity is not None and (not self._is_diagonal_covmat()):
+            raise ValueError(
+                f"connectivity can only be used with a diagonal covariance matrix (covariance_type='diag' og covariance_type='shareddiag')"
+            )
+        
+        if self.connectivity is not None:
+            if type(self.connectivity) != np.ndarray or \
+                len(self.connectivity.shape) != 2 or \
+                self.connectivity.shape[0] != self.n_components or \
+                self.connectivity.shape[1] != self.n_components:
+                raise ValueError(f"connectivity must be of type ndarray with shape (n_components, n_components)")
+        
+        if self.Pstructure is not None:
+            if type(self.Pstructure) != np.ndarray or \
+                self.Pstructure.dtype != bool or \
+                len(self.Pstructure.dtype.shape) != 2 or \
+                self.Pstructure.shape[0] != self.n_components or \
+                self.Pstructure.shape[1] != self.n_components:
+                raise ValueError(f"Pstructure must be of type ndarray with shape (n_components, n_components)")
+        
+        if self.Pistructure is not None:
+            if type(self.Pistructure) != np.ndarray or \
+                self.Pistructure.dtype != bool or \
+                len(self.Pistructure.dtype.shape) != 1 or \
+                self.Pistructure.shape[0] != self.n_components:
+                raise ValueError(f"Pistructure must be of type ndarray with shape (n_components,)")
+        
+    
     def _is_diagonal_covmat(self):
-        diagonal_covmat = (self.covtype == 'shareddiag') or (self.covtype == 'diag')
+        diagonal_covmat = (self.covariance_type == 'shareddiag') or (self.covariance_type == 'diag')
         
         return diagonal_covmat
     
     def _is_shared_covmat(self):
-        shared_covmat = (self.covtype == 'shareddiag') or (self.covtype == 'sharedfull')
+        shared_covmat = (self.covariance_type == 'shareddiag') or (self.covariance_type == 'sharedfull')
         
         return shared_covmat
     
@@ -183,7 +220,7 @@ class GLHMM():
     def _loglikelihood_k(self,X,Y,L,k,cache):
 
         T,q = Y.shape
-        if self.model_beta != 'no': p = X.shape[1]
+        if self.model_beta is not None: p = X.shape[1]
         else: p = 0
         
         k_mean,k_beta = k,k
@@ -405,7 +442,7 @@ class GLHMM():
         if shared_mean: K_mean = 1
         if shared_beta: K_beta = 1
 
-        if self.model_mean != 'no':
+        if self.model_mean is not None:
             for k in range(K_mean):
                 if self._is_diagonal_covmat():
                     self.alpha_mean[k]["rate"] = self.priors["alpha_mean"]["rate"] \
@@ -415,7 +452,7 @@ class GLHMM():
                         + 0.5 * np.diag(self.mean[k]["Sigma"]) + self.mean[k]["Mu"] ** 2
                 self.alpha_mean[k]["shape"] = self.priors["alpha_mean"]["shape"] + 0.5
 
-        if self.model_beta != 'no':
+        if self.model_beta is not None:
             p,q = self.beta[0]["Mu"].shape
             jj = np.arange(p)
             for k in range(K_beta):
@@ -468,36 +505,46 @@ class GLHMM():
             self.priors["Sigma"]["irate"] = np.linalg.inv(self.priors["Sigma"]["rate"])
 
         # alpha (state betas and mean priors)
-        if self.model_mean != 'no':
+        if self.model_mean is not None:
             self.alpha_mean = []
             for k in range(K_mean):
                 self.alpha_mean.append({})
                 self.alpha_mean[k] = {}
-        if self.model_beta != 'no':
+        if self.model_beta is not None:
             self.alpha_beta = []
             for k in range(K_beta):
                 self.alpha_beta.append({})
                 self.alpha_beta[k] = {}
 
-        if self.model_mean != 'no':
+        if self.model_mean is not None:
                 self.priors["alpha_mean"] = {}
                 self.priors["alpha_mean"]["rate"] = 0.1 * np.ones(q)
                 self.priors["alpha_mean"]["shape"] = 0.1
-        if self.model_beta != 'no':
+        if self.model_beta is not None:
                 self.priors["alpha_beta"] = {}
                 self.priors["alpha_beta"]["rate"] = 0.1 * np.ones((p,q))
                 self.priors["alpha_beta"]["shape"] = 0.1        
 
 
     def _init_prior_P_Pi(self):
+        if self.Pstructure is None:
+            Pstructure = np.ones((self.n_components, self.n_components), dtype=bool)
+        else:
+            Pstructure = self.Pstructure
+            
+        if self.Pistructure is None:
+            Pistructure = np.ones((self.n_components,), dtype=bool)
+        else:
+            Pistructure = self.Pistructure
+        
         n_components = self.n_components
         # priors for dynamics
         self.priors = {}
         self.priors["Dir_alpha"] = np.ones(n_components)
-        #self.priors["Dir_alpha"][self.Pistructure] = 1
+        #self.priors["Dir_alpha"][Pistructure] = 1
         self.priors["Dir2d_alpha"] = np.ones((n_components,n_components))
         for k in range(n_components):
-            #self.priors["Dir2d_alpha"][self.Pstructure[k,],:] = 1
+            #self.priors["Dir2d_alpha"][Pstructure[k,],:] = 1
             self.priors["Dir2d_alpha"][k,k] = self.dirichlet_diag
 
 
@@ -505,7 +552,7 @@ class GLHMM():
 
         if not files is None: # iterative calculation
             N = len(files)
-            if self.model_mean != 'no':
+            if self.model_mean is not None:
                 for j in range(N):
                     _,Yj,_,_ = io.load_files(files,j)
                     if j == 0: 
@@ -515,7 +562,7 @@ class GLHMM():
                         m += np.sum(Yj,axis=0)
                         nt += Yj.shape[0]
                 m /= nt
-            if self.model_beta != 'no':
+            if self.model_beta is not None:
                 for j in range(N):
                     Xj,Yj,_,_ = io.load_files(files,j)
                     if j == 0: 
@@ -528,9 +575,9 @@ class GLHMM():
             for j in range(N):
                 Xj,Yj,_,_ = io.load_files(files,j)
                 if j == 0: q = Yj.shape[1]
-                if self.model_mean != 'no':
+                if self.model_mean is not None:
                     Yj -= np.expand_dims(m,axis=0)
-                if self.model_beta != 'no':
+                if self.model_beta is not None:
                     Yj -= Xj @ beta
                 rj = np.max(Yj,axis=0) - np.min(Yj,axis=0)                
                 if j == 0: r = np.copy(rj)
@@ -538,11 +585,11 @@ class GLHMM():
 
         else:
             T,q = Y.shape
-            if self.model_mean != 'no': 
+            if self.model_mean is not None: 
                 Yr = Y - np.expand_dims(np.mean(Y,axis=0),axis=0)
             else: 
                 Yr = np.copy(Y)
-            if self.model_beta != 'no':
+            if self.model_beta is not None:
                 p = X.shape[1]
                 beta = np.linalg.inv(X.T @ X + 0.1 * np.eye(p)) @ (X.T @ Yr)
                 Yr -= X @ beta
@@ -565,8 +612,15 @@ class GLHMM():
         Update transition prob matrix and initial probabilities
         """
 
-        Pistructure = self.Pistructure
-        Pstructure = self.Pstructure
+        if self.Pstructure is None:
+            Pstructure = np.ones((self.n_components, self.n_components), dtype=bool)
+        else:
+            Pstructure = self.Pstructure
+        
+        if self.Pistructure is None:
+            Pistructure = np.ones((self.n_components,), dtype=bool)
+        else:
+            Pistructure = self.Pistructure
 
         # Transition probability matrix
         if (Xi is None) and (Gamma is None) and (Dir2d_alpha is None):
@@ -614,14 +668,14 @@ class GLHMM():
         
         n_components = self.n_components
         T,q = Y.shape
-        if self.model_beta != 'no': p = X.shape[1]
+        if self.model_beta is not None: p = X.shape[1]
         
         shared_beta = self.model_beta == 'shared'
         shared_mean = self.model_mean == 'shared'
         K_mean,K_beta = n_components,n_components
         if shared_mean: K_mean = 1
         if shared_beta: K_beta = 1
-        if self.model_beta != 'no':
+        if self.model_beta is not None:
             XGX = np.zeros((p,p,n_components))
             for k in range(n_components): XGX[:,:,k] = (X * np.expand_dims(Gamma[:,k],axis=1)).T @ X
             XGXb = np.expand_dims(np.sum(XGX,axis=2),axis=2) if shared_beta else XGX
@@ -629,9 +683,9 @@ class GLHMM():
         Gm = np.ones((T,1)) if shared_mean else Gamma
 
         # Mean
-        if self.model_mean != 'no':
+        if self.model_mean is not None:
 
-            if self.model_beta != 'no':
+            if self.model_beta is not None:
                 Yr = np.copy(Y)
                 for k in range(K_beta): 
                     Yr -= (X @ self.beta[k]["Mu"]) * np.expand_dims(Gb[:,k], axis=1)                    
@@ -668,9 +722,9 @@ class GLHMM():
                     self.mean[k]["Mu"] = rho * mu + (1-rho) * self.mean[k]["Mu"]
 
         # betas 
-        if self.model_beta != 'no':
+        if self.model_beta is not None:
 
-            if self.model_mean != 'no':
+            if self.model_mean is not None:
                 Yr = np.copy(Y)
                 for k in range(K_mean): 
                     Yr -= np.expand_dims(self.mean[k]["Mu"], axis=0) * np.expand_dims(Gm[:,k], axis=1)                  
@@ -727,13 +781,13 @@ class GLHMM():
             d = np.copy(Y) 
 
             sm = np.zeros(q) if self._is_diagonal_covmat() else np.zeros((q,q))
-            if self.model_mean != 'no': 
+            if self.model_mean is not None: 
                 kk = 0 if shared_mean else k
                 d -= np.expand_dims(self.mean[kk]["Mu"], axis=0)
                 sm = self.mean[kk]["Sigma"] * np.sum(Gamma[:,k])
 
             sb = np.zeros(q) if self._is_diagonal_covmat() else np.zeros((q,q))
-            if self.model_beta != 'no': 
+            if self.model_beta is not None: 
                 kk = 0 if shared_beta else k
                 d -= (X @ self.beta[kk]["Mu"])
                 if self._is_diagonal_covmat():
@@ -811,7 +865,7 @@ class GLHMM():
         
         n_components = self.n_components
         q = Y.shape[1]
-        if self.model_beta != 'no': p = X.shape[1]
+        if self.model_beta is not None: p = X.shape[1]
         
         shared_beta = self.model_beta == 'shared'
         shared_mean = self.model_mean == 'shared'
@@ -820,14 +874,14 @@ class GLHMM():
         if shared_beta: K_beta = 1
 
         # alpha (keep it unregularised)
-        if self.model_mean != 'no':
+        if self.model_mean is not None:
             self.alpha_mean = []
             for k in range(K_mean):
                 self.alpha_mean.append({})
                 self.alpha_mean[k]["rate"] = 0.1 * np.ones(q)
                 self.alpha_mean[k]["shape"] = 0.0001 # mild-regularised start
 
-        if self.model_beta != 'no':
+        if self.model_beta is not None:
             self.alpha_beta = []
             for k in range(K_beta):
                 self.alpha_beta.append({})
@@ -860,7 +914,7 @@ class GLHMM():
                 self.Sigma[k]["shape"] = self.priors["Sigma"]["shape"]
 
         # create initial values for mean and beta
-        if self.model_beta != 'no':
+        if self.model_beta is not None:
             self.beta = []
             for k in range(K_beta):
                 self.beta.append({})
@@ -869,7 +923,7 @@ class GLHMM():
                     self.beta[k]["Sigma"] = np.zeros((p,p,q))
                     for j in range(q): self.beta[k]["Sigma"][:,:,j] = 0.01 * np.eye(p)
                 else: self.beta[k]["Sigma"] = 0.01 * np.eye(p*q)
-        if self.model_mean != 'no':
+        if self.model_mean is not None:
             self.mean = []
             for k in range(K_mean):
                 self.mean.append({})  
@@ -1156,7 +1210,7 @@ class GLHMM():
         X_sliced = X
         Y_sliced = Y
         if set is not None:
-            if self.model_beta != 'no':
+            if self.model_beta is not None:
                 X_sliced = auxiliary.slice_matrix(X,indices[set,:])
             Y_sliced = auxiliary.slice_matrix(Y,indices[set,:])
             indices_sliced = indices[set,:]
@@ -1274,7 +1328,7 @@ class GLHMM():
 
         rng = np.random.default_rng()
 
-        if (self.model_beta != 'no') and (X is None):
+        if (self.model_beta is not None) and (X is None):
             p = self.beta[0]["Mu"].shape[1]
             X = np.random.normal(size=(np.sum(T),p))
 
@@ -1383,7 +1437,7 @@ class GLHMM():
             d = np.sum(d**2,axis=0)
 
             d0 = np.copy(Y[tt_j,:])
-            if self.model_mean != 'no':
+            if self.model_mean is not None:
                 d0 -= np.expand_dims(m,axis=0)
             d0 = np.sum(d0**2,axis=0)
 
@@ -1483,7 +1537,7 @@ class GLHMM():
         klobs = []
         if todo[4]:
             q = self.Sigma[0]["rate"].shape[0]
-            if self.model_mean != 'no':
+            if self.model_mean is not None:
                 for k in range(K_mean):
                     if self._is_diagonal_covmat():
                         for j in range(q):
@@ -1505,7 +1559,7 @@ class GLHMM():
                             self.priors["alpha_mean"]["shape"],self.priors["alpha_mean"]["rate"] \
                         )))   
 
-            if self.model_beta != 'no':
+            if self.model_beta is not None:
                 p = self.beta[0]["Mu"].shape[0]
                 jj = np.arange(p)
                 for k in range(K_beta):
@@ -1638,7 +1692,7 @@ class GLHMM():
         if not self.trained: 
             raise Exception("The model has not yet been trained") 
 
-        if self.model_beta == 'no':
+        if self.model_beta is None:
             raise Exception("The model has no beta")
 
         return self.beta[k]["Mu"]
@@ -1663,7 +1717,7 @@ class GLHMM():
         if not self.trained: 
             raise Exception("The model has not yet been trained") 
 
-        if self.model_beta == 'no':
+        if self.model_beta is None:
             raise Exception("The model has no beta")
 
         (p,q) = self.beta[0]["Mu"].shape
@@ -1697,7 +1751,7 @@ class GLHMM():
         if not self.trained: 
             raise Exception("The model has not yet been trained") 
 
-        if self.model_mean == 'no':
+        if self.model_mean is None:
             raise Exception("The model has no mean")
 
         return self.mean[k]["Mu"]
@@ -1722,10 +1776,10 @@ class GLHMM():
         if not self.trained: 
             raise Exception("The model has not yet been trained") 
 
-        if self.model_mean == 'no':
+        if self.model_mean is None:
             raise Exception("The model has no mean")
 
-        if self.model_beta != 'no':
+        if self.model_beta is not None:
             q = self.beta[0]["Mu"].shape
         else:
             q = self.Sigma[0]["rate"].shape[0]
@@ -1842,6 +1896,7 @@ class GLHMM():
 	        If `X` is not provided and the hyperparameter 'model_beta' is True.
             If 'files' is not provided and stochastic learning is called upon
         """
+        self._check()
 
         stochastic = (options is not None) and ("stochastic" in options) and (options["stochastic"])
         
@@ -1851,7 +1906,7 @@ class GLHMM():
         if (files is None) and (Y is None):
             raise Exception("Training needs data")
         
-        if (X is None) and (self.model_beta != 'no'):
+        if (X is None) and (self.model_beta is not None):
             raise Exception("If you want to model beta, X is needed as an argument")
 
         if stochastic:
