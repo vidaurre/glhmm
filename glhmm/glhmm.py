@@ -73,7 +73,7 @@ class glhmm():
         Pistructure=None
     ):
 
-        if (connectivity is not None) and ((covtype == 'shareddiag') or (covtype == 'diag')):
+        if (connectivity is not None) and not ((covtype == 'shareddiag') or (covtype == 'diag')):
             warnings.warn('Parameter connectivity can only be used with a diagonal covariance matrix')
             connectivity = None
 
