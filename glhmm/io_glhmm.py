@@ -8,12 +8,14 @@ Input/output functions - Gaussian Linear Hidden Markov Model
 import numpy as np
 import scipy.special
 import scipy.io
+import pickle
 
 from . import glhmm
 from . import auxiliary
 
 def load_files(files,I=None,do_only_indices=False):
-    """Loads data from files and returns the loaded data, indices, and individual indices for each file.
+    """
+    Loads data from files and returns the loaded data, indices, and individual indices for each file.
     """       
 
     X = []
@@ -74,7 +76,9 @@ def load_files(files,I=None,do_only_indices=False):
 
 
 def read_flattened_hmm_mat(file):
-    """Reads a MATLAB file containing hidden Markov model (HMM) parameters, and initializes a Gaussian linear hidden Markov model (GLHMM) using those parameters.
+    """
+    Reads a MATLAB file containing hidden Markov model (HMM) parameters, 
+    and initializes a Gaussian linear hidden Markov model (GLHMM) using those parameters.
     """
     
     hmm_mat = scipy.io.loadmat(file)
@@ -208,4 +212,23 @@ def read_flattened_hmm_mat(file):
     hmm.trained = True
     
     return hmm
+
+
+def save_hmm(hmm, filename):
+    """
+    Saves a glhmm object on filename
+    """
+    with open(filename, 'wb') as outp:  # Overwrites any existing file.
+        pickle.dump(hmm, outp, pickle.HIGHEST_PROTOCOL)
+
+
+def load_hmm(filename):
+    """
+    Loads a glhmm object from filename
+    """
+    with open(filename, 'rb') as inp:
+        hmm = pickle.load(inp)
+    return hmm
+
+
 

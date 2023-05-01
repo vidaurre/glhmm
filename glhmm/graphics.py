@@ -173,8 +173,14 @@ def show_temporal_statistic(Gamma,indices,statistic='FO',type_plot='barplot'):
         fig.tight_layout()
 
 
-def show_beta(hmm,only_active_states=False,X=None,Y=None,show_average=None):
-    """Displays the beta coefficients of a given HMM.
+def show_beta(hmm,only_active_states=True,recompute_states=False,
+              X=None,Y=None,Gamma=None,show_average=None,alpha=1.0):
+    """
+    Displays the beta coefficients of a given HMM.
+    The beta coefficients can be extracted directly from the HMM structure or reestimated from the data;
+    for the latter, X, Y and Gamma need to be provided as parameters. 
+    This is useful for example if one has run the model on PCA space, 
+    but wants to show coefficients in the original space.
     
     Parameters:
     -----------
@@ -182,38 +188,60 @@ def show_beta(hmm,only_active_states=False,X=None,Y=None,show_average=None):
         An instance of the HMM class containing the beta coefficients to be visualized.
     only_active_states: bool, optional, default=False
         If True, only the beta coefficients of active states are shown.
+    recompute_states: bool, optional, default=False
+        If True, the betas will be recomputed from the data and the state time courses
     X: numpy.ndarray, optional, default=None
         The timeseries of set of variables 1.
     Y: numpy.ndarray, optional, default=None
         The timeseries of set of variables 2.
+    Gamma: numpy.ndarray, optional, default=None
+        The state time courses
     show_average: bool, optional, default=None
         If True, an additional row of the average beta coefficients is shown.
+    alpha: float, optional, default=0.1
+        The regularisation parameter to be applied if the betas are to be recomputed.
+
     """
     
     if show_average is None:
         show_average = not ((X is None) or (Y is None))
     
-    K = hmm.hyperparameters["K"]
-    beta = hmm.get_betas()
+    K = hmm.get_betas().shape[2]
+    
+    if recompute_states:
+        if (Y is None) or (X is None) or (Gamma is None):
+            raise Exception("The data (X,Y) and the state time courses (Gamma) need \
+                             to be provided if recompute_states is True ")
+        (p,q) = (X.shape[1],Y.shape[1])
+        beta = np.zeros((p,q,K))
+        for k in range(K):
+            if hmm.hyperparameters["model_mean"] != 'no':
+                m = (np.expand_dims(Gamma[:,k],axis=1).T @ Yr) / np.sum(Gamma[:,k])
+                Yr = Y - np.expand_dims(m, axis=0)
+            else:
+                Yr = Y
+            beta[:,:,k] =  np.linalg.inv((X * np.expand_dims(Gamma[:,k],axis=1)).T @ X + alpha * np.eye(p)) @ \
+                ((X * np.expand_dims(Gamma[:,k],axis=1)).T @ Yr)
+    else:
+        beta = hmm.get_betas()
+        (p,q,_) = beta.shape
 
     if only_active_states:
         idx = np.where(hmm.active_states)[0]
         beta = beta[:,:,idx]
+        K = beta.shape[2]
     else:
         idx = np.arange(K)
 
-    (p,q,K) = beta.shape
-
     if show_average:
-        Yr = np.copy(Y)
-        Yr -= np.expand_dims(np.mean(Y,axis=0), axis=0)   
-        b0 = np.linalg.inv(X.T @ X) @ (X.T @ Yr)
+        Yr = Y - np.expand_dims(np.mean(Y,axis=0), axis=0) 
+        b0 = np.linalg.inv(X.T @ X + alpha * np.eye(p)) @ (X.T @ Yr)
         K += 1
         B = np.zeros((p,q,K))
         B[:,:,0:K-1] = beta
         B[:,:,-1] = b0 
     else:
-        B = beta
+        B = beta 
 
     Bstar1 = np.zeros((p,q,K,K))
     for k in range(K): Bstar1[:,:,k,:] = B
@@ -244,14 +272,17 @@ def show_beta(hmm,only_active_states=False,X=None,Y=None,show_average=None):
     B = np.concatenate((Bstar1,Bstar2,I1,I2,I3),axis=0).T
     df = pd.DataFrame(B,columns=('x','y','Variable','beta x','beta y'))
 
-    sb.relplot(x='x', 
+    g = sb.relplot(x='x', 
         y='y', 
+        s=25,
         hue='Variable', 
         col="beta x", row="beta y",
         data=df,
-        palette='cool', 
-        height=8)
+        palette='cool')
     
+    for item, ax in g.axes_dict.items():
+        ax.grid(False, axis='x')
+        ax.set_title('')
 
     # def show_r2(r2=None,hmm=None,Gamma=None,X=None,Y=None,indices=None,show_average=False):
 
