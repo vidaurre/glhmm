@@ -346,9 +346,11 @@ class glhmm():
             if (r == 0) or (fe[r] < np.min(fe[0:r])):
                 Gamma = np.copy(Gamma_r)
                 best = r
-            print("Init repetition " + str(r+1) + " free energy = " + str(fe[r]))
+            if options["verbose"]: 
+                print("Init repetition " + str(r+1) + " free energy = " + str(fe[r]))
 
-        print("Best repetition: " + str(best+1))
+        if options["verbose"]: 
+            print("Best repetition: " + str(best+1))
         return Gamma
                 
                 
@@ -950,12 +952,12 @@ class glhmm():
             # data likelihood
             todo = (False,True,False,False,False)
             if X is None:
-                loglik_entropy[j,0] = self.get_fe(None,Y,Gamma,Xi,None,indices_individual[0],todo)
+                loglik_entropy[j,0] = np.sum(self.get_fe(None,Y,Gamma,Xi,None,indices_individual[0],todo))
             else:
-                loglik_entropy[j,0] = self.get_fe(X,Y,Gamma,Xi,None,indices_individual[0],todo)
+                loglik_entropy[j,0] = np.sum(self.get_fe(X,Y,Gamma,Xi,None,indices_individual[0],todo))
             # Gamma likelihood and entropy
             todo = (True,False,True,False,False)
-            loglik_entropy[j,1] = self.get_fe(None,Y,Gamma,Xi,None,indices_individual[0],todo)
+            loglik_entropy[j,1] = np.sum(self.get_fe(None,Y,Gamma,Xi,None,indices_individual[0],todo))
 
         # do the actual training
         while it < options["cyc"]: 
@@ -1008,19 +1010,19 @@ class glhmm():
                 # data likelihood
                 todo = (False,True,False,False,False)
                 if X is None:
-                    loglik_entropy[I[j],0] = self.get_fe(None,Y[tt_j,:], \
-                        Gamma[tt_j,:],Xi[tt_j_xi,:,:],None,indices_individual[j],todo)
+                    loglik_entropy[I[j],0] = np.sum(self.get_fe(None,Y[tt_j,:], \
+                        Gamma[tt_j,:],Xi[tt_j_xi,:,:],None,indices_individual[j],todo))
                 else:
-                    loglik_entropy[I[j],0] = self.get_fe(X[tt_j,:],Y[tt_j,:], \
-                        Gamma[tt_j,:],Xi[tt_j_xi,:,:],None,indices_individual[j],todo)
+                    loglik_entropy[I[j],0] = np.sum(self.get_fe(X[tt_j,:],Y[tt_j,:], \
+                        Gamma[tt_j,:],Xi[tt_j_xi,:,:],None,indices_individual[j],todo))
                 # Gamma likelihood and entropy
                 todo = (True,False,True,False,False)
-                loglik_entropy[I[j],1] = self.get_fe(None,Y[tt_j,:], \
-                        Gamma[tt_j,:],Xi[tt_j_xi,:,:],None,indices_individual[j],todo)
+                loglik_entropy[I[j],1] = np.sum(self.get_fe(None,Y[tt_j,:], \
+                        Gamma[tt_j,:],Xi[tt_j_xi,:,:],None,indices_individual[j],todo))
                               
             # KL divergences
             todo = (False,False,False,True,True)
-            kl = self.get_fe(None,None,None,None,None,None,todo)
+            kl = np.sum(self.get_fe(None,None,None,None,None,None,todo))
             fe_it = np.sum(kl) + np.sum(loglik_entropy)
             #print(str(np.sum(kl)) + ' ' + str(np.sum(loglik_entropy)))
             fe = np.append(fe, fe_it) 
@@ -1403,7 +1405,7 @@ class glhmm():
         return r2
 
             
-    def get_fe(self,X,Y,Gamma,Xi,scale=None,indices=None,todo=None):
+    def get_fe(self,X,Y,Gamma,Xi,scale=None,indices=None,todo=None,non_informative_prior_P=False):
         """Computes the Free Energy of an HMM depending on observation model.
         
         Parameters:
@@ -1423,12 +1425,15 @@ class glhmm():
             The start and end indices of each trial/session in the input data.
         todo:  bool of shape (n_terms,) or None, default=None
             Whether or not each of the 5 elements (see `fe_terms`) should be computed.
+            Only for internal use.
+        non_informative_prior_P: array-like of shape (n_states, n_states), optional, default=False
+            Prior of transition probability matrix
+            Only for internal use. 
                 
         Returns:
         --------
         fe_terms : array of shape (n_terms,)
             The variational free energy, separated into different terms:
-        
             - element 1: Gamma Entropy
             - element 2: Data negative log-likelihood
             - element 3: Gamma negative log-likelihood
@@ -1490,9 +1495,11 @@ class glhmm():
 
         kldyn = []
         if todo[3]:
+            if non_informative_prior_P: P_prior = np.ones((K,K))
+            else: P_prior = self.priors["Dir2d_alpha"]
             kldyn.append(auxiliary.dirichlet_kl(self.Dir_alpha,self.priors["Dir_alpha"]))
             for k in range(K):
-                kldyn.append(auxiliary.dirichlet_kl(self.Dir2d_alpha[k,:],self.priors["Dir2d_alpha"][k,:]))
+                kldyn.append(auxiliary.dirichlet_kl(self.Dir2d_alpha[k,:],P_prior[k,:]))
 
         klobs = []
         if todo[4]:
@@ -1576,7 +1583,7 @@ class glhmm():
             fe_terms[3] = sum(kldyn)
             fe_terms[4] = sum(klobs)
 
-        return np.sum(fe_terms)
+        return fe_terms
         
 
     def get_covariance_matrix(self,k=0):
@@ -1931,7 +1938,7 @@ class glhmm():
                 #     epsilon *= 2
 
             # if we use the scale to compute the FE, it's only valid after the E-step
-            fe_it = self.get_fe(X,Y,Gamma,Xi,scale,indices)
+            fe_it = np.sum(self.get_fe(X,Y,Gamma,Xi,scale,indices))
             fe = np.append(fe, fe_it) 
 
             if it > 1:
