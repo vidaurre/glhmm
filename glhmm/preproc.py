@@ -5,6 +5,7 @@ Preprocessing functions - General/Gaussian Linear Hidden Markov Model
 @author: Diego Vidaurre 2023
 """
 
+import math
 import numpy as np
 import warnings
 from sklearn.decomposition import PCA
@@ -94,7 +95,7 @@ def preprocess_data(data,indices,
         If None, no filtering will be applied.
         If a tuple, the first element is the low-pass threshold and the second is the high-pass threshold.
 
-    detrend : bool, default=True
+    detrend : bool, default=False
         Whether to detrend the input data.
 
     onpower : bool, default=False
@@ -166,11 +167,13 @@ def preprocess_data(data,indices,
         Tnew = np.ceil(factor * (indices[:,1]-indices[:,0])).astype(int)
         indices_new = auxiliary.make_indices_from_T(Tnew)
         data_new = np.zeros((np.sum(Tnew),p))
+        gcd = math.gcd(downsample,fs)
         for j in range(N):
             t = np.arange(indices[j,0],indices[j,1]) 
             tnew = np.arange(indices_new[j,0],indices_new[j,1]) 
             Tjnew = tnew.shape[0]
-            data_new[tnew,:] = signal.resample(data[t,:], Tjnew, axis=0)     
+            data_new[tnew,:] = signal.resample_poly(data[t,:], fs/gcd, downsample/gcd)
+            # data_new[tnew,:] = signal.resample(data[t,:], Tjnew)     
         data = data_new
     else: indices_new = indices
 
