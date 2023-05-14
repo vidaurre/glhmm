@@ -171,8 +171,8 @@ def preprocess_data(data,indices,
         for j in range(N):
             t = np.arange(indices[j,0],indices[j,1]) 
             tnew = np.arange(indices_new[j,0],indices_new[j,1]) 
-            Tjnew = tnew.shape[0]
-            data_new[tnew,:] = signal.resample_poly(data[t,:], fs/gcd, downsample/gcd)
+            data_new[tnew,:] = signal.resample_poly(data[t,:], downsample/gcd, fs/gcd)
+            # Tjnew = tnew.shape[0]
             # data_new[tnew,:] = signal.resample(data[t,:], Tjnew)     
         data = data_new
     else: indices_new = indices
