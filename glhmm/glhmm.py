@@ -16,11 +16,11 @@ import copy
 import time
 
 # import auxiliary
-# import io_glhmm
+# import io
 # import utils
 
 from . import auxiliary
-from . import io_glhmm as io
+from . import io
 from . import utils
 
 
@@ -1817,7 +1817,11 @@ class glhmm():
 
 
     def train(self,X=None,Y=None,indices=None,files=None,Gamma=None,Xi=None,scale=None,options=None):
-        """Train the HMM on input data X and Y.
+        """
+        Train the GLHMM on input data X and Y, which most general formulation is
+        Y = mu_k + X beta_k + noise
+        where noise is Gaussian with mean zero and standard deviation Sigma_k
+
         It supports both standard and stochastic variational learning; 
         for the latter, data must be supplied in files format
 

@@ -88,10 +88,11 @@ def show_Gamma(Gamma, line_overlay=None, tlim=None, Hz=1, palette='viridis'):
     # Setup data according to given limits
     if tlim is not None:
         T = tlim[1] - tlim[0]
-        data = Gamma[tlim[0] : tlim[1], :].copy()
-        
+        data = Gamma[tlim[0] : tlim[1], :]
         if line_overlay is not None:
             line = line_overlay[tlim[0] : tlim[1]].copy()
+    else: 
+        data = Gamma
     
     df = pd.DataFrame(data, index=np.arange(T)/Hz)
     df = df.divide(df.sum(axis=1), axis=0)
