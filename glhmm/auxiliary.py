@@ -57,7 +57,8 @@ def make_indices_from_T(T):
 
     """
 
-    Ts = np.squeeze(T)
+    if len(T)>1: Ts = np.squeeze(T)
+    else: Ts = T
     N = Ts.shape[0]
     indices = np.zeros((N,2),dtype=int)
     acc = 0
