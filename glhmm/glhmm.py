@@ -915,6 +915,7 @@ class glhmm():
 
         if options["verbose"]: start = time.time()
 
+        # init model with a subset of subjects
         if not self.trained:
             if Gamma is None: 
                 self.__init_stochastic(files,options)
@@ -939,9 +940,25 @@ class glhmm():
         Dir_alpha_each = np.zeros((K,N))
         Dir2d_alpha_each = np.zeros((K,K,N))
         warm_up = True
+        cyc_to_go =  options["cyc_to_go_under_th"]
         rho = 1
         it = 0
 
+        # collect subject specific free energy terms
+        for j in range(N):
+            X,Y,indices,indices_individual = io.load_files(files,j)
+            Gamma,Xi,_ = self.decode(X,Y,indices)
+            # data likelihood
+            todo = (False,True,False,False,False)
+            if X is None:
+                loglik_entropy[j,0] = self.get_fe(None,Y,Gamma,Xi,None,indices_individual[0],todo)
+            else:
+                loglik_entropy[j,0] = self.get_fe(X,Y,Gamma,Xi,None,indices_individual[0],todo)
+            # Gamma likelihood and entropy
+            todo = (True,False,True,False,False)
+            loglik_entropy[j,1] = self.get_fe(None,Y,Gamma,Xi,None,indices_individual[0],todo)
+
+        # do the actual training
         while it < options["cyc"]: 
 
             I = np.random.choice(np.arange(N), size=options["Nbatch"], replace=False, p=sampling_prob)
@@ -1005,33 +1022,35 @@ class glhmm():
                 loglik_entropy[I[j],1] = self.get_fe(None,Y[tt_j,:], \
                         Gamma[tt_j,:],Xi[tt_j_xi,:,:],None,indices_individual[j],todo)
                               
-            if not warm_up: 
+            # KL divergences
+            todo = (False,False,False,True,True)
+            kl = self.get_fe(None,None,None,None,None,None,todo)
+            fe_it = np.sum(kl) + np.sum(loglik_entropy)
+            #print(str(np.sum(kl)) + ' ' + str(np.sum(loglik_entropy)))
+            fe = np.append(fe, fe_it) 
 
-                # KL divergences
-                todo = (False,False,False,True,True)
-                kl = self.get_fe(None,None,None,None,None,None,todo)
-                fe_it = np.sum(kl) + np.sum(loglik_entropy)
-                #print(str(np.sum(kl)) + ' ' + str(np.sum(loglik_entropy)))
-                fe = np.append(fe, fe_it) 
-
-                if fe.shape[0] > 1:
-                    chgFrEn = abs((fe[-1]-fe[-2]) / (fe[-1]-fe[0]))
+            if fe.shape[0] > 1:
+                chgFrEn = abs((fe[-1]-fe[-2]) / (fe[-1]-fe[0]))
+                if not warm_up:
                     if np.abs(chgFrEn) < options["tol"]: cyc_to_go -= 1
                     else: cyc_to_go =  options["cyc_to_go_under_th"]
-                    if options["verbose"]: 
+                if options["verbose"]: 
+                    if warm_up: 
+                        print("Cycle " + str(it+1) + ", free energy = " + str(fe_it) + \
+                            ", relative change = " + str(chgFrEn) + ", rho = " + str(rho) + \
+                            ", went through = " + str(100*np.mean(ever_used)) + "% of the sessions")
+                    else:
                         print("Cycle " + str(it+1) + ", free energy = " + str(fe_it) + \
                             ", relative change = " + str(chgFrEn) + ", rho = " + str(rho))
+                if not warm_up:
                     if cyc_to_go == 0: 
                         if options["verbose"]: print("Reached early convergence")
                         break
-                else:
-                    if options["verbose"]: print("Cycle " + str(it+1) + " free energy = " + str(fe_it))
-
-                it += 1
-                rho = (it + 1)**(-options["forget_rate"])
-
             else:
-                if options["verbose"]: print("Warming up, went through = " + str(100*np.mean(ever_used)) + "% of the sessions")
+                if options["verbose"]: print("Cycle " + str(it+1) + " free energy = " + str(fe_it))
+            
+            it += 1
+            if not warm_up: rho = (it + 1)**(-options["forget_rate"])
 
         K_active = np.sum(self.active_states)
         if options["verbose"]:
@@ -1787,6 +1806,8 @@ class glhmm():
 
     def train(self,X=None,Y=None,indices=None,files=None,Gamma=None,Xi=None,scale=None,options=None):
         """Train the HMM on input data X and Y.
+        It supports both standard and stochastic variational learning; 
+        for the latter, data must be supplied in files format
 
         Parameters:
         -----------
@@ -1828,10 +1849,13 @@ class glhmm():
         Exception
 	        If `files` and `Y` are both provided or if neither are provided.
 	        If `X` is not provided and the hyperparameter 'model_beta' is True.
+            If 'files' is not provided and stochastic learning is called upon
         """
 
-        if (files is not None) and (Y is not None):
-            raise Exception("Argument 'files' cannot be used if the data (Y) is also provided")
+        stochastic = (options is not None) and ("stochastic" in options) and (options["stochastic"])
+        
+        if (files is not None) and (Y is not None) and (not stochastic):
+            warnings.warn("Argument 'files' cannot be used if the data (Y) is also provided")
 
         if (files is None) and (Y is None):
             raise Exception("Training needs data")
@@ -1839,7 +1863,11 @@ class glhmm():
         if (X is None) and (self.hyperparameters["model_beta"] != 'no'):
             raise Exception("If you want to model beta, X is needed as an argument")
 
-        if (options is not None) and ("stochastic" in options) and (options["stochastic"]):
+        if stochastic:
+            if files is None: 
+                raise Exception("For stochastic learning, argument 'files' must be provided")
+            if (X is not None) or (Y is not None):
+                warnings.warn("X and Y are not used in stochastic learning")
             fe = self.__train_stochastic(files,Gamma,options)
             return np.empty(0),np.empty(0),fe
 
