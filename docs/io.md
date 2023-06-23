@@ -1,7 +1,7 @@
-# glhmm.io_glhmm
+# glhmm.io
 
 ```{eval-rst}
-.. automodule:: glhmm.io_glhmm
+.. automodule:: glhmm.io
    :members:
    :undoc-members:
    :show-inheritance:
