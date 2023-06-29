@@ -11,6 +11,8 @@
 :caption: 'Contents:'
 :maxdepth: 2
 
+notebooks/tutorial
+notebooks/example1/example1
 modules
 glossary
 
