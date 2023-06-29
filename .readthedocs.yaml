@@ -7,6 +7,13 @@ build:
 
 sphinx:
   configuration: docs/conf.py
+
+sphinx:
+  fail_on_warning: true
+
+formats:
+  - pdf
+  - epub
   
 python:
   install:
