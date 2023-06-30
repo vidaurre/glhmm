@@ -17,7 +17,7 @@
       The number of total sessions.
 
    n_states {#glossary-n_states}
-      The number of hidden states in the HMM.
+      The number of hidden states in the :term:HMM.
 
    state mixing {#glossary-state_mixing}
       Refers to whether the model is capable of capturing within-session state modulations, rather than assigning the entire sessions (or the largest part of them) to a single state. For more information, visit Ahrends et al. (2022) article <https://pubmed.ncbi.nlm.nih.gov/35217207/>.
