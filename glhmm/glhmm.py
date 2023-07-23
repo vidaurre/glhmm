@@ -1902,7 +1902,10 @@ class glhmm():
         if options["verbose"]: start = time.time()
 
         if not self.trained:
-            if Gamma is None: Gamma = self.__init_Gamma(X,Y,indices,options)
+            if Gamma is None: 
+                Gamma = self.__init_Gamma(X,Y,indices,options)
+            elif Gamma.shape != (Y.shape[0],K): 
+                raise Exception('Supplied initial Gamma has not the correct dimensions')
             self.__init_priors(X,Y)
             self.__init_dynamics(Gamma,indices=indices)
             self.__init_obsdist(X,Y,Gamma)
