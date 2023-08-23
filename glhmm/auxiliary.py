@@ -57,13 +57,15 @@ def make_indices_from_T(T):
 
     """
 
-    N = T.shape[0]
+    if len(T)>1: Ts = np.squeeze(T)
+    else: Ts = T
+    N = Ts.shape[0]
     indices = np.zeros((N,2),dtype=int)
     acc = 0
     for j in range(N):
         indices[j,0] = acc
-        indices[j,1] = acc + T[j]
-        acc += T[j]
+        indices[j,1] = acc + Ts[j]
+        acc += Ts[j]
     return indices
 
 

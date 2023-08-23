@@ -12,6 +12,8 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+glhmm/__pycache__/*.pyc
+
 # C extensions
 *.so
 

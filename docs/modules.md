@@ -4,9 +4,10 @@
 :maxdepth: 4
 
 glhmm
-io_glhmm
+io
 preproc
 auxiliary
 utils
 graphics
+prediction
 ```
