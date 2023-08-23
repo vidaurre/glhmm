@@ -7,10 +7,12 @@ Kernel prediction from Gaussian Linear Hidden Markov Model
 
 import numpy as np
 import sys
+import sklearn
+import igraph as ig
 from . import glhmm
 
 
-def compute_gradient(hmm, Y, incl_Pi=True, incl_P=True, incl_Mu=False, incl_Sigma=False):
+def compute_gradient(hmm, Y, incl_Pi=True, incl_P=True, incl_Mu=True, incl_Sigma=True):
     """Computes the gradient of the log-likelihood for timeseries Y
     with respect to specified HMM parameters
     
@@ -198,6 +200,8 @@ def hmm_kernel(hmm, Y, indices, type='Fisher', shape='linear', incl_Pi=True, inc
     Does not include X and beta in kernel construction
     Only Fisher kernel implemented at this point
     """
+    if not hmm.trained:
+        raise Exception("The model has not yet been trained")
 
     S = indices.shape[0]
     K = hmm.hyperparameters["K"]
@@ -232,9 +236,174 @@ def hmm_kernel(hmm, Y, indices, type='Fisher', shape='linear', incl_Pi=True, inc
     if return_feat and not return_dist:
         return kernel, feat
     elif return_dist and not return_feat:
-        return kernel, dist 
+        if shape=='linear':
+            raise Exception("Distance matrix is not defined for linear kernel")
+        else:
+            return kernel, dist 
     elif return_feat and return_dist:
-        return kernel, feat, dist
+        if shape=='linear':
+            raise Exception("Distance matrix is not defined for linear kernel")
+        else:
+            return kernel, feat, dist
     else:   
         return kernel
+    
+def get_summ_features(hmm, Y, indices, metrics):
+    # Note: lifetimes uses the mean lifetimes (change code if you want to use median or max lifetimes instead)
+    if not set(metrics).issubset(['FO', 'switching_rate', 'lifetimes']):
+            raise Exception('Requested summary metrics are not recognised. Use one or more of FO, switching rate, or lifetimes (for now)')
+
+    features_tmp = np.zeros(shape=(indices.shape[0],1))
+
+    # get Gamma or vpath from hmm:
+    if 'FO' in metrics or 'switching_rate' in metrics:
+        Gamma,_,_ = hmm.decode(X=None, Y=Y, indices=indices, viterbi=False)
+    
+    if 'lifetimes' in metrics:
+        vpath = hmm.decode(X=None, Y=Y, indices=indices, viterbi=True)
+
+    if 'FO' in metrics:
+        FO = glhmm.utils.get_FO(Gamma, indices)
+        features_tmp = np.append(features_tmp, FO, axis=1)
+    if 'switching_rate' in metrics:
+        SR = glhmm.utils.get_switching_rate(Gamma, indices)
+        features_tmp = np.append(features_tmp, SR, axis=1)
+    if 'lifetimes' in metrics:
+        LT,_,_ = glhmm.utils.get_life_times(vpath, indices)
+        features_tmp = np.append(features_tmp, LT, axis=1)
+
+    features = features_tmp[:,1:]
+
+    return features
+    
+def get_groups(group_structure):
+    # make sure diagonal if family matrix is 1:
+    cs2 = group_structure
+    np.fill_diagonal(cs2, 1)
+    # create adjacency graph
+    csG = ig.Graph.Adjacency(cs2)
+    # get groups (connected components in adjacency matrix)
+    groups = csG.connected_components()
+    cs_tmp = groups.membership
+    cs = np.asarray(cs_tmp)
+
+    return cs
         
+def predictPhenotype(hmm, Y, behav, indices, method='Fisherkernel', estimator='KernelRidge', options=None):
+    """Predict phenotype from HMM
+    
+    Parameters:
+    -----------
+    hmm : trained (group-level) HMM
+    Y : (group) timeseries
+    behav : phenotype to be predicted
+    indices : indices indicating beginning and end of each subject's timeseries
+    method : either 'Fisherkernel' or 'summary_metrics' (default='Fisherkernel')
+    estimator : sklearn estimator to be used for prediction (default='KernelRidge')
+    options :
+
+    Returns:
+    --------
+    behav_pred : predicted phenotype
+    
+    """
+    if not hmm.trained:
+        raise Exception("The model has not yet been trained")
+
+    if behav is None:
+        raise Exception("Phenotype to be predicted needs to be provided")
+    
+    if indices is None: 
+        raise Exception("To predict phenotype from HMM, indices need to be provided")
+    
+    if options is None: 
+        options = {}
+    else:
+        if method=='Fisherkernel':
+            if not options['shape']:
+                shape='linear' 
+            else:
+                shape=options['shape']
+            if options['incl_Pi']:
+                incl_Pi = options['incl_Pi']
+            else:
+                incl_Pi = True
+            if options['incl_P']:
+                incl_P = options['incl_P']
+            else:
+                incl_P = True
+            if options['incl_Mu']:
+                incl_Mu = options['incl_Mu']
+            else:
+                incl_Mu = True
+            if options['incl_Sigma']:
+                incl_Sigma = options['incl_Sigma']:
+            else:
+                incl_Sigma = True
+        
+        if method=='summary':
+            if not options['metrics']:
+                metrics = ['FO', 'switching_rate', 'lifetimes']
+            else:
+                metrics = options['metrics']
+
+        if not options['CVscheme']:
+            CVscheme = 'KFold'
+        else:
+            CVscheme = options['CVscheme']
+
+        if not options['nfolds']:
+            nfolds = 5
+        else:
+            nfolds = options['nfolds']
+
+        if not options['family_structure']:
+            do_groupKFold = False
+            allcs = None
+        else:
+            do_groupKFold = True
+            allcs = options['family_structure']
+            CVscheme = 'GroupKFold'
+
+        if not options['confounds']:
+            confounds = None
+        else:
+            confounds = options['confounds']
+
+    N = indices.shape[0] # number of samples
+
+    # get features/kernel from HMM to be predicted from (default: Fisher kernel):
+    if method=='Fisherkernel':
+        if shape=='linear':
+            tau=None
+        elif shape=='Gaussian':
+            tau=options['tau']
+        Xin = hmm_kernel(hmm, Y, indices, type='Fisher', shape=shape, incl_Pi=incl_Pi, incl_P=incl_P, incl_Mu=incl_Mu, incl_Sigma=incl_Sigma, tau=tau, return_feat=False, return_dist=False)
+    # alternative: predict from HMM summary metrics
+    elif method=='summary':
+        Xin = get_summ_features(hmm, Y, indices, metrics)  
+            
+    # create CV folds
+    if do_groupKFold: # when using family/group structure - use GroupKFold
+        cs = get_groups(allcs)
+        cvfolds = sklearn.model_selection.GroupKFold(n_splits=nfolds)
+        cvfolds.get_n_splits(Y, behav, cs)
+    elif CVscheme=='KFold': # when not using family/group structure
+        cvfolds = sklearn.model_selection.KFold(n_splits=nfolds)
+        cvfolds.get_n_splits(Y, behav)
+
+    behav_pred = np.zeros(shape=N)
+
+    if estimator=='KernelRidge':
+        if not options['alpha']:
+            alphas = np.logspace(-4, -1, 6)
+        else:
+            alphas = options['alpha']
+        
+        model = sklearn.kernel_ridge.KernelRidge(kernel="precomputed")
+        for train, test in cvfolds.split(Xin, behav, groups=cs):
+            model_tuned = sklearn.model_selection.GridSearchCV(estimator=model, param_grid=dict(alpha=alphas), cv=cvfolds)
+            model_tuned.fit(Xin[train, train.reshape(-1,1)], behav[train], groups=cs[train])
+            behav_pred[test] = model_tuned.predict(Xin[train, test.reshape(-1,1)])
+
+    return behav_pred
