@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Kernel prediction from Gaussian Linear Hidden Markov Model
+Prediction from Gaussian Linear Hidden Markov Model
 @author: Christine Ahrends 2023
 """
 
@@ -9,7 +9,7 @@ import numpy as np
 import sys
 import sklearn
 import igraph as ig
-from . import glhmm
+from glhmm import glhmm, utils
 
 
 def compute_gradient(hmm, Y, incl_Pi=True, incl_P=True, incl_Mu=True, incl_Sigma=True):
@@ -264,13 +264,13 @@ def get_summ_features(hmm, Y, indices, metrics):
         vpath = hmm.decode(X=None, Y=Y, indices=indices, viterbi=True)
 
     if 'FO' in metrics:
-        FO = glhmm.utils.get_FO(Gamma, indices)
+        FO = utils.get_FO(Gamma, indices)
         features_tmp = np.append(features_tmp, FO, axis=1)
     if 'switching_rate' in metrics:
-        SR = glhmm.utils.get_switching_rate(Gamma, indices)
+        SR = utils.get_switching_rate(Gamma, indices)
         features_tmp = np.append(features_tmp, SR, axis=1)
     if 'lifetimes' in metrics:
-        LT,_,_ = glhmm.utils.get_life_times(vpath, indices)
+        LT,_,_ = utils.get_life_times(vpath, indices)
         features_tmp = np.append(features_tmp, LT, axis=1)
 
     features = features_tmp[:,1:]
@@ -319,57 +319,57 @@ def predictPhenotype(hmm, Y, behav, indices, method='Fisherkernel', estimator='K
     
     if options is None: 
         options = {}
+    
+    if method=='Fisherkernel':
+        if not options['shape']:
+            shape='linear' 
+        else:
+            shape=options['shape']
+        if 'incl_Pi' in options:
+            incl_Pi = options['incl_Pi']
+        else:
+            incl_Pi = True
+        if 'incl_P' in options:
+            incl_P = options['incl_P']
+        else:
+            incl_P = True
+        if 'incl_Mu' in options:
+            incl_Mu = options['incl_Mu']
+        else:
+            incl_Mu = False
+        if 'incl_Sigma' in options:
+            incl_Sigma = options['incl_Sigma']
+        else:
+            incl_Sigma = True
+    
+    if method=='summary':
+        if not 'metrics' in options:
+            metrics = ['FO', 'switching_rate', 'lifetimes']
+        else:
+            metrics = options['metrics']
+
+    if not 'CVscheme' in options:
+        CVscheme = 'KFold'
     else:
-        if method=='Fisherkernel':
-            if not options['shape']:
-                shape='linear' 
-            else:
-                shape=options['shape']
-            if options['incl_Pi']:
-                incl_Pi = options['incl_Pi']
-            else:
-                incl_Pi = True
-            if options['incl_P']:
-                incl_P = options['incl_P']
-            else:
-                incl_P = True
-            if options['incl_Mu']:
-                incl_Mu = options['incl_Mu']
-            else:
-                incl_Mu = True
-            if options['incl_Sigma']:
-                incl_Sigma = options['incl_Sigma']:
-            else:
-                incl_Sigma = True
-        
-        if method=='summary':
-            if not options['metrics']:
-                metrics = ['FO', 'switching_rate', 'lifetimes']
-            else:
-                metrics = options['metrics']
+        CVscheme = options['CVscheme']
 
-        if not options['CVscheme']:
-            CVscheme = 'KFold'
-        else:
-            CVscheme = options['CVscheme']
+    if not 'nfolds' in options:
+        nfolds = 5
+    else:
+        nfolds = options['nfolds']
 
-        if not options['nfolds']:
-            nfolds = 5
-        else:
-            nfolds = options['nfolds']
+    if not 'family_structure' in options:
+        do_groupKFold = False
+        allcs = None
+    else:
+        do_groupKFold = True
+        allcs = options['family_structure']
+        CVscheme = 'GroupKFold'
 
-        if not options['family_structure']:
-            do_groupKFold = False
-            allcs = None
-        else:
-            do_groupKFold = True
-            allcs = options['family_structure']
-            CVscheme = 'GroupKFold'
-
-        if not options['confounds']:
-            confounds = None
-        else:
-            confounds = options['confounds']
+    if not 'confounds' in options:
+        confounds = None
+    else:
+        confounds = options['confounds']
 
     N = indices.shape[0] # number of samples
 
@@ -396,15 +396,64 @@ def predictPhenotype(hmm, Y, behav, indices, method='Fisherkernel', estimator='K
     behav_pred = np.zeros(shape=N)
 
     if estimator=='KernelRidge':
-        if not options['alpha']:
+        if not 'alpha' in options:
             alphas = np.logspace(-4, -1, 6)
         else:
             alphas = options['alpha']
         
-        model = sklearn.kernel_ridge.KernelRidge(kernel="precomputed")
-        for train, test in cvfolds.split(Xin, behav, groups=cs):
-            model_tuned = sklearn.model_selection.GridSearchCV(estimator=model, param_grid=dict(alpha=alphas), cv=cvfolds)
-            model_tuned.fit(Xin[train, train.reshape(-1,1)], behav[train], groups=cs[train])
-            behav_pred[test] = model_tuned.predict(Xin[train, test.reshape(-1,1)])
+        if 'return_scores' in options and options['return_scores']==True:
+            scores = list()
+            return_scores = True
+        else:
+            return_scores = False
+        if 'return_models'in options and options['return_models']==True:
+            models = list()
+            return_models = True
+        else:
+            return_models = False
+        if 'return_hyperparams' in options and options['return_hyperparams']==True:
+            hyperparams = list()
+            return_hyperparams = True
+        else:
+            return_hyperparams = False
 
-    return behav_pred
+        model = sklearn.kernel_ridge.KernelRidge(kernel="precomputed")
+
+        if do_groupKFold:
+            for train, test in cvfolds.split(Xin, behav, groups=cs):
+                model_tuned = sklearn.model_selection.GridSearchCV(estimator=model, param_grid=dict(alpha=alphas), cv=cvfolds)
+                model_tuned.fit(Xin[train, train.reshape(-1,1)], behav[train], groups=cs[train])
+                behav_pred[test] = model_tuned.predict(Xin[train, test.reshape(-1,1)])
+                if return_scores:
+                    scores.append(model_tuned.score(Xin[train, test.reshape(-1,1)], behav[test]))
+                if return_models:
+                    models.append(model_tuned)
+                if return_hyperparams:
+                    hyperparams.append(model_tuned.best_estimator_.alpha)
+        else:
+            for train, test in cvfolds.split(Xin, behav):
+                model_tuned = sklearn.model_selection.GridSearchCV(estimator=model, param_grid=dict(alpha=alphas), cv=cvfolds)
+                model_tuned.fit(Xin[train, train.reshape(-1,1)], behav[train])
+                behav_pred[test] = model_tuned.predict(Xin[train, test.reshape(-1,1)])
+                if return_scores:
+                    scores.append(model_tuned.score(Xin[train, test.reshape(-1,1)], behav[test]))
+                if return_models:
+                    models.append(model_tuned)
+                if return_hyperparams:
+                    hyperparams.append(model_tuned.best_estimator_.alpha)
+
+        corr = np.corrcoef(behav_pred, behav)[0,1]
+
+    results = {}
+    results['behav_pred'] = behav_pred
+    results['corr'] = corr
+    if return_scores:
+        results['scores'] = scores
+    if return_models:
+        results['models'] = models
+    if return_hyperparams:
+        results['hyperparams'] = hyperparams
+    
+    return results
+
+# TO DO: deconfounding
