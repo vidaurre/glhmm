@@ -199,7 +199,9 @@ def hmm_kernel(hmm, Y, indices, type='Fisher', shape='linear', incl_Pi=True, inc
     ------
     Does not include X and beta in kernel construction
     Only Fisher kernel implemented at this point
+
     """
+
     if not hmm.trained:
         raise Exception("The model has not yet been trained")
 
@@ -250,6 +252,29 @@ def hmm_kernel(hmm, Y, indices, type='Fisher', shape='linear', incl_Pi=True, inc
 
 
 def get_summ_features(hmm, Y, indices, metrics):
+    """Util function to get summary features from HMM. 
+    Output can be used as input features for ML
+
+    Parameters:
+    -----------
+    hmm : HMM object
+        An instance of the HMM class, estimated on the group-level
+    Y : array-like of shape (n_samples, n_variables_2)
+        (group-level) timeseries data
+    indices : array-like of shape (n_sessions, 2)
+        The start and end indices of each trial/session in the input data. 
+        Note that kernel cannot be computed if indices=None  
+    metrics : list
+        names of metrics to be extracted. For now, this should be one or more 
+        of 'FO', 'switching_rate', 'lifetimes'    
+
+    Returns:
+    --------
+    features : array-like of shape (n_samples, n_features)
+        The HMM summary metrics collected into a feature matrix
+
+    """
+
     # Note: lifetimes uses the mean lifetimes (change code if you want to use median or max lifetimes instead)
     if not set(metrics).issubset(['FO', 'switching_rate', 'lifetimes']):
             raise Exception('Requested summary metrics are not recognised. Use one or more of FO, switching rate, or lifetimes (for now)')
@@ -278,7 +303,26 @@ def get_summ_features(hmm, Y, indices, metrics):
     return features
     
 def get_groups(group_structure):
-    # make sure diagonal if family matrix is 1:
+    """Util function to get groups from group structure matrix such as family structure. 
+    Output can be used to make sure groups/families are not split across folds during 
+    cross validation, e.g. using sklearn's GroupKFold. Groups are defined as components 
+    in the adjacency matrix.
+
+    Parameter:
+    ----------
+    group_structure : array-like of shape (n_samples, n_samples)
+        a matrix specifying the structure of the dataset, with positive
+        values indicating relations between samples and zeros indicating no relations.
+        Note: The diagonal will be set to 1
+    
+    Returns:
+    --------
+    cs : array-like of shape (n_samples,)
+        1D array containing the group each sample belongs to
+
+    """
+
+    # make sure diagonal of family matrix is 1:
     cs2 = group_structure
     np.fill_diagonal(cs2, 1)
     # create adjacency graph
@@ -290,24 +334,69 @@ def get_groups(group_structure):
 
     return cs
         
-def predictPhenotype(hmm, Y, behav, indices, method='Fisherkernel', estimator='KernelRidge', options=None):
+def predictPhenotype(hmm, Y, behav, indices, predictor='Fisherkernel', estimator='KernelRidge', options=None):
     """Predict phenotype from HMM
+    This uses either the Fisher kernel (default) or a set of HMM summary metrics
+    to predict a phenotype, in a nested cross-validated way
+    Estimators so far include: Kernel Ridge Regression and Ridge Regression
+    Cross-validation strategies so far include: KFold and GroupKFold
+    Hyperparameter optimization strategies so far include: only grid search
     
     Parameters:
     -----------
-    hmm : trained (group-level) HMM
-    Y : (group) timeseries
-    behav : phenotype to be predicted
-    indices : indices indicating beginning and end of each subject's timeseries
-    method : either 'Fisherkernel' or 'summary_metrics' (default='Fisherkernel')
-    estimator : sklearn estimator to be used for prediction (default='KernelRidge')
-    options :
+    hmm : HMM object
+        An instance of the HMM class, estimated on the group-level
+    Y : array-like of shape (n_samples, n_variables_2)
+        (group-level) timeseries data
+    behav : array-like of shape (n_samples,)
+        phenotype to be predicted
+    indices : array-like of shape (n_sessions, 2)
+        The start and end indices of each trial/session in the input data. 
+        Note that this function does not work if indices=None  
+    predictor : char (optional, default to 'Fisherkernel')
+        What to predict from, either 'Fisherkernel' or 'summary_metrics' (default='Fisherkernel')
+    estimator : char (optional, default to 'KernelRidge')
+        Model to be used for prediction (default='KernelRidge')
+        This should be the name of a sklearn base estimator
+        (for now either 'KernelRidge' or 'Ridge')
+    options : dict (optional, default to None)
+        general relevant options are:
+            'CVscheme': char, which CVscheme to use (default: 'GroupKFold' if group structure is specified, otherwise: KFold)
+            'nfolds': int, number of folds k for (outer and inner) k-fold CV loops
+            'group_structure': ndarray of (n_samples, n_samples), matrix specifying group structure: positive values if samples are related, zeros otherwise
+            'confounds': (TO DO)
+            'return_scores': bool, whether to return also the model scores of each fold
+            'return_models': bool, whether to return also the trained models of each fold
+            'return_hyperparams': bool, whether to return also the optimised hyperparameters of each fold
+            possible hyperparameters for model, e.g. 'alpha' for (kernel) ridge regression
+        for Fisher kernel, relevant options are: 
+            'shape': char, either 'linear' or 'Gaussian' (TO DO)
+            'incl_Pi': bool, whether to include the gradient w.r.t. the initial state probabilities when computing the Fisher kernel
+            'incl_P': bool, whether to include the gradient w.r.t. the transition probabilities
+            'incl_Mu': bool, whether to include the gradient w.r.t. the state means (note that this only works if means were not set to 0 when training HMM)
+            'incl_Sigma': bool, whether to include the gradient w.r.t. the state covariances
+        for summary metrics, relevant options are:
+            'metrics': list of char, containing metrics to be included as features
 
     Returns:
     --------
-    behav_pred : predicted phenotype
+    results : dict
+        containing
+        'behav_pred': predicted phenotype on test sets
+        'corr': correlation coefficient between predicted and actual values
+        (if requested):
+        'scores': the model scores of each fold
+        'models': the trained models from each fold
+        'hyperparams': the optimised hyperparameters of each fold
+
+    Raises:
+    -------
+    Exception
+        If the model has not been trained or if necessary input is missing
     
     """
+
+    # check conditions
     if not hmm.trained:
         raise Exception("The model has not yet been trained")
 
@@ -317,10 +406,11 @@ def predictPhenotype(hmm, Y, behav, indices, method='Fisherkernel', estimator='K
     if indices is None: 
         raise Exception("To predict phenotype from HMM, indices need to be provided")
     
+    # check options or set default:
     if options is None: 
-        options = {}
-    
-    if method=='Fisherkernel':
+        options = {}   
+    # necessary options for Fisher kernel:
+    if predictor=='Fisherkernel':
         if not options['shape']:
             shape='linear' 
         else:
@@ -340,14 +430,16 @@ def predictPhenotype(hmm, Y, behav, indices, method='Fisherkernel', estimator='K
         if 'incl_Sigma' in options:
             incl_Sigma = options['incl_Sigma']
         else:
-            incl_Sigma = True
-    
-    if method=='summary':
+            incl_Sigma = True   
+        estimator='KernelRidge'
+    # necessary options for summary metrics
+    if predictor=='summary':
         if not 'metrics' in options:
             metrics = ['FO', 'switching_rate', 'lifetimes']
         else:
             metrics = options['metrics']
-
+        estimator='Ridge'
+    # other necessary options
     if not 'CVscheme' in options:
         CVscheme = 'KFold'
     else:
@@ -358,12 +450,12 @@ def predictPhenotype(hmm, Y, behav, indices, method='Fisherkernel', estimator='K
     else:
         nfolds = options['nfolds']
 
-    if not 'family_structure' in options:
+    if not 'group_structure' in options:
         do_groupKFold = False
         allcs = None
     else:
         do_groupKFold = True
-        allcs = options['family_structure']
+        allcs = options['group_structure']
         CVscheme = 'GroupKFold'
 
     if not 'confounds' in options:
@@ -374,14 +466,14 @@ def predictPhenotype(hmm, Y, behav, indices, method='Fisherkernel', estimator='K
     N = indices.shape[0] # number of samples
 
     # get features/kernel from HMM to be predicted from (default: Fisher kernel):
-    if method=='Fisherkernel':
+    if predictor=='Fisherkernel':
         if shape=='linear':
             tau=None
         elif shape=='Gaussian':
             tau=options['tau']
         Xin = hmm_kernel(hmm, Y, indices, type='Fisher', shape=shape, incl_Pi=incl_Pi, incl_P=incl_P, incl_Mu=incl_Mu, incl_Sigma=incl_Sigma, tau=tau, return_feat=False, return_dist=False)
     # alternative: predict from HMM summary metrics
-    elif method=='summary':
+    elif predictor=='summary':
         Xin = get_summ_features(hmm, Y, indices, metrics)  
             
     # create CV folds
@@ -393,29 +485,32 @@ def predictPhenotype(hmm, Y, behav, indices, method='Fisherkernel', estimator='K
         cvfolds = sklearn.model_selection.KFold(n_splits=nfolds)
         cvfolds.get_n_splits(Y, behav)
 
-    behav_pred = np.zeros(shape=N)
+    # create empty return structures
+    behav_pred = np.zeros(shape=N)  
+    # optional return: 
+    if 'return_scores' in options and options['return_scores']==True:
+        scores = list()
+        return_scores = True
+    else:
+        return_scores = False
+    if 'return_models'in options and options['return_models']==True:
+        models = list()
+        return_models = True
+    else:
+        return_models = False
+    if 'return_hyperparams' in options and options['return_hyperparams']==True:
+        hyperparams = list()
+        return_hyperparams = True
+    else:
+        return_hyperparams = False
 
+    # main prediction:
+    # KRR (default for Fisher kernel):
     if estimator=='KernelRidge':
         if not 'alpha' in options:
             alphas = np.logspace(-4, -1, 6)
         else:
             alphas = options['alpha']
-        
-        if 'return_scores' in options and options['return_scores']==True:
-            scores = list()
-            return_scores = True
-        else:
-            return_scores = False
-        if 'return_models'in options and options['return_models']==True:
-            models = list()
-            return_models = True
-        else:
-            return_models = False
-        if 'return_hyperparams' in options and options['return_hyperparams']==True:
-            hyperparams = list()
-            return_hyperparams = True
-        else:
-            return_hyperparams = False
 
         model = sklearn.kernel_ridge.KernelRidge(kernel="precomputed")
 
@@ -430,7 +525,7 @@ def predictPhenotype(hmm, Y, behav, indices, method='Fisherkernel', estimator='K
                     models.append(model_tuned)
                 if return_hyperparams:
                     hyperparams.append(model_tuned.best_estimator_.alpha)
-        else:
+        else: # KFold CV not accounting for family structure
             for train, test in cvfolds.split(Xin, behav):
                 model_tuned = sklearn.model_selection.GridSearchCV(estimator=model, param_grid=dict(alpha=alphas), cv=cvfolds)
                 model_tuned.fit(Xin[train, train.reshape(-1,1)], behav[train])
@@ -441,9 +536,43 @@ def predictPhenotype(hmm, Y, behav, indices, method='Fisherkernel', estimator='K
                     models.append(model_tuned)
                 if return_hyperparams:
                     hyperparams.append(model_tuned.best_estimator_.alpha)
+    
+    # RR (default for summary metrics):
+    elif estimator=='Ridge':
+        if not 'alpha' in options:
+            alphas = np.logspace(-4, -1, 6)
+        else:
+            alphas = options['alpha']
 
-        corr = np.corrcoef(behav_pred, behav)[0,1]
+        model = sklearn.linear_model.Ridge()
 
+        if do_groupKFold:
+            for train, test in cvfolds.split(Xin, behav, groups=cs):
+                model_tuned = sklearn.model_selection.GridSearchCV(estimator=model, param_grid=dict(alpha=alphas), cv=cvfolds)
+                model_tuned.fit(Xin[train, :], behav[train], groups=cs[train])
+                behav_pred[test] = model_tuned.predict(Xin[test,:])
+                if return_scores:
+                    scores.append(model_tuned.score(Xin[test,:], behav[test]))
+                if return_models:
+                    models.append(model_tuned)
+                if return_hyperparams:
+                    hyperparams.append(model_tuned.best_estimator_.alpha)
+        else: # KFold CV not using family structure
+            for train, test in cvfolds.split(Xin, behav):
+                model_tuned = sklearn.model_selection.GridSearchCV(estimator=model, param_grid=dict(alpha=alphas), cv=cvfolds)
+                model_tuned.fit(Xin[train, :], behav[train])
+                behav_pred[test] = model_tuned.predict(Xin[test,:])
+                if return_scores:
+                    scores.append(model_tuned.score(Xin[test,:], behav[test]))
+                if return_models:
+                    models.append(model_tuned)
+                if return_hyperparams:
+                    hyperparams.append(model_tuned.best_estimator_.alpha)
+    
+    # get correlation coefficient between model-predicted and actual values
+    corr = np.corrcoef(behav_pred, behav)[0,1]
+
+    # aggregate results and optional returns
     results = {}
     results['behav_pred'] = behav_pred
     results['corr'] = corr
@@ -456,4 +585,9 @@ def predictPhenotype(hmm, Y, behav, indices, method='Fisherkernel', estimator='K
     
     return results
 
-# TO DO: deconfounding
+# TO DO: 
+# classification
+# deconfounding
+# add betas (gradient, prediction)
+# add options for different hyperparameter optimisation
+# fix Gaussian Fisher kernel to do proper optimisation for tau
