@@ -334,8 +334,8 @@ def get_groups(group_structure):
 
     return cs
 
-def deconfound_phenotype(Y, confX, betaY=None, my=None):
-    """Deconfound phenotype
+def deconfound(Y, confX, betaY=None, my=None):
+    """Deconfound
     """
     if betaY is None:
         betaY = np.zeros(shape=Y.shape)
@@ -352,8 +352,8 @@ def deconfound_phenotype(Y, confX, betaY=None, my=None):
     
     return betaY, my, Y
 
-def confound_phenotype(Y, conf, betaY, my):
-    """Reconfound phenotype
+def reconfound(Y, conf, betaY, my):
+    """Reconfound
     """
     if conf.ndim==1:
         conf = np.reshape(conf, (-1,1))
@@ -503,7 +503,7 @@ def predict_phenotype(hmm, Y, behav, indices, predictor='Fisherkernel', estimato
             tau=options['tau']
         Xin = hmm_kernel(hmm, Y, indices, type='Fisher', shape=shape, incl_Pi=incl_Pi, incl_P=incl_P, incl_Mu=incl_Mu, incl_Sigma=incl_Sigma, tau=tau, return_feat=False, return_dist=False)
     # alternative: predict from HMM summary metrics
-    elif predictor=='summary':
+    elif predictor=='summary_metrics':
         Xin = get_summ_features(hmm, Y, indices, metrics)  
             
     # create CV folds
@@ -558,7 +558,7 @@ def predict_phenotype(hmm, Y, behav, indices, predictor='Fisherkernel', estimato
                 # deconfounding:
                 if deconfounding:
                     confounds_train = confounds[train,:]
-                    CbetaY, CinterceptY, behav_train = deconfound_phenotype(behav_train, confounds_train)
+                    CbetaY, CinterceptY, behav_train = deconfound(behav_train, confounds_train)
                 # train model and make predictions:
                 model_tuned = sklearn.model_selection.GridSearchCV(estimator=model, param_grid=dict(alpha=alphas), cv=cvfolds)
                 model_tuned.fit(Xin[train, train.reshape(-1,1)], behav_train, groups=cs[train])
@@ -568,9 +568,9 @@ def predict_phenotype(hmm, Y, behav, indices, predictor='Fisherkernel', estimato
                 behavD[test] = behav[test]
                 behav_meanD[test] = behav_mean[test]
                 if deconfounding:
-                    _,_,behavD[test] = deconfound_phenotype(behavD[test], confounds[test,:], CbetaY, CinterceptY)
-                    behav_predD[test] = confound_phenotype(behav_predD[test], confounds[test,:], CbetaY, CinterceptY)
-                    behav_meanD[test] = confound_phenotype(behav_meanD[test], confounds[test,:], CbetaY, CinterceptY)
+                    _,_,behavD[test] = deconfound(behavD[test], confounds[test,:], CbetaY, CinterceptY)
+                    behav_predD[test] = reconfound(behav_predD[test], confounds[test,:], CbetaY, CinterceptY)
+                    behav_meanD[test] = reconfound(behav_meanD[test], confounds[test,:], CbetaY, CinterceptY)
                 # get additional output
                 if return_scores:
                     scores.append(model_tuned.score(Xin[train, test.reshape(-1,1)], behav[test]))
@@ -587,7 +587,7 @@ def predict_phenotype(hmm, Y, behav, indices, predictor='Fisherkernel', estimato
                 # deconfounding:
                 if deconfounding:
                     confounds_train = confounds[train,:]
-                    CbetaY, CinterceptY, behav_train = deconfound_phenotype(behav_train, confounds_train)
+                    CbetaY, CinterceptY, behav_train = deconfound(behav_train, confounds_train)
                 # train model and make predictions:
                 model_tuned = sklearn.model_selection.GridSearchCV(estimator=model, param_grid=dict(alpha=alphas), cv=cvfolds)
                 model_tuned.fit(Xin[train, train.reshape(-1,1)], behav_train)
@@ -597,9 +597,9 @@ def predict_phenotype(hmm, Y, behav, indices, predictor='Fisherkernel', estimato
                 behavD[test] = behav[test]
                 behav_meanD[test] = behav_mean[test]
                 if deconfounding:
-                    _,_,behavD[test] = deconfound_phenotype(behavD[test], confounds[test,:], CbetaY, CinterceptY)
-                    behav_predD[test] = confound_phenotype(behav_predD[test], confounds[test,:], CbetaY, CinterceptY)
-                    behav_meanD[test] = confound_phenotype(behav_meanD[test], confounds[test,:], CbetaY, CinterceptY)
+                    _,_,behavD[test] = deconfound(behavD[test], confounds[test,:], CbetaY, CinterceptY)
+                    behav_predD[test] = reconfound(behav_predD[test], confounds[test,:], CbetaY, CinterceptY)
+                    behav_meanD[test] = reconfound(behav_meanD[test], confounds[test,:], CbetaY, CinterceptY)
                 # get additional output
                 if return_scores:
                     scores.append(model_tuned.score(Xin[train, test.reshape(-1,1)], behav[test]))
@@ -626,7 +626,7 @@ def predict_phenotype(hmm, Y, behav, indices, predictor='Fisherkernel', estimato
                 # deconfounding:
                 if deconfounding:
                     confounds_train = confounds[train,:]
-                    CbetaY, CinterceptY, behav_train = deconfound_phenotype(behav_train, confounds_train)
+                    CbetaY, CinterceptY, behav_train = deconfound(behav_train, confounds_train)
                 # train model and make predictions:
                 model_tuned = sklearn.model_selection.GridSearchCV(estimator=model, param_grid=dict(alpha=alphas), cv=cvfolds)
                 model_tuned.fit(Xin[train, :], behav_train, groups=cs[train])
@@ -636,14 +636,14 @@ def predict_phenotype(hmm, Y, behav, indices, predictor='Fisherkernel', estimato
                 behavD[test] = behav[test]
                 behav_meanD[test] = behav_mean[test]
                 if deconfounding:
-                    _,_,behavD[test] = deconfound_phenotype(behavD[test], confounds[test,:], CbetaY, CinterceptY)
-                    behav_predD[test] = confound_phenotype(behav_predD[test], confounds[test,:], CbetaY, CinterceptY)
-                    behav_meanD[test] = confound_phenotype(behav_meanD[test], confounds[test,:], CbetaY, CinterceptY)
+                    _,_,behavD[test] = deconfound(behavD[test], confounds[test,:], CbetaY, CinterceptY)
+                    behav_predD[test] = reconfound(behav_predD[test], confounds[test,:], CbetaY, CinterceptY)
+                    behav_meanD[test] = reconfound(behav_meanD[test], confounds[test,:], CbetaY, CinterceptY)
                 # get additional output
                 if return_scores:
                     scores.append(model_tuned.score(Xin[test,:], behav[test]))
                     if deconfounding:
-                        scores_deconf.append(model_tuned.score(Xin[train, test.reshape(-1,1)], behavD[test]))
+                        scores_deconf.append(model_tuned.score(Xin[test,:], behavD[test]))
                 if return_models:
                     models.append(model_tuned)
                 if return_hyperparams:
@@ -655,7 +655,7 @@ def predict_phenotype(hmm, Y, behav, indices, predictor='Fisherkernel', estimato
                 # deconfounding:
                 if deconfounding:
                     confounds_train = confounds[train,:]
-                    CbetaY, CinterceptY, behav_train = deconfound_phenotype(behav_train, confounds_train)
+                    CbetaY, CinterceptY, behav_train = deconfound(behav_train, confounds_train)
                 # train model and make predictions:
                 model_tuned = sklearn.model_selection.GridSearchCV(estimator=model, param_grid=dict(alpha=alphas), cv=cvfolds)
                 model_tuned.fit(Xin[train, :], behav_train)
@@ -665,14 +665,14 @@ def predict_phenotype(hmm, Y, behav, indices, predictor='Fisherkernel', estimato
                 behavD[test] = behav[test]
                 behav_meanD[test] = behav_mean[test]
                 if deconfounding:
-                    _,_,behavD[test] = deconfound_phenotype(behavD[test], confounds[test,:], CbetaY, CinterceptY)
-                    behav_predD[test] = confound_phenotype(behav_predD[test], confounds[test,:], CbetaY, CinterceptY)
-                    behav_meanD[test] = confound_phenotype(behav_meanD[test], confounds[test,:], CbetaY, CinterceptY)
+                    _,_,behavD[test] = deconfound(behavD[test], confounds[test,:], CbetaY, CinterceptY)
+                    behav_predD[test] = reconfound(behav_predD[test], confounds[test,:], CbetaY, CinterceptY)
+                    behav_meanD[test] = reconfound(behav_meanD[test], confounds[test,:], CbetaY, CinterceptY)
                 # get additional output
                 if return_scores:
                     scores.append(model_tuned.score(Xin[test,:], behav[test]))
                     if deconfounding:
-                        scores_deconf.append(model_tuned.score(Xin[train, test.reshape(-1,1)], behavD[test]))
+                        scores_deconf.append(model_tuned.score(Xin[test,:], behavD[test]))
                 if return_models:
                     models.append(model_tuned)
                 if return_hyperparams:
@@ -703,7 +703,7 @@ def predict_phenotype(hmm, Y, behav, indices, predictor='Fisherkernel', estimato
 
 # TO DO: 
 # classification
-# deconfounding
+# option for deconfounding X
 # add betas (gradient, prediction)
 # add options for different hyperparameter optimisation
 # fix Gaussian Fisher kernel to do proper optimisation for tau
