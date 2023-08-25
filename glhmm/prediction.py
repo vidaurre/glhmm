@@ -9,7 +9,7 @@ import numpy as np
 import sys
 import sklearn
 import igraph as ig
-from glhmm import glhmm, utils
+from . import glhmm, utils
 
 
 def compute_gradient(hmm, Y, incl_Pi=True, incl_P=True, incl_Mu=True, incl_Sigma=True):
@@ -334,7 +334,7 @@ def get_groups(group_structure):
 
     return cs
         
-def predictPhenotype(hmm, Y, behav, indices, predictor='Fisherkernel', estimator='KernelRidge', options=None):
+def predict_phenotype(hmm, Y, behav, indices, predictor='Fisherkernel', estimator='KernelRidge', options=None):
     """Predict phenotype from HMM
     This uses either the Fisher kernel (default) or a set of HMM summary metrics
     to predict a phenotype, in a nested cross-validated way
