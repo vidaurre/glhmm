@@ -77,7 +77,7 @@ def show_Gamma(Gamma, line_overlay=None, tlim=None, Hz=1, palette='viridis'):
 
     # Setup colors
     x = np.round(np.linspace(0.0, 256-1, K)).astype(int)
-    cmap = plt.get_cmap('plasma').colors
+    # cmap = plt.get_cmap('plasma').colors
     cmap = plt.get_cmap(palette)
     cmap = cmap(np.arange(0, cmap.N))[:, :3]
     

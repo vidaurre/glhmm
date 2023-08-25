@@ -129,23 +129,21 @@ class glhmm():
 
             scale[tt] = sc
             Gamma[tt,:] = b * a
-            Gamma[tt,:] = Gamma[tt,:] / np.expand_dims(np.sum(Gamma[tt,:],axis=1), axis=1)
-
             Xi[tt_xi,:,:] = np.matmul( np.expand_dims(a[0:-1,:],axis=2), \
                 np.expand_dims((b[1:,:] * L[tt[1:],:]),axis=1)) * self.P
-            Xi[tt_xi,:,:] = Xi[tt_xi,:,:] / np.expand_dims(np.sum(Xi[tt_xi,:,:],axis=(1,2)),axis=(1,2))
 
             # repeat if a Nan is produced, scaling the loglikelood
-            if np.any(np.isnan(Gamma)) or np.any(np.isnan(Xi)):
+            if np.any(np.isinf(Gamma)) or np.any(np.isinf(Xi)):
                 LL = np.log(L[tt,:])
                 t = np.all(LL<0,axis=1)
                 LL[t,:] = LL[t,:] -  np.expand_dims(np.max(LL[t,:],axis=1), axis=1)
                 a,b,_ = auxiliary.compute_alpha_beta(np.exp(LL),self.Pi,self.P)
                 Gamma[tt,:] = b * a
-                Gamma[tt,:] = Gamma[tt,:] / np.expand_dims(np.sum(Gamma[tt,:],axis=1), axis=1)
                 Xi[tt_xi,:,:] = np.matmul( np.expand_dims(a[0:-1,:],axis=2), \
                     np.expand_dims((b[1:,:] * L[tt[1:],:]),axis=1)) * self.P
-                Xi[tt_xi,:,:] = Xi[tt_xi,:,:] / np.expand_dims(np.sum(Xi[tt_xi,:,:],axis=(1,2)),axis=(1,2))
+
+            Gamma[tt,:] = Gamma[tt,:] / np.expand_dims(np.sum(Gamma[tt,:],axis=1), axis=1)
+            Xi[tt_xi,:,:] = Xi[tt_xi,:,:] / np.expand_dims(np.sum(Xi[tt_xi,:,:],axis=(1,2)),axis=(1,2))
 
         return Gamma,Xi,scale
 
@@ -302,8 +300,8 @@ class glhmm():
         if not "initNbatch" in options: options["initNbatch"] = options["Nbatch"]
         if not "cyc" in options: options["cyc"] = 100
         if not "initcyc" in options: options["initcyc"] = 25
-        if not "forget_rate" in options: options["forget_rate"] = 0.5
-        if not "base_weights" in options: options["base_weights"] = 0.95
+        if not "forget_rate" in options: options["forget_rate"] = 0.75
+        if not "base_weights" in options: options["base_weights"] = 0.25
         if not "min_cyc" in options: options["min_cyc"] = 10
         if ("updateGamma" in options) and (not options["updateGamma"]): 
             options["updateGamma"] = True
@@ -327,6 +325,8 @@ class glhmm():
         
     def __init_Gamma(self,X,Y,indices,options):
 
+        verbose = options["verbose"]
+        options["verbose"] = False
         if options["initrep"] == 0:
             self.__init_prior_P_Pi() # init P,Pi priors
             self.__update_dynamics() # make P,Pi based on priors
@@ -346,11 +346,13 @@ class glhmm():
             if (r == 0) or (fe[r] < np.min(fe[0:r])):
                 Gamma = np.copy(Gamma_r)
                 best = r
-            if options["verbose"]: 
+            if verbose: 
                 print("Init repetition " + str(r+1) + " free energy = " + str(fe[r]))
 
-        if options["verbose"]: 
+        if verbose: 
             print("Best repetition: " + str(best+1))
+
+        options["verbose"] = verbose
         return Gamma
                 
                 
@@ -583,7 +585,7 @@ class glhmm():
                 self.Dir2d_alpha = Dir2d_alpha + self.priors["Dir2d_alpha"]
             else:
                 self.Dir2d_alpha = rho * (Dir2d_alpha + self.priors["Dir2d_alpha"]) \
-                    + (1-rho) * self.Dir2d_alpha
+                    + (1-rho) * np.copy(self.Dir2d_alpha)
         self.Dir2d_alpha[~Pstructure] = 0 
         self.__update_P()
 
@@ -597,7 +599,7 @@ class glhmm():
                 self.Dir_alpha = Dir_alpha + self.priors["Dir_alpha"]
             else:
                 self.Dir_alpha = rho * (Dir_alpha + self.priors["Dir_alpha"]) \
-                    + (1-rho) * self.Dir_alpha                
+                    + (1-rho) * np.copy(self.Dir_alpha)                
         self.Dir_alpha[~Pistructure] = 0
         self.__update_Pi()
 
@@ -610,7 +612,7 @@ class glhmm():
         self.__update_dynamics(Gamma,None,indices,init=True)
 
 
-    def __update_obsdist(self,X,Y,Gamma,Tfactor=1,rho=1):
+    def __update_obsdist(self,X,Y,Gamma,Nfactor=1,rho=1):
         """
         Update state distributions
         """        
@@ -655,23 +657,23 @@ class glhmm():
                 if diagonal_covmat:
                     alpha = self.alpha_mean[k]["shape"] / self.alpha_mean[k]["rate"]
                     isigma = self.Sigma[k_sigma]["shape"] / self.Sigma[k_sigma]["rate"]
-                    iS = Tfactor * isigma * Nk + alpha
+                    iS = Nfactor * isigma * Nk + alpha
                     S = 1 / iS
-                    mu = np.squeeze(Tfactor * isigma * S * GY)
-                    self.mean[k]["Sigma"] = rho * S + (1-rho) * self.mean[k]["Sigma"]
-                    self.mean[k]["Mu"] = rho * mu + (1-rho) * self.mean[k]["Mu"]
+                    mu = np.squeeze(Nfactor * isigma * S * GY)
+                    self.mean[k]["Sigma"] = rho * S + (1-rho) * np.copy(self.mean[k]["Sigma"])
+                    self.mean[k]["Mu"] = rho * mu + (1-rho) * np.copy(self.mean[k]["Mu"])
 
                 else:
                     alpha = np.diag(self.alpha_mean[k]["shape"] / self.alpha_mean[k]["rate"])
                     isigma = (self.Sigma[k_sigma]["shape"] * self.Sigma[k_sigma]["irate"]) 
                     gram = isigma * Nk
                     maxlik_mean = (GY / Nk).T
-                    iS = Tfactor * gram + alpha
+                    iS = Nfactor * gram + alpha
                     iS = (iS + iS.T) / 2
                     S = np.linalg.inv(iS)
-                    mu = np.squeeze(Tfactor * S @ gram @ maxlik_mean)
-                    self.mean[k]["Sigma"] = rho * S + (1-rho) * self.mean[k]["Sigma"]
-                    self.mean[k]["Mu"] = rho * mu + (1-rho) * self.mean[k]["Mu"]
+                    mu = np.squeeze(Nfactor * S @ gram @ maxlik_mean)
+                    self.mean[k]["Sigma"] = rho * S + (1-rho) * np.copy(self.mean[k]["Sigma"])
+                    self.mean[k]["Mu"] = rho * mu + (1-rho) * np.copy(self.mean[k]["Mu"])
 
         # betas 
         if self.hyperparameters["model_beta"] != 'no':
@@ -697,13 +699,14 @@ class glhmm():
                             jj = np.where(self.hyperparameters["connectivity"][:,j]==1)[0]
                         alpha = np.diag(self.alpha_beta[k]["shape"] / self.alpha_beta[k]["rate"][jj,j])
                         isigma = self.Sigma[k_sigma]["shape"] / self.Sigma[k_sigma]["rate"][j]
-                        iS = Tfactor * isigma * XGXb[jj,jj[:,np.newaxis],k] + alpha
+                        iS = Nfactor * isigma * XGXb[jj,jj[:,np.newaxis],k] + alpha
                         iS = (iS + iS.T) / 2
                         S = np.linalg.inv(iS) 
-                        mu = np.squeeze(S @ np.expand_dims(Tfactor * isigma * XGY[jj,j],axis=1))
-                        self.beta[k]["Sigma"][jj,jj[:,np.newaxis],j] = rho * S +  \
-                            (1-rho) * self.beta[k]["Sigma"][jj,jj[:,np.newaxis],j]
-                        self.beta[k]["Mu"][jj,j] = rho * mu + (1-rho) * self.beta[k]["Mu"][jj,j]
+                        mu = np.squeeze(S @ np.expand_dims(Nfactor * isigma * XGY[jj,j],axis=1))
+                        S_old = np.copy(self.beta[k]["Sigma"][jj,jj[:,np.newaxis],j])
+                        mu_old = np.copy(self.beta[k]["Mu"][jj,j])
+                        self.beta[k]["Sigma"][jj,jj[:,np.newaxis],j] = rho * S + (1-rho) * S_old
+                        self.beta[k]["Mu"][jj,j] = rho * mu + (1-rho) * mu_old
 
                 else:
                     alpha = np.diag(self.alpha_beta[k]["shape"] \
@@ -711,22 +714,22 @@ class glhmm():
                     isigma = self.Sigma[k_sigma]["shape"] * self.Sigma[k_sigma]["irate"]
                     gram = np.kron(XGXb[:,:,k],isigma)
                     maxlik_beta = np.reshape(np.linalg.lstsq(XGXb[:,:,k],XGY,rcond=None)[0],(p*q,1))
-                    iS = Tfactor * gram + alpha
+                    iS = Nfactor * gram + alpha
                     iS = (iS + iS.T) / 2
                     S = np.linalg.inv(iS)
-                    mu = Tfactor * S @ gram @ maxlik_beta
+                    mu = Nfactor * S @ gram @ maxlik_beta
                     mu = np.reshape(mu,(p,q)) 
-                    self.beta[k]["Sigma"] = rho * S + (1-rho) * self.beta[k]["Sigma"]
-                    self.beta[k]["Mu"] = rho * mu + (1-rho) * self.beta[k]["Mu"]
+                    self.beta[k]["Sigma"] = rho * S + (1-rho) * np.copy(self.beta[k]["Sigma"])
+                    self.beta[k]["Mu"] = rho * mu + (1-rho) * np.copy(self.beta[k]["Mu"])
            
         # Sigma
         if shared_covmat:
             if diagonal_covmat:
                 rate = np.copy(self.priors["Sigma"]["rate"])
-                shape = self.priors["Sigma"]["shape"] + 0.5 * Tfactor * T
+                shape = self.priors["Sigma"]["shape"] + 0.5 * Nfactor * T
             else:
                 rate = np.copy(self.priors["Sigma"]["rate"])
-                shape = self.priors["Sigma"]["shape"] + Tfactor * T
+                shape = self.priors["Sigma"]["shape"] + Nfactor * T
 
         for k in range(K):
 
@@ -762,55 +765,55 @@ class glhmm():
 
             if shared_covmat: # self.Sigma[0]["rate"] 
                 if diagonal_covmat:
-                    rate += 0.5 * Tfactor * \
+                    rate += 0.5 * Nfactor * \
                         ( (np.sum((d ** 2) * np.expand_dims(Gamma[:,k], axis=1),axis=0)) \
                         + sm + sb
                         )
                 else:
-                    rate += Tfactor * \
+                    rate += Nfactor * \
                         ( ((d * np.expand_dims(Gamma[:,k], axis=1)).T @ d) 
                         + sm + sb)
                     
             else:
                 if diagonal_covmat:
                     rate = self.priors["Sigma"]["rate"] \
-                            + 0.5 * Tfactor * \
+                            + 0.5 * Nfactor * \
                             ( np.sum((d ** 2) * np.expand_dims(Gamma[:,k], axis=1),axis=0) \
                             + sm + sb
                             ) 
                     shape = self.priors["Sigma"]["shape"] + \
-                            0.5 * Tfactor * np.sum(Gamma[:,k])
-                    self.Sigma[k]["rate"] = rho * rate + (1-rho) * self.Sigma[k]["rate"]
-                    self.Sigma[k]["shape"] = rho * shape + (1-rho) * self.Sigma[k]["shape"] 
+                            0.5 * Nfactor * np.sum(Gamma[:,k])
+                    self.Sigma[k]["rate"] = rho * rate + (1-rho) * np.copy(self.Sigma[k]["rate"])
+                    self.Sigma[k]["shape"] = rho * shape + (1-rho) * np.copy(self.Sigma[k]["shape"]) 
                     self.Sigma[k]["irate"] = 1 / self.Sigma[k]["rate"]
                     
                 else:
-                    rate =  self.priors["Sigma"]["rate"] + Tfactor * \
+                    rate =  self.priors["Sigma"]["rate"] + Nfactor * \
                         ( ((d * np.expand_dims(Gamma[:,k], axis=1)).T @ d) \
                         + sm + sb
                         )
                     shape = self.priors["Sigma"]["shape"] + \
-                        Tfactor * np.sum(Gamma[:,k])
-                    self.Sigma[k]["rate"] = rho * rate + (1-rho) * self.Sigma[k]["rate"]
-                    self.Sigma[k]["shape"] = rho * shape + (1-rho) * self.Sigma[k]["shape"] 
+                        Nfactor * np.sum(Gamma[:,k])
+                    self.Sigma[k]["rate"] = rho * rate + (1-rho) * np.copy(self.Sigma[k]["rate"])
+                    self.Sigma[k]["shape"] = rho * shape + (1-rho) * np.copy(self.Sigma[k]["shape"]) 
                     self.Sigma[k]["irate"] = np.linalg.inv(self.Sigma[k]["rate"])   
 
         if shared_covmat:
-            self.Sigma[0]["rate"] = rho * rate + (1-rho) * self.Sigma[0]["rate"]
-            self.Sigma[0]["shape"] = rho * shape + (1-rho) * self.Sigma[0]["shape"] 
+            self.Sigma[0]["rate"] = rho * rate + (1-rho) * np.copy(self.Sigma[0]["rate"])
+            self.Sigma[0]["shape"] = rho * shape + (1-rho) * np.copy(self.Sigma[0]["shape"]) 
             if diagonal_covmat:
                 self.Sigma[0]["irate"] = 1 / self.Sigma[0]["irate"]
             else:
-                 self.Sigma[0]["irate"] = np.linalg.inv(self.Sigma[0]["rate"])    
+                self.Sigma[0]["irate"] = np.linalg.inv(self.Sigma[0]["rate"])    
 
         self.__update_priors()
 
 
     def __update_obsdist_stochastic(self,files,I,Gamma,rho):
 
-        Tfactor = len(files) / len(I)
+        Nfactor = len(files) / len(I)
         X,Y,_,_ = io.load_files(files,I)
-        self.__update_obsdist(X,Y,Gamma,Tfactor,rho)
+        self.__update_obsdist(X,Y,Gamma,Nfactor,rho)
         
 
     def __init_obsdist(self,X,Y,Gamma):
@@ -933,7 +936,7 @@ class glhmm():
             self.trained = True        
 
         fe = np.empty(0)
-        loglik_entropy = np.zeros((N,2)) # data likelihood and Gamma likelihood & entropy
+        loglik_entropy = np.zeros((N,3)) # data likelihood and Gamma likelihood & entropy
         n_used = np.zeros(N)
         sampling_prob = np.ones(N) / N
         ever_used = np.zeros(N).astype(bool)
@@ -941,9 +944,7 @@ class glhmm():
         sum_Gamma = np.zeros((K,N))
         Dir_alpha_each = np.zeros((K,N))
         Dir2d_alpha_each = np.zeros((K,K,N))
-        warm_up = True
         cyc_to_go =  options["cyc_to_go_under_th"]
-        it,itw,rho = 0,0,1
 
         # collect subject specific free energy terms
         for j in range(N):
@@ -956,12 +957,15 @@ class glhmm():
             else:
                 loglik_entropy[j,0] = np.sum(self.get_fe(X,Y,Gamma,Xi,None,indices_individual[0],todo))
             # Gamma likelihood and entropy
-            todo = (True,False,True,False,False)
+            todo = (True,False,False,False,False)
             loglik_entropy[j,1] = np.sum(self.get_fe(None,Y,Gamma,Xi,None,indices_individual[0],todo))
+            todo = (False,False,True,False,False)
+            loglik_entropy[j,2] = np.sum(self.get_fe(None,Y,Gamma,Xi,None,indices_individual[0],todo))
 
         # do the actual training
-        while it < options["cyc"]: 
+        for it in range(options["cyc"]):
 
+            rho = (it + 2)**(-options["forget_rate"])
             I = np.random.choice(np.arange(N), size=options["Nbatch"], replace=False, p=sampling_prob)
             n_used[I] += 1
             n_used = n_used - np.min(n_used) + 1
@@ -969,7 +973,7 @@ class glhmm():
 
             sampling_prob = options["base_weights"] ** n_used
             sampling_prob = sampling_prob / np.sum(sampling_prob)
-            Tfactor = N / np.sum(ever_used)
+            Nfactor = N / np.sum(ever_used)
 
             X,Y,indices,indices_individual = io.load_files(files,I)
             indices_Xi = auxiliary.Gamma_indices_to_Xi_indices(indices)
@@ -979,7 +983,7 @@ class glhmm():
             sum_Gamma[:,I] = utils.get_FO(Gamma,indices,True).T
             
             # which states are active? 
-            if not warm_up and options["deactivate_states"]:
+            if options["deactivate_states"]:
                 for k in range(K):
                     FO = np.sum(sum_Gamma[k,:])
                     active_state = self.active_states[k]
@@ -996,12 +1000,12 @@ class glhmm():
                     Dir_alpha_each[:,I[j]] = Gamma[indices[j,0]]
                     tt_j = range(indices_Xi[j,0],indices_Xi[j,1])
                     Dir2d_alpha_each[:,:,I[j]] = np.sum(Xi[tt_j,:,:],axis=0)
-                Dir_alpha = Tfactor * np.sum(Dir_alpha_each[:,ever_used],axis=1)
-                Dir2d_alpha = Tfactor * np.sum(Dir2d_alpha_each[:,:,ever_used],axis=2)
+                Dir_alpha = Nfactor * np.sum(Dir_alpha_each[:,ever_used],axis=1)
+                Dir2d_alpha = Nfactor * np.sum(Dir2d_alpha_each[:,:,ever_used],axis=2)
                 self.__update_dynamics(Dir_alpha=Dir_alpha,Dir2d_alpha=Dir2d_alpha,rho=rho)
 
             if options["updateObs"]:
-                self.__update_obsdist(X,Y,Gamma,Tfactor,rho)
+                self.__update_obsdist(X,Y,Gamma,Nfactor,rho)
 
             # collect subject specific free energy terms
             for j in range(options["Nbatch"]):
@@ -1016,48 +1020,33 @@ class glhmm():
                     loglik_entropy[I[j],0] = np.sum(self.get_fe(X[tt_j,:],Y[tt_j,:], \
                         Gamma[tt_j,:],Xi[tt_j_xi,:,:],None,indices_individual[j],todo))
                 # Gamma likelihood and entropy
-                todo = (True,False,True,False,False)
+                todo = (True,False,False,False,False)
                 loglik_entropy[I[j],1] = np.sum(self.get_fe(None,Y[tt_j,:], \
                         Gamma[tt_j,:],Xi[tt_j_xi,:,:],None,indices_individual[j],todo))
-                              
+                todo = (False,False,True,False,False)
+                loglik_entropy[I[j],2] = np.sum(self.get_fe(None,Y[tt_j,:], \
+                        Gamma[tt_j,:],Xi[tt_j_xi,:,:],None,indices_individual[j],todo))
+                                              
             # KL divergences
             todo = (False,False,False,True,True)
             kl = np.sum(self.get_fe(None,None,None,None,None,None,todo))
             fe_it = np.sum(kl) + np.sum(loglik_entropy)
-            #print(str(np.sum(kl)) + ' ' + str(np.sum(loglik_entropy)))
             fe = np.append(fe, fe_it) 
 
-            if fe.shape[0] > 1:
+            if len(fe) > 1:
                 chgFrEn = abs((fe[-1]-fe[-2]) / (fe[-1]-fe[0]))
-                if not warm_up:
+                if it > 10:
                     if np.abs(chgFrEn) < options["tol"]: cyc_to_go -= 1
                     else: cyc_to_go =  options["cyc_to_go_under_th"]
                 if options["verbose"]: 
-                    if warm_up: 
-                        print("Warm up cycle " + str(itw+1) + ", free energy = " + str(fe_it) + \
-                            ", relative change = " + str(chgFrEn) + \
-                            ", went through = " + str(100*np.mean(ever_used)) + "% of the sessions")
-                    else:
-                        print("Cycle " + str(it+1) + ", free energy = " + str(fe_it) + \
-                            ", relative change = " + str(chgFrEn) + ", rho = " + str(rho))
-                if not warm_up:
-                    if cyc_to_go == 0: 
-                        if options["verbose"]: print("Reached early convergence")
-                        break
+                    print("Cycle " + str(it+1) + ", free energy = " + str(fe_it) + \
+                        ", relative change = " + str(chgFrEn) + ", rho = " + str(rho))
+                if cyc_to_go == 0: 
+                    if options["verbose"]: print("Reached early convergence")
+                    break
             else:
-                if warm_up:
-                    if options["verbose"]: print("Warm up cycle " + str(itw+1) + " free energy = " + str(fe_it))
-                else:
-                    if options["verbose"]: print("Cycle " + str(it+1) + " free energy = " + str(fe_it))
+                if options["verbose"]: print("Cycle " + str(it+1) + " free energy = " + str(fe_it))
             
-            if not warm_up: 
-                it += 1
-                rho = (it + 1)**(-options["forget_rate"])
-            elif np.all(ever_used):
-                if options["verbose"]: print("Warm up finished") 
-                warm_up = False
-            else: 
-                itw += 1
 
         K_active = np.sum(self.active_states)
         if options["verbose"]:
@@ -1902,7 +1891,10 @@ class glhmm():
         if options["verbose"]: start = time.time()
 
         if not self.trained:
-            if Gamma is None: Gamma = self.__init_Gamma(X,Y,indices,options)
+            if Gamma is None: 
+                Gamma = self.__init_Gamma(X,Y,indices,options)
+            elif Gamma.shape != (Y.shape[0],K): 
+                raise Exception('Supplied initial Gamma has not the correct dimensions')
             self.__init_priors(X,Y)
             self.__init_dynamics(Gamma,indices=indices)
             self.__init_obsdist(X,Y,Gamma)
