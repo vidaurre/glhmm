@@ -7,7 +7,7 @@ Prediction from Gaussian Linear Hidden Markov Model
 
 import numpy as np
 import sys
-import sklearn
+from sklearn import model_selection, kernel_ridge, linear_model
 import igraph as ig
 from . import glhmm, utils
 
@@ -509,10 +509,10 @@ def predict_phenotype(hmm, Y, behav, indices, predictor='Fisherkernel', estimato
     # create CV folds
     if do_groupKFold: # when using family/group structure - use GroupKFold
         cs = get_groups(allcs)
-        cvfolds = sklearn.model_selection.GroupKFold(n_splits=nfolds)
+        cvfolds = model_selection.GroupKFold(n_splits=nfolds)
         cvfolds.get_n_splits(Y, behav, cs)
     elif CVscheme=='KFold': # when not using family/group structure
-        cvfolds = sklearn.model_selection.KFold(n_splits=nfolds)
+        cvfolds = model_selection.KFold(n_splits=nfolds)
         cvfolds.get_n_splits(Y, behav)
 
     # create empty return structures
@@ -549,7 +549,7 @@ def predict_phenotype(hmm, Y, behav, indices, predictor='Fisherkernel', estimato
         else:
             alphas = options['alpha']
 
-        model = sklearn.kernel_ridge.KernelRidge(kernel="precomputed")
+        model = kernel_ridge.KernelRidge(kernel="precomputed")
 
         if do_groupKFold:
             for train, test in cvfolds.split(Xin, behav, groups=cs):
@@ -560,7 +560,7 @@ def predict_phenotype(hmm, Y, behav, indices, predictor='Fisherkernel', estimato
                     confounds_train = confounds[train,:]
                     CbetaY, CinterceptY, behav_train = deconfound(behav_train, confounds_train)
                 # train model and make predictions:
-                model_tuned = sklearn.model_selection.GridSearchCV(estimator=model, param_grid=dict(alpha=alphas), cv=cvfolds)
+                model_tuned = model_selection.GridSearchCV(estimator=model, param_grid=dict(alpha=alphas), cv=cvfolds)
                 model_tuned.fit(Xin[train, train.reshape(-1,1)], behav_train, groups=cs[train])
                 behav_pred[test] = model_tuned.predict(Xin[train, test.reshape(-1,1)])
                 # in deconfounded space
@@ -589,7 +589,7 @@ def predict_phenotype(hmm, Y, behav, indices, predictor='Fisherkernel', estimato
                     confounds_train = confounds[train,:]
                     CbetaY, CinterceptY, behav_train = deconfound(behav_train, confounds_train)
                 # train model and make predictions:
-                model_tuned = sklearn.model_selection.GridSearchCV(estimator=model, param_grid=dict(alpha=alphas), cv=cvfolds)
+                model_tuned = model_selection.GridSearchCV(estimator=model, param_grid=dict(alpha=alphas), cv=cvfolds)
                 model_tuned.fit(Xin[train, train.reshape(-1,1)], behav_train)
                 behav_pred[test] = model_tuned.predict(Xin[train, test.reshape(-1,1)])
                 # in deconfounded space
@@ -617,7 +617,7 @@ def predict_phenotype(hmm, Y, behav, indices, predictor='Fisherkernel', estimato
         else:
             alphas = options['alpha']
 
-        model = sklearn.linear_model.Ridge()
+        model = linear_model.Ridge()
 
         if do_groupKFold:
             for train, test in cvfolds.split(Xin, behav, groups=cs):
@@ -628,7 +628,7 @@ def predict_phenotype(hmm, Y, behav, indices, predictor='Fisherkernel', estimato
                     confounds_train = confounds[train,:]
                     CbetaY, CinterceptY, behav_train = deconfound(behav_train, confounds_train)
                 # train model and make predictions:
-                model_tuned = sklearn.model_selection.GridSearchCV(estimator=model, param_grid=dict(alpha=alphas), cv=cvfolds)
+                model_tuned = model_selection.GridSearchCV(estimator=model, param_grid=dict(alpha=alphas), cv=cvfolds)
                 model_tuned.fit(Xin[train, :], behav_train, groups=cs[train])
                 behav_pred[test] = model_tuned.predict(Xin[test,:])
                 # in deconfounded space
@@ -657,7 +657,7 @@ def predict_phenotype(hmm, Y, behav, indices, predictor='Fisherkernel', estimato
                     confounds_train = confounds[train,:]
                     CbetaY, CinterceptY, behav_train = deconfound(behav_train, confounds_train)
                 # train model and make predictions:
-                model_tuned = sklearn.model_selection.GridSearchCV(estimator=model, param_grid=dict(alpha=alphas), cv=cvfolds)
+                model_tuned = model_selection.GridSearchCV(estimator=model, param_grid=dict(alpha=alphas), cv=cvfolds)
                 model_tuned.fit(Xin[train, :], behav_train)
                 behav_pred[test] = model_tuned.predict(Xin[test,:])
                 # in deconfounded space
