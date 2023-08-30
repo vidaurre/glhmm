@@ -459,7 +459,7 @@ def predict_phenotype(hmm, Y, behav, indices, predictor='Fisherkernel', estimato
             incl_Sigma = True   
         estimator='KernelRidge'
     # necessary options for summary metrics
-    if predictor=='summary':
+    if predictor=='summary_metrics':
         if not 'metrics' in options:
             metrics = ['FO', 'switching_rate', 'lifetimes']
         else:
