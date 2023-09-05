@@ -10,6 +10,7 @@ import sys
 from sklearn import preprocessing, model_selection, kernel_ridge, linear_model, svm
 from sklearn import metrics as ms
 import igraph as ig
+import warnings
 from . import glhmm, utils
 
 
@@ -345,7 +346,9 @@ def deconfound(Y, confX, betaY=None, my=None):
         if confX.ndim==1:
             confX = np.reshape(confX, (-1,1))
         confXT = confX.T
-        betaY_tmp = np.linalg.lstsq((np.matmul(confXT, confX)) + 0.00001 * np.identity(confX.shape[1]), np.matmul(confXT, Y))
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            betaY_tmp = np.linalg.lstsq((np.matmul(confXT, confX)) + 0.00001 * np.identity(confX.shape[1]), np.matmul(confXT, Y))
         betaY = betaY_tmp[0]
     
     res = Y - np.matmul(confX,betaY)
@@ -986,6 +989,7 @@ def classify_phenotype(hmm, Y, behav, indices, predictor='FisherKernel', estimat
     return results
 
 # TO DO: 
+# add multiclass classifier
 # add betas (gradient, prediction)
 # option for deconfounding X
 # add options for different hyperparameter optimisation
