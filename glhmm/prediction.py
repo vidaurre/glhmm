@@ -424,6 +424,9 @@ def predict_phenotype(hmm, Y, behav, indices, predictor='Fisherkernel', estimato
     Exception
         If the model has not been trained or if necessary input is missing
     
+    Notes:
+    ------
+    If behav contains NaNs, these subjects/sessions will be removed in Y and confounds
     """
 
     # check conditions
@@ -497,7 +500,15 @@ def predict_phenotype(hmm, Y, behav, indices, predictor='Fisherkernel', estimato
             confounds = confounds.reshape((-1,1))
         deconfounding = True
 
-    N = indices.shape[0] # number of samples
+    # find and remove missing values
+    ind = ~np.isnan(behav)
+    behav = behav[ind]
+    indices = indices[ind,:] # to remove subjects' timeseries whose behavioural variable is missing
+    if deconfounding:
+        confounds = confounds[ind,:]
+
+    # N = indices.shape[0] # number of samples
+    N = sum(ind == True)
 
     # get features/kernel from HMM to be predicted from (default: Fisher kernel):
     if predictor=='Fisherkernel':
@@ -513,6 +524,7 @@ def predict_phenotype(hmm, Y, behav, indices, predictor='Fisherkernel', estimato
     # create CV folds
     if do_groupKFold: # when using family/group structure - use GroupKFold
         cs = get_groups(allcs)
+        cs = cs[ind] # remove missing values
         cvfolds = model_selection.GroupKFold(n_splits=nfolds)
         cvfolds.get_n_splits(Y, behav, cs)
     elif CVscheme=='KFold': # when not using family/group structure
@@ -766,6 +778,9 @@ def classify_phenotype(hmm, Y, behav, indices, predictor='FisherKernel', estimat
     Exception
         If the model has not been trained or if necessary input is missing
     
+    Notes:
+    ------
+    If behav contains NaNs, these subjects/sessions will be removed in Y and confounds
     """
 
     # check conditions
@@ -835,7 +850,13 @@ def classify_phenotype(hmm, Y, behav, indices, predictor='FisherKernel', estimat
     if 'confounds' in options:
         raise Exception("Deconfounding is not implemented for classification, use prediction instead or remove confounds")
 
-    N = indices.shape[0] # number of samples
+    # find and remove missing values
+    ind = ~np.isnan(behav)
+    behav = behav[ind]
+    indices = indices[ind,:] # to remove subjects' timeseries whose behavioural variable is missing
+
+    # N = indices.shape[0] # number of samples
+    N = sum(ind == True)
 
     # get features/kernel from HMM to be predicted from (default: Fisher kernel):
     if predictor=='Fisherkernel':
@@ -851,6 +872,7 @@ def classify_phenotype(hmm, Y, behav, indices, predictor='FisherKernel', estimat
     # create CV folds
     if do_groupKFold: # when using family/group structure - use GroupKFold
         cs = get_groups(allcs)
+        cs = cs[ind] # remove missing values
         cvfolds = model_selection.GroupKFold(n_splits=nfolds)
         cvfolds.get_n_splits(Y, behav, cs)
     elif CVscheme=='KFold': # when not using family/group structure
