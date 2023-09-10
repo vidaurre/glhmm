@@ -1011,8 +1011,10 @@ def classify_phenotype(hmm, Y, behav, indices, predictor='FisherKernel', estimat
     return results
 
 # TO DO: 
-# add multiclass classifier
+# add option to provide features/kernel so it does not have to be recomputed when predicting several traits
+# add/test multiclass classifier
 # add betas (gradient, prediction)
 # option for deconfounding X
 # add options for different hyperparameter optimisation
 # fix Gaussian Fisher kernel to do proper optimisation for tau
+# deconfounding for classifier
