@@ -118,7 +118,11 @@ def compute_gradient(hmm, Y, incl_Pi=True, incl_P=True, incl_Mu=True, incl_Sigma
             dSigma = np.zeros(shape=(q, q, K))
             YT = Y.transpose()
             for k in range(K):
-                Xi_V = Y- Mu[:,k]
+                if not hmm.hyperparameters["model_mean"] == 'no':
+                    Mu = hmm.get_means()
+                    Xi_V = Y- Mu[:,k]
+                else:
+                    Xi_V = Y
                 Xi_VT = Xi_V.transpose()
                 Gamma_tmp = -sum(GammaT[k,:]/2)
                 GamiSigma = Gamma_tmp * invSigma[:,:,k]
@@ -1011,6 +1015,7 @@ def classify_phenotype(hmm, Y, behav, indices, predictor='FisherKernel', estimat
     return results
 
 # TO DO: 
+# add option for separate train and test set (no CV within function)
 # add option to provide features/kernel so it does not have to be recomputed when predicting several traits
 # add/test multiclass classifier
 # add betas (gradient, prediction)
