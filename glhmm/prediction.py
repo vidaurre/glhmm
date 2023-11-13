@@ -448,7 +448,7 @@ def predict_phenotype(hmm, Y, behav, indices, predictor='Fisherkernel', estimato
         options = {}   
     # necessary options for Fisher kernel:
     if predictor=='Fisherkernel':
-        if not options['shape']:
+        if not 'shape' in options:
             shape='linear' 
         else:
             shape=options['shape']
@@ -804,7 +804,7 @@ def classify_phenotype(hmm, Y, behav, indices, predictor='FisherKernel', estimat
         options = {}   
     # necessary options for Fisher kernel:
     if predictor=='Fisherkernel':
-        if not options['shape']:
+        if not 'shape' in options:
             shape='linear' 
         else:
             shape=options['shape']
@@ -1013,6 +1013,219 @@ def classify_phenotype(hmm, Y, behav, indices, predictor='FisherKernel', estimat
         results['hyperparams'] = hyperparams
     
     return results
+
+def train_pred(hmm, Y, behav, indices, predictor='Fisherkernel', estimator='KernelRidge', options=None):
+    """Train prediction model for phenotype from HMM
+    This uses either the Fisher kernel (default) or a set of HMM summary metrics
+    to predict a phenotype, in a nested cross-validated way
+    Estimators so far include: Kernel Ridge Regression and Ridge Regression
+    Cross-validation strategies so far include: KFold and GroupKFold
+    Hyperparameter optimization strategies so far include: only grid search
+    
+    Parameters:
+    -----------
+    hmm : HMM object
+        An instance of the HMM class, estimated on the group-level
+    Y : array-like of shape (n_samples, n_variables_2)
+        (group-level) timeseries data
+    behav : array-like of shape (n_samples,)
+        phenotype to be predicted
+    indices : array-like of shape (n_sessions, 2)
+        The start and end indices of each trial/session in the input data. 
+        Note that this function does not work if indices=None  
+    predictor : char (optional, default to 'Fisherkernel')
+        What to predict from, either 'Fisherkernel' or 'summary_metrics' (default='Fisherkernel')
+    estimator : char (optional, default to 'KernelRidge')
+        Model to be used for prediction (default='KernelRidge')
+        This should be the name of a sklearn base estimator
+        (for now either 'KernelRidge' or 'Ridge')
+    options : dict (optional, default to None)
+        general relevant options are:
+            'CVscheme': char, which CVscheme to use (default: 'GroupKFold' if group structure is specified, otherwise: KFold)
+            'nfolds': int, number of folds k for (outer and inner) k-fold CV loops
+            'group_structure': ndarray of (n_samples, n_samples), matrix specifying group structure: positive values if samples are related, zeros otherwise
+            'confounds': array-like of shape (n_sessions,) or (n_sessions, n_confounds) containing confounding variables
+            possible hyperparameters for model, e.g. 'alpha' for (kernel) ridge regression
+        for Fisher kernel, relevant options are: 
+            'shape': char, either 'linear' or 'Gaussian' (TO DO)
+            'incl_Pi': bool, whether to include the gradient w.r.t. the initial state probabilities when computing the Fisher kernel
+            'incl_P': bool, whether to include the gradient w.r.t. the transition probabilities
+            'incl_Mu': bool, whether to include the gradient w.r.t. the state means (note that this only works if means were not set to 0 when training HMM)
+            'incl_Sigma': bool, whether to include the gradient w.r.t. the state covariances
+        for summary metrics, relevant options are:
+            'metrics': list of char, containing metrics to be included as features
+
+    Returns:
+    --------
+    results : dict
+        containing
+        'behav_pred': predicted phenotype on test sets
+        'corr': correlation coefficient between predicted and actual values
+        (if requested):
+        'scores': the model scores of each fold
+        'models': the trained models from each fold
+        'hyperparams': the optimised hyperparameters of each fold
+
+    Raises:
+    -------
+    Exception
+        If the model has not been trained or if necessary input is missing
+    
+    Notes:
+    ------
+    If behav contains NaNs, these subjects/sessions will be removed in Y and confounds
+    """
+
+    # check conditions
+    if not hmm.trained:
+        raise Exception("The model has not yet been trained")
+
+    if behav is None:
+        raise Exception("Phenotype to be predicted needs to be provided")
+    
+    if indices is None: 
+        raise Exception("To predict phenotype from HMM, indices need to be provided")
+    
+    # check options or set default:
+    if options is None: 
+        options = {}   
+    # necessary options for Fisher kernel:
+    if predictor=='Fisherkernel':
+        if not 'shape' in options:
+            shape='linear' 
+        else:
+            shape=options['shape']
+        if 'incl_Pi' in options:
+            incl_Pi = options['incl_Pi']
+        else:
+            incl_Pi = True
+        if 'incl_P' in options:
+            incl_P = options['incl_P']
+        else:
+            incl_P = True
+        if 'incl_Mu' in options:
+            incl_Mu = options['incl_Mu']
+        else:
+            incl_Mu = False
+        if 'incl_Sigma' in options:
+            incl_Sigma = options['incl_Sigma']
+        else:
+            incl_Sigma = True   
+        estimator='KernelRidge'
+    # necessary options for summary metrics
+    if predictor=='summary_metrics':
+        if not 'metrics' in options:
+            metrics = ['FO', 'switching_rate', 'lifetimes']
+        else:
+            metrics = options['metrics']
+        estimator='Ridge'
+    # other necessary options
+    if not 'optim_hyperparam' in options:
+        optim_hyperparam = 'GridSearchCV'
+    else: 
+        optim_hyperparam = options['optim_hyperparam']
+        
+    if optim_hyperparam == 'GridSearchCV':
+        if not 'CVscheme' in options:
+            CVscheme = 'KFold'
+        else:
+            CVscheme = options['CVscheme']
+        
+        if not 'nfolds' in options:
+            nfolds = 5
+        else:
+            nfolds = options['nfolds']
+
+        if not 'group_structure' in options:
+            do_groupKFold = False
+            allcs = None
+        else:
+            do_groupKFold = True
+            allcs = options['group_structure']
+            CVscheme = 'GroupKFold'
+    elif optim_hyperparam is None:
+        do_groupKFold = False
+        CVscheme = None
+
+    if not 'confounds' in options:
+        confounds = None
+        deconfounding = False
+    else:
+        confounds = options['confounds']
+        if confounds.ndim==1:
+            confounds = confounds.reshape((-1,1))
+        deconfounding = True
+
+    # find and remove missing values
+    ind = ~np.isnan(behav)
+    behav = behav[ind]
+    indices = indices[ind,:] # to remove subjects' timeseries whose behavioural variable is missing
+    if deconfounding:
+        confounds = confounds[ind,:]
+
+    # N = indices.shape[0] # number of samples
+    N = sum(ind == True)
+
+    # get features/kernel from HMM to be predicted from (default: Fisher kernel):
+    if predictor=='Fisherkernel':
+        if shape=='linear':
+            tau=None
+        elif shape=='Gaussian':
+            tau=options['tau']
+        Xin = hmm_kernel(hmm, Y, indices, type='Fisher', shape=shape, incl_Pi=incl_Pi, incl_P=incl_P, incl_Mu=incl_Mu, incl_Sigma=incl_Sigma, tau=tau, return_feat=False, return_dist=False)
+    # alternative: predict from HMM summary metrics
+    elif predictor=='summary_metrics':
+        Xin = get_summ_features(hmm, Y, indices, metrics)  
+            
+    behav_mean = np.zeros(shape=N)
+    if deconfounding:
+        behavD = np.zeros(shape=N)
+        behav_meanD = np.zeros(shape=N)
+
+    if do_groupKFold: # when using family/group structure - use GroupKFold
+        cs = get_groups(allcs)
+        cs = cs[ind] # remove missing values
+        cvfolds = model_selection.GroupKFold(n_splits=nfolds)
+        cvfolds.get_n_splits(Y, behav, cs)
+    elif CVscheme=='KFold': # when not using family/group structure
+        cvfolds = model_selection.KFold(n_splits=nfolds)
+        cvfolds.get_n_splits(Y, behav)
+    # train estimator:
+    if not 'alpha' in options:
+        alphas = np.logspace(-4, -1, 6)
+    else:
+        alphas = options['alpha']
+    # KRR (default for Fisher kernel):        
+    if estimator=='KernelRidge':
+        model = kernel_ridge.KernelRidge(kernel="precomputed")
+     # RR (default for summary metrics):       
+    elif estimator=='Ridge':
+        model = linear_model.Ridge()
+
+    behav_train = behav
+    # behav_mean = np.mean(behav_train)
+    # deconfounding:
+    if deconfounding:
+        confounds_train = confounds
+        CbetaY, CinterceptY, behavD = deconfound(behav_train, confounds_train)
+        behav_train = behavD
+    # train model:
+    if optim_hyperparam == 'GridSearchCV':
+        model_tuned = model_selection.GridSearchCV(estimator=model, param_grid=dict(alpha=alphas), cv=cvfolds)
+    else:
+        model.set_params(alpha=alphas)
+        model_tuned = model
+    
+    if do_groupKFold:
+        model_tuned.fit(Xin, behav_train, groups=cs)
+    else:
+        model_tuned.fit(Xin, behav_train)
+    
+    if deconfounding:
+        return model_tuned, CbetaY, CinterceptY, behavD
+    else:
+        return model_tuned
+
 
 # TO DO: 
 # add option for separate train and test set (no CV within function)
