@@ -14,7 +14,7 @@ import warnings
 from . import glhmm, utils
 
 
-def compute_gradient(hmm, Y, incl_Pi=True, incl_P=True, incl_Mu=True, incl_Sigma=True):
+def compute_gradient(hmm, Y, incl_Pi=True, incl_P=True, incl_Mu=False, incl_Sigma=True):
     """Computes the gradient of the log-likelihood for timeseries Y
     with respect to specified HMM parameters
     
@@ -151,7 +151,7 @@ def compute_gradient(hmm, Y, incl_Pi=True, incl_P=True, incl_Mu=True, incl_Sigma
         
     return hmmgrad
 
-def hmm_kernel(hmm, Y, indices, type='Fisher', shape='linear', incl_Pi=True, incl_P=True, incl_Mu=False, incl_Sigma=False, tau=None, return_feat=False, return_dist=False):
+def hmm_kernel(hmm, Y, indices, type='Fisher', shape='linear', incl_Pi=True, incl_P=True, incl_Mu=False, incl_Sigma=True, tau=None, return_feat=False, return_dist=False):
     """Constructs a kernel from an HMM, as well as the respective feature matrix 
     and/or distance matrix
     
@@ -224,7 +224,6 @@ def hmm_kernel(hmm, Y, indices, type='Fisher', shape='linear', incl_Pi=True, inc
         else:
             raise Exception("This kernel is not yet implemented. Use type='Fisher' instead")
 
-
     if shape=='linear':
         featT = feat.transpose()
         kernel = feat @ featT # inner product
@@ -234,8 +233,7 @@ def hmm_kernel(hmm, Y, indices, type='Fisher', shape='linear', incl_Pi=True, inc
         for i in range(S):
             for j in range(S):
                 dist[i,j] = np.sqrt(sum(abs(feat[i,:]-feat[j,:])**2))**2
-            
-            
+                       
         if not tau:
             tau = 1
         
@@ -537,6 +535,7 @@ def predict_phenotype(hmm, Y, behav, indices, predictor='Fisherkernel', estimato
 
     # create empty return structures
     behav_pred = np.zeros(shape=N)  
+    behav_pred_scaled = np.zeros(shape=N)
     behav_mean = np.zeros(shape=N)
     if deconfounding:
         behavD = np.zeros(shape=N)
@@ -575,27 +574,46 @@ def predict_phenotype(hmm, Y, behav, indices, predictor='Fisherkernel', estimato
             for train, test in cvfolds.split(Xin, behav, groups=cs):
                 behav_train = behav[train]
                 behav_mean[test] = np.mean(behav_train)
+                behav_train_scaled = np.zeros(shape=behav_train.shape)
+                if not deconfounding:
+                    scaler_y = preprocessing.StandardScaler().fit(behav_train.reshape(-1,1))
+                    behav_train_scaled = scaler_y.transform(behav_train.reshape(-1,1))
+                    behav_train_scaled = behav_train_scaled.reshape(-1,1)
                 # deconfounding:
-                if deconfounding:
+                elif deconfounding:
                     confounds_train = confounds[train,:]
-                    CbetaY, CinterceptY, behav_train = deconfound(behav_train, confounds_train)
+                    CbetaY, CinterceptY, behav_train_scaled = deconfound(behav_train, confounds_train)
                 # train model and make predictions:
+                Xin_train = Xin[train, train.reshape(-1,1)]
+                center_K = preprocessing.KernelCenterer().fit(Xin_train)
+                Xin_train_scaled = center_K.transform(Xin_train)
                 model_tuned = model_selection.GridSearchCV(estimator=model, param_grid=dict(alpha=alphas), cv=cvfolds)
-                model_tuned.fit(Xin[train, train.reshape(-1,1)], behav_train, groups=cs[train])
-                behav_pred[test] = model_tuned.predict(Xin[train, test.reshape(-1,1)])
-                # in deconfounded space
-                behav_predD[test] = behav_pred[test]
-                behavD[test] = behav[test]
-                behav_meanD[test] = behav_mean[test]
-                if deconfounding:
+                model_tuned.fit(Xin_train_scaled, behav_train_scaled, groups=cs[train])
+                Xin_test = Xin[train, test.reshape(-1,1)]
+                Xin_test_scaled = center_K.transform(Xin_test)
+                behav_pred_scaled_tmp = model_tuned.predict(Xin_test_scaled)
+                behav_pred_scaled[test] = behav_pred_scaled_tmp.flatten()
+                if not deconfounding:
+                    behav_pred_tmp = scaler_y.inverse_transform(behav_pred_scaled_tmp)
+                    behav_pred[test] = behav_pred_tmp.flatten()
+                elif deconfounding:
+                    # in deconfounded space
+                    behav_pred[test] = behav_pred_scaled[test]
+                    behav_predD[test] = behav_pred[test]
+                    behavD[test] = behav[test]
+                    behav_meanD[test] = behav_mean[test]
                     _,_,behavD[test] = deconfound(behavD[test], confounds[test,:], CbetaY, CinterceptY)
                     behav_predD[test] = reconfound(behav_predD[test], confounds[test,:], CbetaY, CinterceptY)
                     behav_meanD[test] = reconfound(behav_meanD[test], confounds[test,:], CbetaY, CinterceptY)
                 # get additional output
                 if return_scores:
-                    scores.append(model_tuned.score(Xin[train, test.reshape(-1,1)], behav[test]))
-                    if deconfounding:
-                        scores_deconf.append(model_tuned.score(Xin[train, test.reshape(-1,1)], behavD[test]))
+                    behav_test = behav[test]
+                    if not deconfounding:
+                        behav_test_scaled = scaler_y.transform(behav_test)
+                        scores.append(model_tuned.score(Xin_test_scaled, behav_test_scaled))
+                    elif deconfounding:
+                        scores.append(model_tuned.score(Xin_test_scaled, behav_test))
+                        scores_deconf.append(model_tuned.score(Xin_test_scaled, behavD[test]))
                 if return_models:
                     models.append(model_tuned)
                 if return_hyperparams:
@@ -604,27 +622,46 @@ def predict_phenotype(hmm, Y, behav, indices, predictor='Fisherkernel', estimato
             for train, test in cvfolds.split(Xin, behav):
                 behav_train = behav[train]
                 behav_mean[test] = np.mean(behav_train)
+                behav_train_scaled = np.zeros(shape=behav_train.shape)
+                if not deconfounding:
+                    scaler_y = preprocessing.StandardScaler().fit(behav_train.reshape(-1,1))
+                    behav_train_scaled = scaler_y.transform(behav_train.reshape(-1,1))
+                    behav_train_scaled = behav_train_scaled.reshape(-1,1)
                 # deconfounding:
-                if deconfounding:
+                elif deconfounding:
                     confounds_train = confounds[train,:]
-                    CbetaY, CinterceptY, behav_train = deconfound(behav_train, confounds_train)
+                    CbetaY, CinterceptY, behav_train_scaled = deconfound(behav_train, confounds_train)
                 # train model and make predictions:
+                Xin_train = Xin[train, train.reshape(-1,1)]
+                center_K = preprocessing.KernelCenterer().fit(Xin_train)
+                Xin_train_scaled = center_K.transform(Xin_train)
                 model_tuned = model_selection.GridSearchCV(estimator=model, param_grid=dict(alpha=alphas), cv=cvfolds)
-                model_tuned.fit(Xin[train, train.reshape(-1,1)], behav_train)
-                behav_pred[test] = model_tuned.predict(Xin[train, test.reshape(-1,1)])
-                # in deconfounded space
-                behav_predD[test] = behav_pred[test]
-                behavD[test] = behav[test]
-                behav_meanD[test] = behav_mean[test]
-                if deconfounding:
+                model_tuned.fit(Xin_train_scaled, behav_train_scaled)
+                Xin_test = Xin[train, test.reshape(-1,1)]
+                Xin_test_scaled = center_K.transform(Xin_test)
+                behav_pred_scaled_tmp = model_tuned.predict(Xin_test_scaled)
+                behav_pred_scaled[test] = behav_pred_scaled_tmp.flatten()
+                if not deconfounding:
+                    behav_pred_tmp = scaler_y.inverse_transform(behav_pred_scaled_tmp)
+                    behav_pred[test] = behav_pred_tmp.flatten()
+                elif deconfounding:
+                    # in deconfounded space
+                    behav_pred[test] = behav_pred_scaled[test]
+                    behav_predD[test] = behav_pred[test]
+                    behavD[test] = behav[test]
+                    behav_meanD[test] = behav_mean[test]
                     _,_,behavD[test] = deconfound(behavD[test], confounds[test,:], CbetaY, CinterceptY)
                     behav_predD[test] = reconfound(behav_predD[test], confounds[test,:], CbetaY, CinterceptY)
                     behav_meanD[test] = reconfound(behav_meanD[test], confounds[test,:], CbetaY, CinterceptY)
                 # get additional output
                 if return_scores:
-                    scores.append(model_tuned.score(Xin[train, test.reshape(-1,1)], behav[test]))
-                    if deconfounding:
-                        scores_deconf.append(model_tuned.score(Xin[train, test.reshape(-1,1)], behavD[test]))
+                    behav_test = behav[test]
+                    if not deconfounding:
+                        behav_test_scaled = scaler_y.transform(behav_test)
+                        scores.append(model_tuned.score(Xin_test_scaled, behav_test_scaled))
+                    elif deconfounding:
+                        scores.append(model_tuned.score(Xin_test_scaled, behav_test))
+                        scores_deconf.append(model_tuned.score(Xin_test_scaled, behavD[test]))
                 if return_models:
                     models.append(model_tuned)
                 if return_hyperparams:
@@ -643,27 +680,46 @@ def predict_phenotype(hmm, Y, behav, indices, predictor='Fisherkernel', estimato
             for train, test in cvfolds.split(Xin, behav, groups=cs):
                 behav_train = behav[train]
                 behav_mean[test] = np.mean(behav_train)
+                behav_train_scaled = np.zeros(shape=behav_train.shape)
+                if not deconfounding:
+                    scaler_y = preprocessing.StandardScaler().fit(behav_train.reshape(-1,1))
+                    behav_train_scaled = scaler_y.transform(behav_train.reshape(-1,1))
+                    behav_train_scaled = behav_train_scaled.reshape(-1,1)
                 # deconfounding:
-                if deconfounding:
+                elif deconfounding:
                     confounds_train = confounds[train,:]
-                    CbetaY, CinterceptY, behav_train = deconfound(behav_train, confounds_train)
+                    CbetaY, CinterceptY, behav_train_scaled = deconfound(behav_train, confounds_train)
                 # train model and make predictions:
+                Xin_train = Xin[train,:]
+                scaler_x = preprocessing.StandardScaler().fit(Xin_train)
+                Xin_train_scaled = scaler_x.transform(Xin_train)
                 model_tuned = model_selection.GridSearchCV(estimator=model, param_grid=dict(alpha=alphas), cv=cvfolds)
-                model_tuned.fit(Xin[train, :], behav_train, groups=cs[train])
-                behav_pred[test] = model_tuned.predict(Xin[test,:])
-                # in deconfounded space
-                behav_predD[test] = behav_pred[test]
-                behavD[test] = behav[test]
-                behav_meanD[test] = behav_mean[test]
-                if deconfounding:
+                model_tuned.fit(Xin_train_scaled, behav_train_scaled, groups=cs[train])
+                Xin_test = Xin[test,:]
+                Xin_test_scaled = scaler_x.transform(Xin_test)
+                behav_pred_scaled_tmp = model_tuned.predict(Xin_test_scaled)
+                behav_pred_scaled[test] = behav_pred_scaled_tmp.flatten()
+                if not deconfounding:
+                    behav_pred_tmp = scaler_y.inverse_transform(behav_pred_scaled_tmp)
+                    behav_pred[test] = behav_pred_tmp.flatten()
+                elif deconfounding:
+                    # in deconfounded space
+                    behav_pred[test] = behav_pred_scaled[test]
+                    behav_predD[test] = behav_pred[test]
+                    behavD[test] = behav[test]
+                    behav_meanD[test] = behav_mean[test]
                     _,_,behavD[test] = deconfound(behavD[test], confounds[test,:], CbetaY, CinterceptY)
                     behav_predD[test] = reconfound(behav_predD[test], confounds[test,:], CbetaY, CinterceptY)
                     behav_meanD[test] = reconfound(behav_meanD[test], confounds[test,:], CbetaY, CinterceptY)
                 # get additional output
                 if return_scores:
-                    scores.append(model_tuned.score(Xin[test,:], behav[test]))
-                    if deconfounding:
-                        scores_deconf.append(model_tuned.score(Xin[test,:], behavD[test]))
+                    behav_test = behav[test]
+                    if not deconfounding:
+                        behav_test_scaled = scaler_y.transform(behav_test)
+                        scores.append(model_tuned.score(Xin_test_scaled, behav_test_scaled))
+                    elif deconfounding:
+                        scores.append(model_tuned.score(Xin_test_scaled, behav_test))
+                        scores_deconf.append(model_tuned.score(Xin_test_scaled, behavD[test]))
                 if return_models:
                     models.append(model_tuned)
                 if return_hyperparams:
@@ -672,27 +728,46 @@ def predict_phenotype(hmm, Y, behav, indices, predictor='Fisherkernel', estimato
             for train, test in cvfolds.split(Xin, behav):
                 behav_train = behav[train]
                 behav_mean[test] = np.mean(behav_train)
+                behav_train_scaled = np.zeros(shape=behav_train.shape)
+                if not deconfounding:
+                    scaler_y = preprocessing.StandardScaler().fit(behav_train.reshape(-1,1))
+                    behav_train_scaled = scaler_y.transform(behav_train.reshape(-1,1))
+                    behav_train_scaled = behav_train_scaled.reshape(-1,1)
                 # deconfounding:
-                if deconfounding:
+                elif deconfounding:
                     confounds_train = confounds[train,:]
-                    CbetaY, CinterceptY, behav_train = deconfound(behav_train, confounds_train)
+                    CbetaY, CinterceptY, behav_train_scaled = deconfound(behav_train, confounds_train)
                 # train model and make predictions:
+                Xin_train = Xin[train,:]
+                scaler_x = preprocessing.StandardScaler().fit(Xin_train)
+                Xin_train_scaled = scaler_x.transform(Xin_train)
                 model_tuned = model_selection.GridSearchCV(estimator=model, param_grid=dict(alpha=alphas), cv=cvfolds)
-                model_tuned.fit(Xin[train, :], behav_train)
-                behav_pred[test] = model_tuned.predict(Xin[test,:])
-                # in deconfounded space
-                behav_predD[test] = behav_pred[test]
-                behavD[test] = behav[test]
-                behav_meanD[test] = behav_mean[test]
-                if deconfounding:
+                model_tuned.fit(Xin_train_scaled, behav_train_scaled)
+                Xin_test = Xin[test,:]
+                Xin_test_scaled = scaler_x.transform(Xin_test)
+                behav_pred_scaled_tmp = model_tuned.predict(Xin_test_scaled)
+                behav_pred_scaled[test] = behav_pred_scaled_tmp.flatten()
+                if not deconfounding:
+                    behav_pred_tmp = scaler_y.inverse_transform(behav_pred_scaled_tmp)
+                    behav_pred[test] = behav_pred_tmp.flatten()
+                elif deconfounding:
+                    # in deconfounded space
+                    behav_pred[test] = behav_pred_scaled[test]
+                    behav_predD[test] = behav_pred[test]
+                    behavD[test] = behav[test]
+                    behav_meanD[test] = behav_mean[test]
                     _,_,behavD[test] = deconfound(behavD[test], confounds[test,:], CbetaY, CinterceptY)
                     behav_predD[test] = reconfound(behav_predD[test], confounds[test,:], CbetaY, CinterceptY)
                     behav_meanD[test] = reconfound(behav_meanD[test], confounds[test,:], CbetaY, CinterceptY)
                 # get additional output
                 if return_scores:
-                    scores.append(model_tuned.score(Xin[test,:], behav[test]))
-                    if deconfounding:
-                        scores_deconf.append(model_tuned.score(Xin[test,:], behavD[test]))
+                    behav_test = behav[test]
+                    if not deconfounding:
+                        behav_test_scaled = scaler_y.transform(behav_test)
+                        scores.append(model_tuned.score(Xin_test_scaled, behav_test_scaled))
+                    elif deconfounding:
+                        scores.append(model_tuned.score(Xin_test_scaled, behav_test))
+                        scores_deconf.append(model_tuned.score(Xin_test_scaled, behavD[test]))
                 if return_models:
                     models.append(model_tuned)
                 if return_hyperparams:
@@ -721,7 +796,7 @@ def predict_phenotype(hmm, Y, behav, indices, predictor='Fisherkernel', estimato
     
     return results
 
-def classify_phenotype(hmm, Y, behav, indices, predictor='FisherKernel', estimator='SVM', options=None):
+def classify_phenotype(hmm, Y, behav, indices, predictor='Fisherkernel', estimator='SVM', options=None):
     """Classify phenotype from HMM
     This uses either the Fisher kernel (default) or a set of HMM summary metrics
     to make a classification, in a nested cross-validated way
@@ -925,14 +1000,19 @@ def classify_phenotype(hmm, Y, behav, indices, predictor='FisherKernel', estimat
             for train, test in cvfolds.split(Xin, behav, groups=cs):
                 behav_train = behav[train]
                 # train model and make predictions:
+                Xin_train = Xin[train, train.reshape(-1,1)]
+                center_K = preprocessing.KernelCenterer().fit(Xin_train)
+                Xin_train_scaled = center_K.transform(Xin_train)
                 model_tuned = model_selection.GridSearchCV(estimator=model, param_grid=dict(C=Cs), cv=cvfolds)
-                model_tuned.fit(Xin[train, train.reshape(-1,1)], behav_train, groups=cs[train])
-                behav_pred[test] = model_tuned.predict(Xin[train, test.reshape(-1,1)])
+                model_tuned.fit(Xin_train_scaled, behav_train, groups=cs[train])
+                Xin_test = Xin[train, test.reshape(-1,1)]
+                Xin_test_scaled = center_K.transform(Xin_test)
+                behav_pred[test] = model_tuned.predict(Xin_test_scaled)
                 if return_prob:
-                    behav_prob[test,:] = model_tuned.predict_proba(Xin[train, test.reshape(-1,1)])
+                    behav_prob[test,:] = model_tuned.predict_proba(Xin_test_scaled)
                 # get additional output
                 if return_scores:
-                    scores.append(model_tuned.score(Xin[train, test.reshape(-1,1)], behav[test]))
+                    scores.append(model_tuned.score(Xin_test_scaled, behav[test]))
                 if return_models:
                     models.append(model_tuned)
                 if return_hyperparams:
@@ -941,14 +1021,19 @@ def classify_phenotype(hmm, Y, behav, indices, predictor='FisherKernel', estimat
             for train, test in cvfolds.split(Xin, behav):
                 behav_train = behav[train]
                 # train model and make predictions:
+                Xin_train = Xin[train, train.reshape(-1,1)]
+                center_K = preprocessing.KernelCenterer().fit(Xin_train)
+                Xin_train_scaled = center_K.transform(Xin_train)
                 model_tuned = model_selection.GridSearchCV(estimator=model, param_grid=dict(C=Cs), cv=cvfolds)
-                model_tuned.fit(Xin[train, train.reshape(-1,1)], behav_train)
-                behav_pred[test] = model_tuned.predict(Xin[train, test.reshape(-1,1)])
+                model_tuned.fit(Xin_train_scaled, behav_train)
+                Xin_test = Xin[train, test.reshape(-1,1)]
+                Xin_test_scaled = center_K.transform(Xin_test)
+                behav_pred[test] = model_tuned.predict(Xin_test_scaled)
                 if return_prob:
-                    behav_prob[test,:] = model_tuned.predict_proba(Xin[train, test.reshape(-1,1)])
+                    behav_prob[test,:] = model_tuned.predict_proba(Xin_test_scaled)
                 # get additional output
                 if return_scores:
-                    scores.append(model_tuned.score(Xin[train, test.reshape(-1,1)], behav[test]))
+                    scores.append(model_tuned.score(Xin_test_scaled, behav[test]))
                 if return_models:
                     models.append(model_tuned)
                 if return_hyperparams:
@@ -967,14 +1052,19 @@ def classify_phenotype(hmm, Y, behav, indices, predictor='FisherKernel', estimat
             for train, test in cvfolds.split(Xin, behav, groups=cs):
                 behav_train = behav[train]
                 # train model and make predictions:
+                Xin_train = Xin[train,:]
+                scaler_x = preprocessing.StandardScaler().fit(Xin_train)
+                Xin_train_scaled = scaler_x.transform(Xin_train)
                 model_tuned = model_selection.GridSearchCV(estimator=model, param_grid=dict(C=Cs), cv=cvfolds)
-                model_tuned.fit(Xin[train, :], behav_train, groups=cs[train])
-                behav_pred[test] = model_tuned.predict(Xin[test,:])
+                model_tuned.fit(Xin_train_scaled, behav_train, groups=cs[train])
+                Xin_test = Xin[test,:]
+                Xin_test_scaled = scaler_x.transform(Xin_test)
+                behav_pred[test] = model_tuned.predict(Xin_test_scaled)
                 if return_prob:
-                    behav_prob[test,:] = model_tuned.predict_proba(Xin[test,:])
+                    behav_prob[test,:] = model_tuned.predict_proba(Xin_test_scaled)
                 # get additional output
                 if return_scores:
-                    scores.append(model_tuned.score(Xin[test,:], behav[test]))
+                    scores.append(model_tuned.score(Xin_test_scaled, behav[test]))
                 if return_models:
                     models.append(model_tuned)
                 if return_hyperparams:
@@ -983,14 +1073,19 @@ def classify_phenotype(hmm, Y, behav, indices, predictor='FisherKernel', estimat
             for train, test in cvfolds.split(Xin, behav):
                 behav_train = behav[train]
                 # train model and make predictions:
+                Xin_train = Xin[train,:]
+                scaler_x = preprocessing.StandardScaler().fit(Xin_train)
+                Xin_train_scaled = scaler_x.transform(Xin_train)
                 model_tuned = model_selection.GridSearchCV(estimator=model, param_grid=dict(C=Cs), cv=cvfolds)
-                model_tuned.fit(Xin[train, :], behav_train)
-                behav_pred[test] = model_tuned.predict(Xin[test,:])
+                model_tuned.fit(Xin_train_scaled, behav_train)
+                Xin_test = Xin[test,:]
+                Xin_test_scaled = scaler_x.transform(Xin_test)
+                behav_pred[test] = model_tuned.predict(Xin_test_scaled)
                 if return_prob:
-                    behav_prob[test,:] = model_tuned.predict_proba(Xin[test,:])
+                    behav_prob[test,:] = model_tuned.predict_proba(Xin_test_scaled)
                 # get additional output
                 if return_scores:
-                    scores.append(model_tuned.score(Xin[test,:], behav[test]))
+                    scores.append(model_tuned.score(Xin_test_scaled, behav[test]))
                 if return_models:
                     models.append(model_tuned)
                 if return_hyperparams:
@@ -1198,17 +1293,27 @@ def train_pred(hmm, Y, behav, indices, predictor='Fisherkernel', estimator='Kern
     # KRR (default for Fisher kernel):        
     if estimator=='KernelRidge':
         model = kernel_ridge.KernelRidge(kernel="precomputed")
+        center_K = preprocessing.KernelCenterer().fit(Xin)
+        Xin_scaled = center_K.transform(Xin)
+        scaler_x = center_K
      # RR (default for summary metrics):       
     elif estimator=='Ridge':
         model = linear_model.Ridge()
+        scaler_x = preprocessing.StandardScaler().fit(Xin)
+        Xin_scaled = scaler_x.transform(Xin)
 
     behav_train = behav
+    behav_train_scaled = np.zeros(shape=behav_train.shape)
+    if not deconfounding:
+        scaler_y = preprocessing.StandardScaler().fit(behav_train.reshape(-1,1))
+        behav_train_scaled = scaler_y.transform(behav_train.reshape(-1,1))
+        behav_train_scaled = behav_train_scaled.reshape(-1,1)
     # behav_mean = np.mean(behav_train)
     # deconfounding:
-    if deconfounding:
+    elif deconfounding:
         confounds_train = confounds
         CbetaY, CinterceptY, behavD = deconfound(behav_train, confounds_train)
-        behav_train = behavD
+        behav_train_scaled = behavD
     # train model:
     if optim_hyperparam == 'GridSearchCV':
         model_tuned = model_selection.GridSearchCV(estimator=model, param_grid=dict(alpha=alphas), cv=cvfolds)
@@ -1217,14 +1322,466 @@ def train_pred(hmm, Y, behav, indices, predictor='Fisherkernel', estimator='Kern
         model_tuned = model
     
     if do_groupKFold:
+        model_tuned.fit(Xin_scaled, behav_train_scaled, groups=cs)
+    else:
+        model_tuned.fit(Xin_scaled, behav_train_scaled)
+    
+    if deconfounding:
+        return model_tuned, scaler_x, CbetaY, CinterceptY, behavD
+    else:
+        return model_tuned, scaler_x, scaler_y
+    
+def test_pred(hmm, Y, indices, model_tuned, scaler_x, scaler_y=None, behav=None, train_indices=None, CinterceptY=None, CbetaY=None, predictor='Fisherkernel', estimator='KernelRidge', options=None):
+    """
+    When using a kernel method (e.g. Fisher kernel), Y must be the timeseries of both training and 
+    test set to construct the correct kernel, and indices of the training sessions (train_indices)
+    must be provided. When using summary metrics, Y must be the timeseries of only the test set, and
+    train_indices should be None.
+    When using deconfounding, CinterceptY and CbetaY need to be specified
+    """
+    # check conditions
+    if not hmm.trained:
+        raise Exception("The model has not yet been trained")
+    
+    if indices is None: 
+        raise Exception("To predict phenotype from HMM, indices need to be provided")
+    
+    if behav is not None:
+        return_corr = True
+        return_scores = True
+    else:
+        return_corr = False
+        return_scores = False
+
+    # check options or set default:
+    if options is None: 
+        options = {}   
+    # necessary options for Fisher kernel:
+    if predictor=='Fisherkernel':
+        if not 'shape' in options:
+            shape='linear' 
+        else:
+            shape=options['shape']
+        if 'incl_Pi' in options:
+            incl_Pi = options['incl_Pi']
+        else:
+            incl_Pi = True
+        if 'incl_P' in options:
+            incl_P = options['incl_P']
+        else:
+            incl_P = True
+        if 'incl_Mu' in options:
+            incl_Mu = options['incl_Mu']
+        else:
+            incl_Mu = False
+        if 'incl_Sigma' in options:
+            incl_Sigma = options['incl_Sigma']
+        else:
+            incl_Sigma = True   
+        estimator='KernelRidge'
+    # necessary options for summary metrics
+    if predictor=='summary_metrics':
+        if not 'metrics' in options:
+            metrics = ['FO', 'switching_rate', 'lifetimes']
+        else:
+            metrics = options['metrics']
+        estimator='Ridge'
+
+    if not 'confounds' in options:
+        confounds = None
+        deconfounding = False
+    else:
+        confounds = options['confounds']
+        if confounds.ndim==1:
+            confounds = confounds.reshape((-1,1))
+        deconfounding = True
+
+    N = indices.shape[0] # number of samples
+    ses_vec = np.arange(N)
+    if train_indices is not None:
+        test_indices = np.delete(ses_vec, train_indices)
+
+    # get features/kernel from HMM to be predicted from (default: Fisher kernel):
+    if predictor=='Fisherkernel':
+        if shape=='linear':
+            tau=None
+        elif shape=='Gaussian':
+            tau=options['tau']
+        Xin = hmm_kernel(hmm, Y, indices, type='Fisher', shape=shape, incl_Pi=incl_Pi, incl_P=incl_P, incl_Mu=incl_Mu, incl_Sigma=incl_Sigma, tau=tau, return_feat=False, return_dist=False)
+    # alternative: predict from HMM summary metrics
+    elif predictor=='summary_metrics':
+        Xin = get_summ_features(hmm, Y, indices, metrics)  
+
+    if train_indices is not None:
+        behav_pred = np.zeros(shape=test_indices.shape)
+        if deconfounding:
+            if behav is not None:
+                behavD = np.zeros(shape=test_indices.shape)
+                behav_mean = np.mean(behav)
+            behav_predD = np.zeros(shape=test_indices.shape)
+            behav_meanD = np.zeros(shape=test_indices.shape)
+    else:
+        behav_pred = np.zeros(shape=N)  
+        behav_pred_scaled = np.zeros(shape=N)
+        if deconfounding:
+            if behav is not None:
+                behavD = np.zeros(shape=N)
+                behav_mean= np.mean(behav)
+            behav_predD = np.zeros(shape=N)
+            behav_meanD = np.zeros(shape=N)
+
+    # optional return: 
+    if 'return_models'in options and options['return_models']==True:
+        return_models = True
+    else:
+        return_models = False
+
+    if estimator=="KernelRidge":
+        Xin_test = Xin[train_indices, test_indices.reshape(-1,1)]
+        Xin_test_scaled = scaler_x.transform(Xin_test)
+        behav_pred_scaled = model_tuned.predict(Xin_test_scaled)
+        if not deconfounding:
+            behav_pred_tmp = scaler_y.inverse_transform(behav_pred_scaled)
+            behav_pred = behav_pred_tmp.flatten()
+        elif deconfounding:
+            # in deconfounded space
+            behav_pred = behav_pred_scaled
+            behav_predD = behav_pred_scaled
+            behav_predD = reconfound(behav_predD, confounds[test_indices,:], CbetaY, CinterceptY)
+            if behav is not None:
+                behavD = behav[test_indices]
+                #behav_meanD = behav_mean[test_indices]
+                _,_,behavD = deconfound(behavD, confounds[test_indices,:], CbetaY, CinterceptY)
+                #behav_meanD = reconfound(behav_meanD, confounds[test_indices,:], CbetaY, CinterceptY)
+            # get additional output
+        if return_scores:
+            behav_test = behav[test_indices]
+            if not deconfounding:
+                behav_test_scaled_tmp = scaler_y.transform(behav_test.reshape(-1,1))
+                behav_test_scaled = behav_test_scaled_tmp.flatten()
+                score = model_tuned.score(Xin_test_scaled, behav_test_scaled)
+            if deconfounding:
+                score = model_tuned.score(Xin_test_scaled, behav_test)
+                score_deconf = model_tuned.score(Xin_test_scaled, behavD)
+
+    elif estimator=="Ridge":
+        Xin_scaled = scaler_x.transform(Xin)
+        behav_pred_scaled = model_tuned.predict(Xin_scaled)
+        if not deconfounding:
+            behav_pred_tmp = scaler_y.inverse_transform(behav_pred_scaled)
+            behav_pred = behav_pred_tmp.flatten()
+        elif deconfounding:
+            # in deconfounded space
+            behav_pred = behav_pred_scaled
+            behav_predD = behav_pred_scaled
+            behav_predD = reconfound(behav_predD, confounds, CbetaY, CinterceptY)
+            if behav is not None:
+                behavD = behav
+                #behav_meanD = behav_mean
+                _,_,behavD = deconfound(behavD, confounds, CbetaY, CinterceptY)
+                #behav_meanD = reconfound(behav_meanD, confounds, CbetaY, CinterceptY)
+        if return_scores:
+            if not deconfounding:
+                behav_scaled_tmp = scaler_y.transform(behav.reshape(-1,1))
+                behav_scaled = behav_scaled_tmp.flatten()
+                score = model_tuned.score(Xin_scaled, behav_scaled)
+            if deconfounding:
+                score_deconf = model_tuned.score(Xin_scaled, behavD)        
+
+    if return_corr:
+        if train_indices is not None:
+            corr = np.corrcoef(behav_pred, behav[test_indices])[0,1]
+        else:
+            corr = np.corrcoef(behav_pred, behav)[0,1]
+        if deconfounding:
+            if train_indices is not None:
+                corr_deconf = np.corrcoef(behav_predD, behavD)[0,1]
+            else:
+                corr_deconf = np.corrcoef(behav_predD, behavD)[0,1]           
+
+    # aggregate results and optional returns
+    results = {}
+    results['behav_pred'] = behav_pred
+    if return_corr:
+        results['corr'] = corr
+    if deconfounding:
+        results['behav_predD'] = behav_predD
+        if return_corr:
+            results['corr_deconf'] = corr_deconf
+    if return_scores:
+        results['scores'] = score
+        if deconfounding:
+            results['scores_deconf'] = score_deconf
+    if return_models:
+        results['models'] = model_tuned
+
+    return results
+
+def train_classif(hmm, Y, behav, indices, predictor='Fisherkernel', estimator='SVM', options=None):
+
+    # check conditions
+    if not hmm.trained:
+        raise Exception("The model has not yet been trained")
+
+    if behav is None:
+        raise Exception("Phenotype to be predicted needs to be provided")
+    elif behav.ndim>1 or np.unique(behav).shape[0]>2:
+        behav = preprocessing.LabelBinarizer().fit_transform(behav)
+    
+    if indices is None: 
+        raise Exception("To predict phenotype from HMM, indices need to be provided")
+    
+    # check options or set default:
+    if options is None: 
+        options = {}   
+    # necessary options for Fisher kernel:
+    if predictor=='Fisherkernel':
+        if not 'shape' in options:
+            shape='linear' 
+        else:
+            shape=options['shape']
+        if 'incl_Pi' in options:
+            incl_Pi = options['incl_Pi']
+        else:
+            incl_Pi = True
+        if 'incl_P' in options:
+            incl_P = options['incl_P']
+        else:
+            incl_P = True
+        if 'incl_Mu' in options:
+            incl_Mu = options['incl_Mu']
+        else:
+            incl_Mu = False
+        if 'incl_Sigma' in options:
+            incl_Sigma = options['incl_Sigma']
+        else:
+            incl_Sigma = True   
+        estimator='SVM'
+    # necessary options for summary metrics
+    if predictor=='summary_metrics':
+        if not 'metrics' in options:
+            metrics = ['FO', 'switching_rate', 'lifetimes']
+        else:
+            metrics = options['metrics']
+        estimator='LogisticRegression'
+    # other necessary options
+    if not 'optim_hyperparam' in options:
+        optim_hyperparam = 'GridSearchCV'
+    else: 
+        optim_hyperparam = options['optim_hyperparam']
+        
+    if optim_hyperparam == 'GridSearchCV':
+        if not 'CVscheme' in options:
+            CVscheme = 'KFold'
+        else:
+            CVscheme = options['CVscheme']
+        
+        if not 'nfolds' in options:
+            nfolds = 5
+        else:
+            nfolds = options['nfolds']
+
+        if not 'group_structure' in options:
+            do_groupKFold = False
+            allcs = None
+        else:
+            do_groupKFold = True
+            allcs = options['group_structure']
+            CVscheme = 'GroupKFold'
+    elif optim_hyperparam is None:
+        do_groupKFold = False
+        CVscheme = None
+
+    if 'confounds' in options:
+        raise Exception("Deconfounding is not implemented for classification, use prediction instead or remove confounds")
+
+    # find and remove missing values
+    ind = ~np.isnan(behav)
+    behav = behav[ind]
+    indices = indices[ind,:] # to remove subjects' timeseries whose behavioural variable is missing
+
+    # N = indices.shape[0] # number of samples
+    N = sum(ind == True)
+
+    # get features/kernel from HMM to be predicted from (default: Fisher kernel):
+    if predictor=='Fisherkernel':
+        if shape=='linear':
+            tau=None
+        elif shape=='Gaussian':
+            tau=options['tau']
+        Xin = hmm_kernel(hmm, Y, indices, type='Fisher', shape=shape, incl_Pi=incl_Pi, incl_P=incl_P, incl_Mu=incl_Mu, incl_Sigma=incl_Sigma, tau=tau, return_feat=False, return_dist=False)
+    # alternative: predict from HMM summary metrics
+    elif predictor=='summary_metrics':
+        Xin = get_summ_features(hmm, Y, indices, metrics)  
+
+    if do_groupKFold: # when using family/group structure - use GroupKFold
+        cs = get_groups(allcs)
+        cs = cs[ind] # remove missing values
+        cvfolds = model_selection.GroupKFold(n_splits=nfolds)
+        cvfolds.get_n_splits(Y, behav, cs)
+    elif CVscheme=='KFold': # when not using family/group structure
+        cvfolds = model_selection.KFold(n_splits=nfolds)
+        cvfolds.get_n_splits(Y, behav)
+    
+    # train estimator:
+    if 'return_prob' in options and options['return_prob']==True:
+        return_prob = True
+    else:
+        return_prob = False
+
+    # main classification:
+    # SVM (default for Fisher kernel):
+    if not 'C' in options:
+        Cs =  np.logspace(-10, 0, 10)
+    else:
+        Cs = options['C']
+        
+    if estimator=='SVM':
+        model = svm.SVC(kernel="precomputed")
+        if return_prob:
+            model = svm.SVC(kernel="precomputed", probability=True)
+    elif estimator=='LogisticRegression':
+        model = linear_model.LogisticRegression()
+
+    behav_train = behav
+    # behav_mean = np.mean(behav_train)
+    # train model:
+    if optim_hyperparam == 'GridSearchCV':
+        model_tuned = model_selection.GridSearchCV(estimator=model, param_grid=dict(C=Cs), cv=cvfolds)
+    else:
+        model.set_params(C=Cs)
+        model_tuned = model
+    
+    if do_groupKFold:
         model_tuned.fit(Xin, behav_train, groups=cs)
     else:
         model_tuned.fit(Xin, behav_train)
+
+    return model_tuned
+
+def test_classif(hmm, Y, indices, model_tuned, behav=None, train_indices=None, predictor='Fisherkernel', estimator='SVM', options=None):
+
+# check conditions
+    if not hmm.trained:
+        raise Exception("The model has not yet been trained")
     
-    if deconfounding:
-        return model_tuned, CbetaY, CinterceptY, behavD
+    if indices is None: 
+        raise Exception("To predict phenotype from HMM, indices need to be provided")
+    
+    if behav is not None:
+        return_acc = True
+        return_scores = True
+        if behav.ndim>1 or np.unique(behav).shape[0]>2:
+            behav = preprocessing.LabelBinarizer().fit_transform(behav)
     else:
-        return model_tuned
+        return_acc = False
+        return_scores = False
+
+    # check options or set default:
+    if options is None: 
+        options = {}   
+
+    # necessary options for Fisher kernel:
+    if predictor=='Fisherkernel':
+        if not 'shape' in options:
+            shape='linear' 
+        else:
+            shape=options['shape']
+        if 'incl_Pi' in options:
+            incl_Pi = options['incl_Pi']
+        else:
+            incl_Pi = True
+        if 'incl_P' in options:
+            incl_P = options['incl_P']
+        else:
+            incl_P = True
+        if 'incl_Mu' in options:
+            incl_Mu = options['incl_Mu']
+        else:
+            incl_Mu = False
+        if 'incl_Sigma' in options:
+            incl_Sigma = options['incl_Sigma']
+        else:
+            incl_Sigma = True   
+        estimator='SVM'
+    # necessary options for summary metrics
+    if predictor=='summary_metrics':
+        if not 'metrics' in options:
+            metrics = ['FO', 'switching_rate', 'lifetimes']
+        else:
+            metrics = options['metrics']
+        estimator='LogisticRegression'
+
+    if 'confounds' in options:
+        raise Exception("Deconfounding is not implemented for classification, use prediction instead or remove confounds")   
+
+    N = indices.shape[0] # number of samples
+    ses_vec = np.arange(N)
+    if train_indices is not None:
+        test_indices = np.delete(ses_vec, train_indices)
+
+    if 'return_prob' in options and options['return_prob']==True:
+        return_prob = True
+        behav_prob = np.zeros(shape=(N,2))
+    else:
+        return_prob = False
+
+    # get features/kernel from HMM to be predicted from (default: Fisher kernel):
+    if predictor=='Fisherkernel':
+        if shape=='linear':
+            tau=None
+        elif shape=='Gaussian':
+            tau=options['tau']
+        Xin = hmm_kernel(hmm, Y, indices, type='Fisher', shape=shape, incl_Pi=incl_Pi, incl_P=incl_P, incl_Mu=incl_Mu, incl_Sigma=incl_Sigma, tau=tau, return_feat=False, return_dist=False)
+    # alternative: predict from HMM summary metrics
+    elif predictor=='summary_metrics':
+        Xin = get_summ_features(hmm, Y, indices, metrics)  
+
+    if train_indices is not None:
+        behav_pred = np.zeros(shape=test_indices.shape)
+    else:
+        behav_pred = np.zeros(shape=N)  
+
+    # optional return: 
+    if 'return_models'in options and options['return_models']==True:
+        return_models = True
+    else:
+        return_models = False
+
+    if estimator=="SVM":
+        behav_pred = model_tuned.predict(Xin[train_indices, test_indices.reshape(-1,1)])
+        if return_prob:
+            behav_prob = model_tuned.predict_proba(Xin[train_indices, test_indices.reshape(-1,1)])
+        # get additional output
+        if return_scores:
+            score = model_tuned.score(Xin[train_indices, test_indices.reshape(-1,1)], behav[test_indices])
+            
+    elif estimator=="LogisticRegression":
+        behav_pred = model_tuned.predict(Xin)
+        if return_prob:
+            behav_prob = model_tuned.predict_proba(Xin)
+        if return_scores:
+            score = model_tuned.score(Xin, behav)
+    
+    if return_acc:
+        if train_indices is not None:
+            acc = ms.accuracy_score(behav_pred, behav[test_indices])
+        else:
+            acc = ms.accuracy_score(behav_pred, behav)
+
+    # aggregate results and optional returns
+    results = {}
+    results['behav_pred'] = behav_pred
+    if return_acc:
+        results['acc'] = acc
+    if return_scores:
+        results['scores'] = score
+    if return_prob:
+        results['behav_prob'] = behav_prob
+    if return_models:
+        results['models'] = model_tuned
+
+    return results
 
 
 # TO DO: 
