@@ -1414,6 +1414,7 @@ def test_pred(hmm, Y, indices, model_tuned, scaler_x, scaler_y=None, behav=None,
 
     if train_indices is not None:
         behav_pred = np.zeros(shape=test_indices.shape)
+        behav_pred_scaled = np.zeros(shape=test_indices.shape)
         if deconfounding:
             if behav is not None:
                 behavD = np.zeros(shape=test_indices.shape)
@@ -1640,8 +1641,13 @@ def train_classif(hmm, Y, behav, indices, predictor='Fisherkernel', estimator='S
         model = svm.SVC(kernel="precomputed")
         if return_prob:
             model = svm.SVC(kernel="precomputed", probability=True)
+        center_K = preprocessing.KernelCenterer().fit(Xin)
+        Xin_scaled = center_K.transform(Xin)
+        scaler_x = center_K
     elif estimator=='LogisticRegression':
         model = linear_model.LogisticRegression()
+        scaler_x = preprocessing.StandardScaler().fit(Xin)
+        Xin_scaled = scaler_x.transform(Xin)
 
     behav_train = behav
     # behav_mean = np.mean(behav_train)
@@ -1653,13 +1659,13 @@ def train_classif(hmm, Y, behav, indices, predictor='Fisherkernel', estimator='S
         model_tuned = model
     
     if do_groupKFold:
-        model_tuned.fit(Xin, behav_train, groups=cs)
+        model_tuned.fit(Xin_scaled, behav_train, groups=cs)
     else:
-        model_tuned.fit(Xin, behav_train)
+        model_tuned.fit(Xin_scaled, behav_train)
 
-    return model_tuned
+    return model_tuned, scaler_x
 
-def test_classif(hmm, Y, indices, model_tuned, behav=None, train_indices=None, predictor='Fisherkernel', estimator='SVM', options=None):
+def test_classif(hmm, Y, indices, model_tuned, scaler_x, behav=None, train_indices=None, predictor='Fisherkernel', estimator='SVM', options=None):
 
 # check conditions
     if not hmm.trained:
@@ -1722,7 +1728,6 @@ def test_classif(hmm, Y, indices, model_tuned, behav=None, train_indices=None, p
 
     if 'return_prob' in options and options['return_prob']==True:
         return_prob = True
-        behav_prob = np.zeros(shape=(N,2))
     else:
         return_prob = False
 
@@ -1739,8 +1744,12 @@ def test_classif(hmm, Y, indices, model_tuned, behav=None, train_indices=None, p
 
     if train_indices is not None:
         behav_pred = np.zeros(shape=test_indices.shape)
+        if return_prob:
+            behav_prob = np.zeros(shape=(test_indices.shape,2))
     else:
         behav_pred = np.zeros(shape=N)  
+        if return_prob:
+            behav_prob = np.zeros(shape=(N,2))
 
     # optional return: 
     if 'return_models'in options and options['return_models']==True:
@@ -1749,19 +1758,22 @@ def test_classif(hmm, Y, indices, model_tuned, behav=None, train_indices=None, p
         return_models = False
 
     if estimator=="SVM":
-        behav_pred = model_tuned.predict(Xin[train_indices, test_indices.reshape(-1,1)])
+        Xin_test = Xin[train_indices, test_indices.reshape(-1,1)]
+        Xin_test_scaled = scaler_x.transform(Xin_test)
+        behav_pred = model_tuned.predict(Xin_test_scaled)
         if return_prob:
-            behav_prob = model_tuned.predict_proba(Xin[train_indices, test_indices.reshape(-1,1)])
+            behav_prob = model_tuned.predict_proba(Xin_test_scaled)
         # get additional output
         if return_scores:
-            score = model_tuned.score(Xin[train_indices, test_indices.reshape(-1,1)], behav[test_indices])
+            score = model_tuned.score(Xin_test_scaled, behav[test_indices])
             
     elif estimator=="LogisticRegression":
-        behav_pred = model_tuned.predict(Xin)
+        Xin_scaled = scaler_x.transform(Xin)
+        behav_pred = model_tuned.predict(Xin_scaled)
         if return_prob:
-            behav_prob = model_tuned.predict_proba(Xin)
+            behav_prob = model_tuned.predict_proba(Xin_scaled)
         if return_scores:
-            score = model_tuned.score(Xin, behav)
+            score = model_tuned.score(Xin_scaled, behav)
     
     if return_acc:
         if train_indices is not None:
