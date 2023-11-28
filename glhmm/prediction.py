@@ -1745,7 +1745,7 @@ def test_classif(hmm, Y, indices, model_tuned, scaler_x, behav=None, train_indic
     if train_indices is not None:
         behav_pred = np.zeros(shape=test_indices.shape)
         if return_prob:
-            behav_prob = np.zeros(shape=(test_indices.shape,2))
+            behav_prob = np.zeros(shape=(test_indices.shape[0],2))
     else:
         behav_pred = np.zeros(shape=N)  
         if return_prob:
