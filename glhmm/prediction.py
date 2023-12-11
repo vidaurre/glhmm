@@ -197,7 +197,7 @@ def hmm_kernel(hmm, Y, indices, type='Fisher', shape='linear', incl_Pi=True, inc
     Raises:
     -------
     Exception
-        If the model has not been trained or if requested parameters do not exist
+        If the hmm has not been trained or if requested parameters do not exist
         (e.g. if Mu is requested but state means were not estimated)
         If kernel other than Fisher kernel is requested
 
@@ -274,7 +274,7 @@ def get_summ_features(hmm, Y, indices, metrics):
 
     Returns:
     --------
-    features : array-like of shape (n_samples, n_features)
+    features : array-like of shape (n_sessions, n_features)
         The HMM summary metrics collected into a feature matrix
 
     """
@@ -314,15 +314,15 @@ def get_groups(group_structure):
 
     Parameter:
     ----------
-    group_structure : array-like of shape (n_samples, n_samples)
+    group_structure : array-like of shape (n_sessions, n_sessions)
         a matrix specifying the structure of the dataset, with positive
-        values indicating relations between samples and zeros indicating no relations.
+        values indicating relations between sessions(/subjects) and zeros indicating no relations.
         Note: The diagonal will be set to 1
     
     Returns:
     --------
-    cs : array-like of shape (n_samples,)
-        1D array containing the group each sample belongs to
+    cs : array-like of shape (n_sessions,)
+        1D array containing the group each session belongs to
 
     """
 
@@ -369,7 +369,8 @@ def reconfound(Y, conf, betaY, my):
 def predict_phenotype(hmm, Y, behav, indices, predictor='Fisherkernel', estimator='KernelRidge', options=None):
     """Predict phenotype from HMM
     This uses either the Fisher kernel (default) or a set of HMM summary metrics
-    to predict a phenotype, in a nested cross-validated way
+    to predict a phenotype, in a nested cross-validated way.
+    By default, X and Y are standardised/centered unless deconfounding is used.
     Estimators so far include: Kernel Ridge Regression and Ridge Regression
     Cross-validation strategies so far include: KFold and GroupKFold
     Hyperparameter optimization strategies so far include: only grid search
@@ -380,8 +381,8 @@ def predict_phenotype(hmm, Y, behav, indices, predictor='Fisherkernel', estimato
         An instance of the HMM class, estimated on the group-level
     Y : array-like of shape (n_samples, n_variables_2)
         (group-level) timeseries data
-    behav : array-like of shape (n_samples,)
-        phenotype to be predicted
+    behav : array-like of shape (n_sessions,)
+        phenotype, behaviour, or other external variable to be predicted
     indices : array-like of shape (n_sessions, 2)
         The start and end indices of each trial/session in the input data. 
         Note that this function does not work if indices=None  
@@ -395,7 +396,7 @@ def predict_phenotype(hmm, Y, behav, indices, predictor='Fisherkernel', estimato
         general relevant options are:
             'CVscheme': char, which CVscheme to use (default: 'GroupKFold' if group structure is specified, otherwise: KFold)
             'nfolds': int, number of folds k for (outer and inner) k-fold CV loops
-            'group_structure': ndarray of (n_samples, n_samples), matrix specifying group structure: positive values if samples are related, zeros otherwise
+            'group_structure': ndarray of (n_sessions, n_sessions), matrix specifying group structure: positive values if sessions(/subjects) are related, zeros otherwise
             'confounds': array-like of shape (n_sessions,) or (n_sessions, n_confounds) containing confounding variables
             'return_scores': bool, whether to return also the model scores of each fold
             'return_models': bool, whether to return also the trained models of each fold
@@ -424,7 +425,7 @@ def predict_phenotype(hmm, Y, behav, indices, predictor='Fisherkernel', estimato
     Raises:
     -------
     Exception
-        If the model has not been trained or if necessary input is missing
+        If the hmm has not been trained or if necessary input is missing
     
     Notes:
     ------
@@ -799,7 +800,8 @@ def predict_phenotype(hmm, Y, behav, indices, predictor='Fisherkernel', estimato
 def classify_phenotype(hmm, Y, behav, indices, predictor='Fisherkernel', estimator='SVM', options=None):
     """Classify phenotype from HMM
     This uses either the Fisher kernel (default) or a set of HMM summary metrics
-    to make a classification, in a nested cross-validated way
+    to make a classification, in a nested cross-validated way.
+    By default, X is standardised/centered.
     Estimators so far include: SVM and Logistic Regression
     Cross-validation strategies so far include: KFold and GroupKFold
     Hyperparameter optimization strategies so far include: only grid search
@@ -810,22 +812,22 @@ def classify_phenotype(hmm, Y, behav, indices, predictor='Fisherkernel', estimat
         An instance of the HMM class, estimated on the group-level
     Y : array-like of shape (n_samples, n_variables_2)
         (group-level) timeseries data
-    behav : array-like of shape (n_samples,)
-        phenotype labels to be predicted
+    behav : array-like of shape (n_sessions,)
+        phenotype, behaviour, or other external labels to be predicted
     indices : array-like of shape (n_sessions, 2)
         The start and end indices of each trial/session in the input data. 
         Note that this function does not work if indices=None  
     predictor : char (optional, default to 'Fisherkernel')
         What to predict from, either 'Fisherkernel' or 'summary_metrics' (default='Fisherkernel')
-    estimator : char (optional, default to 'KernelRidge')
-        Model to be used for prediction (default='KernelRidge')
+    estimator : char (optional, default to 'SVM')
+        Model to be used for classification (default='SVM')
         This should be the name of a sklearn base estimator
-        (for now either 'KernelRidge' or 'Ridge')
+        (for now either 'SVM' or 'LogisticRegression')
     options : dict (optional, default to None)
         general relevant options are:
             'CVscheme': char, which CVscheme to use (default: 'GroupKFold' if group structure is specified, otherwise: KFold)
             'nfolds': int, number of folds k for (outer and inner) k-fold CV loops
-            'group_structure': ndarray of (n_samples, n_samples), matrix specifying group structure: positive values if samples are related, zeros otherwise
+            'group_structure': ndarray of (n_sessions, n_sessions), matrix specifying group structure: positive values if sessions(/subjects) are related, zeros otherwise
             'return_scores': bool, whether to return also the model scores of each fold
             'return_models': bool, whether to return also the trained models of each fold
             'return_hyperparams': bool, whether to return also the optimised hyperparameters of each fold
@@ -844,7 +846,7 @@ def classify_phenotype(hmm, Y, behav, indices, predictor='Fisherkernel', estimat
     --------
     results : dict
         containing
-        'behav_pred': predicted phenotype on test sets
+        'behav_pred': predicted labels on test sets
         'acc': overall accuracy
         (if requested):
         'behav_prob': predicted probabilities of each class on test set
@@ -855,7 +857,7 @@ def classify_phenotype(hmm, Y, behav, indices, predictor='Fisherkernel', estimat
     Raises:
     -------
     Exception
-        If the model has not been trained or if necessary input is missing
+        If the hmm has not been trained or if necessary input is missing
     
     Notes:
     ------
@@ -1110,23 +1112,26 @@ def classify_phenotype(hmm, Y, behav, indices, predictor='Fisherkernel', estimat
     return results
 
 def train_pred(hmm, Y, behav, indices, predictor='Fisherkernel', estimator='KernelRidge', options=None):
-    """Train prediction model for phenotype from HMM
+    """Train prediction model from HMM
     This uses either the Fisher kernel (default) or a set of HMM summary metrics
-    to predict a phenotype, in a nested cross-validated way
+    to predict a phenotype, in a nested cross-validated way.
+    By default, X and Y are standardised/centered unless deconfounding is used.
+    Note that all outputs except behavD, i.e. model and scalers, need to be passed on to test_pred to ensure that training and test variables are preprocessed in the same way, 
+    while avoiding leakage between training and test set.
     Estimators so far include: Kernel Ridge Regression and Ridge Regression
     Cross-validation strategies so far include: KFold and GroupKFold
-    Hyperparameter optimization strategies so far include: only grid search
+    Hyperparameter optimization strategies so far include: grid search, no hyperparameter optimisation
     
     Parameters:
     -----------
     hmm : HMM object
         An instance of the HMM class, estimated on the group-level
     Y : array-like of shape (n_samples, n_variables_2)
-        (group-level) timeseries data
-    behav : array-like of shape (n_samples,)
-        phenotype to be predicted
-    indices : array-like of shape (n_sessions, 2)
-        The start and end indices of each trial/session in the input data. 
+        (group-level) timeseries data of training set
+    behav : array-like of shape (n_train_sessions,)
+        phenotype, behaviour, or other external variable of training set
+    indices : array-like of shape (n_train_sessions, 2)
+        The start and end indices of each trial/session in the training data. 
         Note that this function does not work if indices=None  
     predictor : char (optional, default to 'Fisherkernel')
         What to predict from, either 'Fisherkernel' or 'summary_metrics' (default='Fisherkernel')
@@ -1136,10 +1141,13 @@ def train_pred(hmm, Y, behav, indices, predictor='Fisherkernel', estimator='Kern
         (for now either 'KernelRidge' or 'Ridge')
     options : dict (optional, default to None)
         general relevant options are:
-            'CVscheme': char, which CVscheme to use (default: 'GroupKFold' if group structure is specified, otherwise: KFold)
-            'nfolds': int, number of folds k for (outer and inner) k-fold CV loops
-            'group_structure': ndarray of (n_samples, n_samples), matrix specifying group structure: positive values if samples are related, zeros otherwise
-            'confounds': array-like of shape (n_sessions,) or (n_sessions, n_confounds) containing confounding variables
+            'optim_hyperparam' : char, which hyperparameter optimisation strategy to use (default: 'GridSearchCV'). 
+                If you don't want to use hyperparameter optimisation, set this to None and specify the hyperparameter (alpha) as an option
+                When using hyperparameter optimisation, additional relevant options are:
+                    'CVscheme': char, which CVscheme to use (default: 'GroupKFold' if group structure is specified, otherwise: KFold)
+                    'nfolds': int, number of folds k for (outer and inner) k-fold CV loops
+                    'group_structure': ndarray of (n_train_sessions, n_train_sessions), matrix specifying group structure: positive values if samples are related, zeros otherwise
+            'confounds': array-like of shape (n_train_sessions,) or (n_train_sessions, n_confounds) containing confounding variables
             possible hyperparameters for model, e.g. 'alpha' for (kernel) ridge regression
         for Fisher kernel, relevant options are: 
             'shape': char, either 'linear' or 'Gaussian' (TO DO)
@@ -1152,19 +1160,25 @@ def train_pred(hmm, Y, behav, indices, predictor='Fisherkernel', estimator='Kern
 
     Returns:
     --------
-    results : dict
-        containing
-        'behav_pred': predicted phenotype on test sets
-        'corr': correlation coefficient between predicted and actual values
-        (if requested):
-        'scores': the model scores of each fold
-        'models': the trained models from each fold
-        'hyperparams': the optimised hyperparameters of each fold
+    model_tuned : estimator
+        the trained and (if applicable) hyperparameter-optimised scikit-learn estimator
+    scaler_x : estimator
+        the trained standard scaler/kernel centerer of the features/kernel x
+    (if not using deconfounding):
+    scaler_y : estimator
+        the trained standard scaler of the variable to be predicted y.
+    (if using deconfounding):
+    CinterceptY : float
+        the estimated intercept for deconfounding
+    CbetaY : array-like of shape (n_confounds)
+        the estimated beta weights for deconfounding of each confound   
+    behavD : array-like of shape (n_train_sessions)
+        the phenotype/behaviour in deconfounded space
 
     Raises:
     -------
     Exception
-        If the model has not been trained or if necessary input is missing
+        If the hmm has not been trained or if necessary input is missing
     
     Notes:
     ------
@@ -1327,17 +1341,82 @@ def train_pred(hmm, Y, behav, indices, predictor='Fisherkernel', estimator='Kern
         model_tuned.fit(Xin_scaled, behav_train_scaled)
     
     if deconfounding:
-        return model_tuned, scaler_x, CbetaY, CinterceptY, behavD
+        return model_tuned, scaler_x, CinterceptY, CbetaY, behavD
     else:
         return model_tuned, scaler_x, scaler_y
     
 def test_pred(hmm, Y, indices, model_tuned, scaler_x, scaler_y=None, behav=None, train_indices=None, CinterceptY=None, CbetaY=None, predictor='Fisherkernel', estimator='KernelRidge', options=None):
     """
-    When using a kernel method (e.g. Fisher kernel), Y must be the timeseries of both training and 
+    Test prediction model from HMM
+    This uses either the Fisher kernel (default) or a set of HMM summary metrics
+    to predict a phenotype, in a nested cross-validated way. 
+    The specified predictor and estimator must be the same as the ones used to train the model.
+    By default, X and Y are standardised/centered unless deconfounding is used.
+    Note: When using a kernel method (e.g. Fisher kernel), Y must be the timeseries of both training and 
     test set to construct the correct kernel, and indices of the training sessions (train_indices)
     must be provided. When using summary metrics, Y must be the timeseries of only the test set, and
     train_indices should be None.
     When using deconfounding, CinterceptY and CbetaY need to be specified
+
+    Parameters:
+    -----------
+    hmm : HMM object
+        An instance of the HMM class, estimated on the group-level
+    Y : array-like of shape (n_samples, n_variables_2)
+        (group-level) timeseries data of test set
+    indices : array-like of shape (n_test_sessions, 2) or (n_sessions, 2)
+        The start and end indices of each trial/session in the test data (when using features)
+        or in the train and test data (when using kernel). 
+        Note that this function does not work if indices=None  
+    model_tuned : estimator
+        the trained and (if applicable) hyperparameter-optimised scikit-learn estimator
+    scaler_x : estimator
+        the trained standard scaler/kernel centerer of the features/kernel x
+    scaler_y : estimator (optional, only specify when not using deconfounding)
+        the trained standard scaler of the variable to be predicted y.
+    behav : array-like of shape (n_test_sessions,) (optional)
+        phenotype, behaviour, or other external variable of test set, to be compared with the predicted values
+    train_indices : array-like of shape (n_train_sessions,) (optional, only use when using kernel)
+        the indices of the sessions/subjects used for training. The function assumes that test indices are all other sessions.
+    CinterceptY : float (optional, only specify when using deconfounding)
+        the estimated intercept for deconfounding    
+    CbetaY : array-like of shape (n_confounds) (optional, only specify when using deconfounding)
+        the estimated beta weights for deconfounding of each confound
+    predictor : char (optional, default to 'Fisherkernel')
+        What to predict from, either 'Fisherkernel' or 'summary_metrics' (default='Fisherkernel')
+    estimator : char (optional, default to 'KernelRidge')
+        Model to be used for prediction (default='KernelRidge')
+        This should be the name of a sklearn base estimator
+        (for now either 'KernelRidge' or 'Ridge')
+    options : dict (optional, default to None)
+        general relevant options are:
+            'confounds': array-like of shape (n_test_sessions,) or (n_test_sessions, n_confounds) containing confounding variables
+            'return_models': whether to return also the model
+        for Fisher kernel, relevant options are: 
+            'shape': char, either 'linear' or 'Gaussian' (TO DO)
+            'incl_Pi': bool, whether to include the gradient w.r.t. the initial state probabilities when computing the Fisher kernel
+            'incl_P': bool, whether to include the gradient w.r.t. the transition probabilities
+            'incl_Mu': bool, whether to include the gradient w.r.t. the state means (note that this only works if means were not set to 0 when training HMM)
+            'incl_Sigma': bool, whether to include the gradient w.r.t. the state covariances
+        for summary metrics, relevant options are:
+            'metrics': list of char, containing metrics to be included as features
+
+    Returns:
+    --------
+    results : dict
+        containing
+        'behav_pred': predicted phenotype on test sets
+        (if behav was specified):
+        'corr': correlation coefficient between predicted and actual values
+        'scores': the model scores of each fold
+        (if requested):
+        'model': the trained model
+
+    Raises:
+    -------
+    Exception
+        If the hmm has not been trained or if necessary input is missing
+
     """
     # check conditions
     if not hmm.trained:
@@ -1519,7 +1598,69 @@ def test_pred(hmm, Y, indices, model_tuned, scaler_x, scaler_y=None, behav=None,
     return results
 
 def train_classif(hmm, Y, behav, indices, predictor='Fisherkernel', estimator='SVM', options=None):
+    """Train classification model from HMM
+    This uses either the Fisher kernel (default) or a set of HMM summary metrics
+    to make a classification, in a nested cross-validated way.
+    By default, X is standardised/centered.
+    Note that all outputs need to be passed on to test_classif to ensure that training and test variables are preprocessed in the same way, 
+    while avoiding leakage between training and test set.
+    Estimators so far include: SVM and Logistic Regression
+    Cross-validation strategies so far include: KFold and GroupKFold
+    Hyperparameter optimization strategies so far include: grid search, no hyperparameter optimisation
+    
+    Parameters:
+    -----------
+    
+    hmm : HMM object
+        An instance of the HMM class, estimated on the group-level
+    Y : array-like of shape (n_samples, n_variables_2)
+        (group-level) timeseries data of training set
+    behav : array-like of shape (n_train_sessions,)
+        phenotype, behaviour, or other external labels of training set to be predicted
+    indices : array-like of shape (n_train_sessions, 2)
+        The start and end indices of each trial/session in the training set. 
+        Note that this function does not work if indices=None  
+    predictor : char (optional, default to 'Fisherkernel')
+        What to predict from, either 'Fisherkernel' or 'summary_metrics' (default='Fisherkernel')
+    estimator : char (optional, default to 'SVM')
+        Model to be used for classification (default='SVM')
+        This should be the name of a sklearn base estimator
+        (for now either 'SVM' or 'LogisticRegression')
+    options : dict (optional, default to None)
+        general relevant options are:
+            'optim_hyperparam' : char, which hyperparameter optimisation strategy to use (default: 'GridSearchCV'). 
+                If you don't want to use hyperparameter optimisation, set this to None and specify the hyperparameter (alpha) as an option
+                When using hyperparameter optimisation, additional relevant options are:
+                    'CVscheme': char, which CVscheme to use (default: 'GroupKFold' if group structure is specified, otherwise: KFold)
+                    'nfolds': int, number of folds k for (outer and inner) k-fold CV loops
+                    'group_structure': ndarray of (n_train_sessions, n_train_sessions), matrix specifying group structure: positive values if samples are related, zeros otherwise
+            possible hyperparameters for model, e.g. 'C' for SVM
+            'return_prob': bool, whether to also estimate the probabilities
+        for Fisher kernel, relevant options are: 
+            'shape': char, either 'linear' or 'Gaussian' (TO DO)
+            'incl_Pi': bool, whether to include the gradient w.r.t. the initial state probabilities when computing the Fisher kernel
+            'incl_P': bool, whether to include the gradient w.r.t. the transition probabilities
+            'incl_Mu': bool, whether to include the gradient w.r.t. the state means (note that this only works if means were not set to 0 when training HMM)
+            'incl_Sigma': bool, whether to include the gradient w.r.t. the state covariances
+        for summary metrics, relevant options are:
+            'metrics': list of char, containing metrics to be included as features
 
+    Returns:
+    --------
+    model_tuned : estimator
+        the trained and (if applicable) hyperparameter-optimised scikit-learn estimator
+    scaler_x : estimator
+        the trained standard scaler/kernel centerer of the features/kernel x
+
+    Raises:
+    -------
+    Exception
+        If the hmm has not been trained or if necessary input is missing
+    
+    Notes:
+    ------
+    If behav contains NaNs, these subjects/sessions will be removed
+    """
     # check conditions
     if not hmm.trained:
         raise Exception("The model has not yet been trained")
@@ -1666,7 +1807,71 @@ def train_classif(hmm, Y, behav, indices, predictor='Fisherkernel', estimator='S
     return model_tuned, scaler_x
 
 def test_classif(hmm, Y, indices, model_tuned, scaler_x, behav=None, train_indices=None, predictor='Fisherkernel', estimator='SVM', options=None):
+    """
+    Test classification model from HMM
+    This uses either the Fisher kernel (default) or a set of HMM summary metrics
+    to make a classification, in a nested cross-validated way. 
+    The specified predictor and estimator must be the same as the ones used to train the classifier.
+    By default, X is standardised/centered.
+    Note: When using a kernel method (e.g. Fisher kernel), Y must be the timeseries of both training and 
+    test set to construct the correct kernel, and indices of the training sessions (train_indices)
+    must be provided. When using summary metrics, Y must be the timeseries of only the test set, and
+    train_indices should be None.
 
+    Parameters:
+    -----------
+    hmm : HMM object
+        An instance of the HMM class, estimated on the group-level
+    Y : array-like of shape (n_samples, n_variables_2)
+        (group-level) timeseries data of test set
+    indices : array-like of shape (n_test_sessions, 2) or (n_sessions, 2)
+        The start and end indices of each trial/session in the test data (when using features)
+        or in the train and test data (when using kernel). 
+        Note that this function does not work if indices=None  
+    model_tuned : estimator
+        the trained and (if applicable) hyperparameter-optimised scikit-learn estimator
+    scaler_x : estimator
+        the trained standard scaler/kernel centerer of the features/kernel x
+    behav : array-like of shape (n_test_sessions,) (optional)
+        phenotype, behaviour, or other external label of test set, to be compared with the predicted labels
+    train_indices : array-like of shape (n_train_sessions,) (optional, only use when using kernel)
+        the indices of the sessions/subjects used for training. The function assumes that test indices are all other sessions.
+    predictor : char (optional, default to 'Fisherkernel')
+        What to predict from, either 'Fisherkernel' or 'summary_metrics' (default='Fisherkernel')
+    estimator : char (optional, default to 'SVM')
+        Model to be used for classification (default='SVM')
+        This should be the name of a sklearn base estimator
+        (for now either 'SVM' or 'LogisticRegression')
+    options : dict (optional, default to None)
+        general relevant options are:
+            'return_prob': bool, whether to return also the estimated probabilities
+            'return_models': whether to return also the model
+        for Fisher kernel, relevant options are: 
+            'shape': char, either 'linear' or 'Gaussian' (TO DO)
+            'incl_Pi': bool, whether to include the gradient w.r.t. the initial state probabilities when computing the Fisher kernel
+            'incl_P': bool, whether to include the gradient w.r.t. the transition probabilities
+            'incl_Mu': bool, whether to include the gradient w.r.t. the state means (note that this only works if means were not set to 0 when training HMM)
+            'incl_Sigma': bool, whether to include the gradient w.r.t. the state covariances
+        for summary metrics, relevant options are:
+            'metrics': list of char, containing metrics to be included as features
+
+    Returns:
+    --------
+    results : dict
+        containing
+        'behav_pred': predicted labels on test sets
+        'acc': overall accuracy
+        (if requested):
+        'behav_prob': predicted probabilities of each class on test set
+        'scores': the model scores of each fold
+        'models': the trained model
+
+    Raises:
+    -------
+    Exception
+        If the hmm has not been trained or if necessary input is missing
+
+    """
 # check conditions
     if not hmm.trained:
         raise Exception("The model has not yet been trained")
@@ -1797,7 +2002,6 @@ def test_classif(hmm, Y, indices, model_tuned, scaler_x, behav=None, train_indic
 
 
 # TO DO: 
-# add option for separate train and test set (no CV within function)
 # add option to provide features/kernel so it does not have to be recomputed when predicting several traits
 # add/test multiclass classifier
 # add betas (gradient, prediction)
