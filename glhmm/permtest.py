@@ -10,7 +10,7 @@ import random
 from scipy.stats import pearsonr
 #from . import palm_functions
 
-def across_subjects(X_data, Y_data, method="regression", Nperm=1000, permute_on ="x", confounds = None, dict_fam = None ,test_statistic_option=False):
+def across_subjects(X_data, Y_data, method="regression", Nperm=1000, confounds = None, dict_fam = None ,test_statistic_option=False):
     from palm_functions import palm_quickperms
     """
     Perform across subjects permutation testing.
@@ -39,14 +39,7 @@ def across_subjects(X_data, Y_data, method="regression", Nperm=1000, permute_on 
         method (str, optional): The statistical method to be used for the permutation test. Valid options are
                                 "regression", "correlation", or "correlation_com". (default: "regression").      
                                 Note: "correlation_com" stands for correlation combined and returns the both the statistical significance of Pearson's correlation coefficient and 2-tailed p-value                                         
-        Nperm (int): Number of permutations to perform (default: 1000).
-        permute_on (str, optional): Where to apply the permutation testing. This is useful if you want to permute on predictors (X) or dependent variables (Y).
-                                Example 1: When to permute on predictors (X), known as the measurement data:
-                                Investigating whether specific brain regions or HMM states (predictors) significantly contribute to explaining the cognitive performance of behavioral data 
-                                (dependent variable).
-                                Example 2: When to permute on dependent variables (Y), known as the behavioral measurement:
-                                You do that to find the overall effect of the dependent variable. This could be to find the general effect of a cognitive task (e.g. IQ) on overall brain activity (independent variables), irrespective of specific regions.
-                                Valid options are "x" and "y". (default: "x").                          
+        Nperm (int): Number of permutations to perform (default: 1000).                       
         confounds (numpy.ndarray or None, optional): 
                                 The confounding variables to be regressed out from the input data (X_data).
                                 If provided, the regression analysis is performed to remove the confounding effects. 
@@ -96,13 +89,8 @@ def across_subjects(X_data, Y_data, method="regression", Nperm=1000, permute_on 
     valid_methods = ["regression", "correlation", "correlation_com"]
     check_value_error(method in valid_methods, "Invalid option specified for 'method'. Must be one of: " + ', '.join(valid_methods))
     
-    # Check validity of method
-    valid_permutations = ["x", "y"]
-    check_value_error(permute_on in valid_permutations, "Invalid option specified for 'permutation_on'. Must be one of: " + ', '.join(valid_methods))
-    
     # Get the shapes of the data
-    n_T, _, n_p, X_data, Y_data = get_input_shape(X_data, Y_data)
-    n_q = Y_data.shape[-1]
+    n_T, _, n_p, n_q, X_data, Y_data = get_input_shape(X_data, Y_data)
     # Note for convension we wrote (T, p, q) => (n_T, n_p, n_q)
     
     # Crate the family structure 
@@ -110,33 +98,33 @@ def across_subjects(X_data, Y_data, method="regression", Nperm=1000, permute_on 
         dict_mfam=fam_dict(dict_fam, Nperm) # modified dictionary of family structure
 
     # Initialize arrays based on shape of data shape and defined options
-    pval, corr_coef, test_statistic_list, pval_list = initialize_arrays(X_data, n_p, n_q, n_T, method, Nperm, test_statistic_option)
+    pval, corr_coef, test_statistic_list, pval_list = initialize_arrays(X_data,Y_data, n_p, n_q, n_T, method, Nperm, test_statistic_option)
 
     for t in tqdm(range(n_T)) if n_T > 1 else range(n_T):
-        # If confounds exist, perform confound regression
-        X_t = calculate_X_t(X_data[t, :], confounds)
-        y_t = Y_data[t, :]
-        
+        # If confounds exist, perform confound regression on the dependent variables
+        Y_t = deconfound_Fnc(Y_data[t, :], confounds)
+        X_t = X_data[t, :]
         # Create test_statistic and pval_perms based on method
-        test_statistic, pval_perms, proj = initialize_permutation_matrices(method, Nperm, n_p, n_q, y_t)
+        test_statistic, pval_perms, proj = initialize_permutation_matrices(method, Nperm, n_p, n_q, X_t)
 
         if dict_fam is None:
             # Get indices for permutation
-            permute_idx_list = across_subjects_permutation(Nperm, X_t)
+            permute_idx_list = across_subjects_permutation(Nperm, Y_t)
         else:
             permute_idx_list = palm_quickperms(dict_mfam["EB"], M=dict_mfam["M"], nP=dict_mfam["nP"], 
                                                CMC=dict_mfam["CMC"], EE=dict_mfam["EE"])
             # Need to convert the index so it starts from 0
             permute_idx_list = permute_idx_list-1
-
+            
         #for perm in range(Nperm):
         for perm in tqdm(range(Nperm)) if n_T == 1 else range(n_T):
-            # Perform permutation on X_t
-            Xin = X_t[permute_idx_list[:, perm]] if permute_on.lower() == 'x' else X_t.copy()
-            yin = y_t.copy() if permute_on.lower() == 'x' else y_t[permute_idx_list[:, perm]]
-            test_statistic, pval_perms = test_statistic_calculations(Xin, yin, perm, pval_perms, test_statistic, proj, method)
-
+            # Perform permutation on Y_t
+            Yin = Y_t[permute_idx_list[:, perm]]
+            # Calculate the permutation distribution
+            test_statistic, pval_perms = test_statistic_calculations(X_t, Yin, perm, pval_perms, test_statistic, proj, method)
+        # Calculate p-values
         pval, corr_coef = get_pval(test_statistic, pval_perms, Nperm, method, t, pval, corr_coef)
+        
         # Output test statistic if it is set to True can be hard for memory otherwise
         if test_statistic_option==True:
             test_statistic_list[t,:] = test_statistic
@@ -240,7 +228,7 @@ def across_trials_within_session(X_data, Y_data, idx_data, method="regression", 
     check_value_error(permute_on in valid_permutations, "Invalid option specified for 'permutation_on'. Must be one of: " + ', '.join(valid_methods))
     
     # Get input shape information
-    n_T, _, n_p, X_data, Y_data = get_input_shape(X_data, Y_data)
+    n_T, _, n_p, n_q, X_data, Y_data = get_input_shape(X_data, Y_data)
     n_q = Y_data.shape[-1]
     
     # Get indices for permutation
@@ -250,28 +238,27 @@ def across_trials_within_session(X_data, Y_data, idx_data, method="regression", 
         idx_array =idx_data.copy()        
 
     # Initialize arrays based on shape of data shape and defined options
-    pval, corr_coef, test_statistic_list, pval_list = initialize_arrays(X_data, n_p, n_q, n_T, method, Nperm, test_statistic_option)
+    pval, corr_coef, test_statistic_list, pval_list = initialize_arrays(X_data, Y_data, n_p, n_q, n_T, method, Nperm, test_statistic_option)
 
 
     for t in tqdm(range(n_T)) if n_T > 1 else range(n_T):
-        # If confounds exist, perform confound regression
-        X_t = calculate_X_t(X_data[t, :], confounds)
-        y_t = Y_data[t, :]
+        # If confounds exist, perform confound regression on the dependent variables
+        Y_t = deconfound_Fnc(Y_data[t, :], confounds)
+        X_t = X_data[t, :]
         
         # Create test_statistic and pval_perms based on method
-        test_statistic, pval_perms, proj = initialize_permutation_matrices(method, Nperm, n_p, n_q, Y_data[t, :])
-
-        # Calculate permutation matrix of X_t 
-        permute_idx_list = within_session_across_trial_permutation(Nperm,X_t, idx_array)
+        test_statistic, pval_perms, proj = initialize_permutation_matrices(method, Nperm, n_p, n_q, X_t)
         
+        # Calculate permutation matrix of X_t 
+        permute_idx_list = within_session_across_trial_permutation(Nperm,Y_t, idx_array)
+                 
         for perm in range(Nperm):
         #for perm in tqdm(range(Nperm)) if n_T == 1 else range(n_T):
-            # Perform permutation
-            Xin = X_t[permute_idx_list[:, perm]] if permute_on.lower() == 'x' else X_t.copy()
-            yin = y_t.copy() if permute_on.lower() == 'x' else y_t[permute_idx_list[:, perm]]
-            
-            test_statistic, pval_perms = test_statistic_calculations(Xin, yin, perm, pval_perms, test_statistic, proj, method)
-
+            # Perform permutation on Y_t
+            Yin = Y_t[permute_idx_list[:, perm]]
+            # Calculate the permutation distribution
+            test_statistic, pval_perms = test_statistic_calculations(X_t, Yin, perm, pval_perms, test_statistic, proj, method)
+        # Calculate p-values
         pval, corr_coef = get_pval(test_statistic, pval_perms, Nperm, method, t, pval, corr_coef)
         if test_statistic_option==True:
             test_statistic_list[t,:] = test_statistic
@@ -383,29 +370,29 @@ def across_sessions_within_subject(X_data, Y_data, idx_data, method="regression"
         raise ValueError("Warning: Unequal number of trials per subject prohibs permutation between subjects when exchangeable is False.")
     
     # Get input shape information
-    n_T, n_ST, n_p, X_data, Y_data = get_input_shape(X_data, Y_data)
-    n_q = Y_data.shape[-1]
+    n_T, _, n_p,n_q, X_data, Y_data = get_input_shape(X_data, Y_data)
+    #n_q = Y_data.shape[-1]
     
 # Initialize arrays based on shape of data shape and defined options
-    pval, corr_coef, test_statistic_list, pval_list = initialize_arrays(X_data, n_p, n_q, n_T, method, Nperm, test_statistic_option)
+    pval, corr_coef, test_statistic_list, pval_list = initialize_arrays(X_data, Y_data, n_p, n_q, n_T, method, Nperm, test_statistic_option)
     for t in tqdm(range(n_T)) if n_T > 1 else range(n_T):
+        # If confounds exist, perform confound regression on the dependent variables
+        Y_t = deconfound_Fnc(Y_data[t, :], confounds)
+        X_t = X_data[t, :]
+        
         # Create test_statistic and pval_perms based on method
-        test_statistic, pval_perms, proj = initialize_permutation_matrices(method, Nperm, n_p, n_q, Y_data[t, :])
-
-        # If confounds exist, perform confound regression
-        X_t = calculate_X_t(X_data[t, :], confounds)
-        # 
-        y_t = Y_data[t, :]
+        test_statistic, pval_perms, proj = initialize_permutation_matrices(method, Nperm, n_p, n_q, X_t)
+        
         # Calculate permutation matrix of X_t 
         permute_idx_list = within_session_across_session_permutation(Nperm, X_t, idx_array)
         
         for perm in range(Nperm):
         #for perm in tqdm(range(Nperm)) if n_T == 1 else range(n_T):
-            # Perform permutation on X_t
-            Xin = X_t[permute_idx_list[:, perm]] if permute_on.lower() == 'x' else X_t.copy()
-            yin = y_t.copy() if permute_on.lower() == 'x' else y_t[permute_idx_list[:, perm]]
-            test_statistic, pval_perms = test_statistic_calculations(Xin, yin, perm, pval_perms, test_statistic, proj, method)
-
+            # Perform permutation on Y_t
+            Yin = Y_t[permute_idx_list[:, perm]]
+            # Calculate the permutation distribution
+            test_statistic, pval_perms = test_statistic_calculations(X_t, Yin, perm, pval_perms, test_statistic, proj, method)
+        # Caluclate p-values
         pval, corr_coef = get_pval(test_statistic, pval_perms, Nperm, method, t, pval, corr_coef)
         if test_statistic_option==True:
             test_statistic_list[t,:] = test_statistic
@@ -426,63 +413,8 @@ def across_sessions_within_subject(X_data, Y_data, idx_data, method="regression"
         'method': method}
     return result
     
-def across_visits(vpath_data, Y_data, n_states, method="regression", Nperm=1000,test_statistic_option=False, statistic ="mean"):
+def across_visits(input_data, vpath_data, n_states, method="regression", Nperm=1000, confounds=None, test_statistic_option=False, statistic ="mean"):
     from itertools import combinations
-    """
-    Perform permutation testing within a session for continuous data.
-
-    This function conducts statistical tests (regression, correlation, or correlation_com, one_vs_rest and state_pairs) between a hidden state path
-    (`vpath_data`) and a dependent variable (`Y_data`) within each session using permutation testing. 
-    The goal is to test if the decodeed vpath is the most like path chosen
-
-    Parameters:
-    --------------
-        vpath_data (numpy.ndarray): The hidden state path data of the continuous measurements represented as a (n, p) matrix. 
-                                    It could be a 2D matrix where each row represents a trials over a period of time and
-                                    each column represents a state variable and gives the shape ((n_timepoints X n_trials), n_states). 
-                                    If it is a 1D array of of shape ((n_timepoints X n_trials),) where each row value represent a giving state.                
-        Y_data (numpy.ndarray):     The dependent-variable with shape (n, q). Where n is the number of samples (n_timepoints X n_trials) and 
-                                    q represents a dependent/target variables           
-        n_states (int):             The number of hidden states in the hidden state path data.
-        method (str, optional):     The statistical method to be used for the permutation test. Valid options are
-                                    "regression", "correlation", "correlation_com", "one_vs_rest" or "state_pairs".
-                                    Note: "correlation_com" exports both correlation coefficients and p-values. (default: "regression").
-        Nperm (int):                Number of permutations to perform (default: 1000). 
-        test_statistic_option (bool, optional): 
-                                    If True, the function will return the test statistic for each permutation.
-                                    (default: False) 
-        statistic (str, optional)   The chosen statistic to be calculated when applying the methods "one_vs_rest" or "state_pairs".
-                                    Valid options are "mean" or "median". (default: "mean)
-                                
-                                
-    Returns:
-    ----------  
-        result (dict): A dictionary containing the following keys. Depending on the `test_statistic_option` and `method`, it can return the p-values, 
-            correlation coefficients, test statistics.
-            'pval': p-values for the test (T, p) if method=="Regression", else (T, p, q).
-            'test_statistic': Test statistic is the permutation distribution with the shape (T, Nperm, p) if test_statistic_option is True, else None.
-            'corr_coef': Correlation Coefficients for the test T, p, q) if method=="correlation or "correlation_com", else None.
-            'pval_list': a list of p-values for each time point (T, Nperm, p) if test_statistic_option is True and method is "correlation_com", else None.
-            'test_type': the type of test, which is the name of the function
-            'method': the method used for analysis Valid options are
-                    "regression", "correlation", or "correlation_com", "one_vs_rest" and "state_pairs" (default: "regression").
-                
-    Note:
-        The function assumes that the number of rows in `vpath_data` and `Y_data` are equal
-
-    Example:
-        vpath_data = np.random.randint(1, 4, size=(100, 5))  # Simulated hidden state path data
-        Y_data = np.random.rand(100, 3)  # Simulated dependent variable data
-        n_states = 5
-        pval, corr_coef, test_statistic_list, pval_list = across_visits(vpath_data, Y_data, n_states,
-                                                                                          method="correlation_com",
-                                                                                          Nperm=1000,
-                                                                                          test_statistic_option=True)
-        print("Correlation Coefficients:", corr_coef)
-        print("P-values:", pval)
-        print("Test Statistics:", test_statistic_list)
-        print("Permutation P-values:", pval_list)
-    """
     
     # Check validity of method
     valid_methods = ["regression", "correlation", "correlation_com", "one_vs_rest", "state_pairs"]
@@ -494,40 +426,56 @@ def across_visits(vpath_data, Y_data, n_states, method="regression", Nperm=1000,
     # Convert vpath from matrix to vector
     vpath_array=generate_vpath_1D(vpath_data)
 
-    # Get input shape information
-    n_T, _, n_p, vpath_data, Y_data = get_input_shape(vpath_data, Y_data)
-    n_q = Y_data.shape[-1]
+    if method == 'regression':
+        # Get input shape information
+        n_T, _, n_p, n_q, input_data, vpath_data= get_input_shape(input_data, vpath_array)
+    else:
+        # Get input shape information
+        n_T, _, n_p, n_q, input_data, vpath_data= get_input_shape(input_data, vpath_data)  
+    
+    # Include the t dimension
+    #vpath_data = np.expand_dims(vpath_data, axis=1)
+    
 
     # Initialize arrays based on shape of data shape and defined options
-    pval, corr_coef, test_statistic_list, pval_list = initialize_arrays(vpath_data, n_p, n_q,
+    pval, corr_coef, test_statistic_list, pval_list = initialize_arrays(input_data,vpath_data, n_p, n_q,
                                                                             n_T, method, Nperm,
                                                                             test_statistic_option)
 
     # Print tqdm over n_T if there are more than one timepoint
     for t in tqdm(range(n_T)) if n_T > 1 else range(n_T):
+        # Correct for confounds and center data_t
+        data_t = deconfound_Fnc(input_data[t, :], confounds)
         # Create test_statistic and pval_perms based on method
         if method != "state_pairs":
             ###################### Permutation testing for other tests beside state pairs #################################
-            test_statistic, pval_perms, proj = initialize_permutation_matrices(method, Nperm, n_p, n_q,
-                                                                                Y_data[t, :])
+            # Create test_statistic and pval_perms based on method
+            test_statistic, pval_perms, proj = initialize_permutation_matrices(method, Nperm, n_p, n_q, 
+                                                                               data_t)
+        
             # Perform permutation testing
             for perm in tqdm(range(Nperm)) if n_T == 1 else range(n_T):
                 # Create vpath_surrogate
                 vpath_surrogate= surrogate_state_time(perm, vpath_array,n_states)
                 if method =="one_vs_rest":
                     for state in range(n_states):
-                        test_statistic[perm,state] =calculate_baseline_difference(vpath_surrogate, Y_data[t,:,:], state+1, statistic.lower())
+                        test_statistic[perm,state] =calculate_baseline_difference(vpath_surrogate, data_t, state+1, statistic.lower())
+                elif method =="regression":
+                    test_statistic, pval_perms = test_statistic_calculations(data_t,vpath_surrogate , perm, pval_perms,
+                                                                            test_statistic, proj, method)
                 else:
                     # Apply 1 hot encoding
                     vpath_surrogate_onehot = viterbi_path_to_stc(vpath_surrogate,n_states)
                     # Apply t-statistic on the vpath_surrogate
-                    test_statistic, pval_perms = test_statistic_calculations(vpath_surrogate_onehot, Y_data[t, :], perm, pval_perms,
+                    test_statistic, pval_perms = test_statistic_calculations(data_t,vpath_surrogate_onehot , perm, pval_perms,
                                                                                 test_statistic, proj, method)
 
             pval, corr_coef = get_pval(test_statistic, pval_perms, Nperm, method, t, pval, corr_coef)
         ###################### Permutation testing for state pairs #################################
         elif method =="state_pairs":
             # Run this code if it is "state_pairs"
+            # Correct for confounds and center data_t
+            data_t = deconfound_Fnc(input_data[t, :], confounds)
             # Generates all unique combinations of length 2 
             pairwise_comparisons = list(combinations(range(1, n_states + 1), 2))
             test_statistic = np.zeros((Nperm, len(pairwise_comparisons)))
@@ -537,7 +485,7 @@ def across_visits(vpath_data, Y_data, n_states, method="regression", Nperm=1000,
                 # Generate surrogate state-time data and calculate differences for each permutation
                 for perm in range(Nperm):
                     vpath_surrogate = surrogate_state_time(perm, vpath_array, n_states)
-                    test_statistic[perm,idx] = calculate_statepair_difference(vpath_surrogate, Y_data[t, :, :], state_1, state_2, statistic)
+                    test_statistic[perm,idx] = calculate_statepair_difference(vpath_surrogate, data_t, state_1, state_2, statistic)
                 
                 p_val= np.sum(test_statistic[:,idx] >= test_statistic[0,idx], axis=0) / (Nperm + 1)
                 pval[state_1-1, state_2-1] = p_val
@@ -550,6 +498,7 @@ def across_visits(vpath_data, Y_data, n_states, method="regression", Nperm=1000,
             # If pval_perms is empty (evaluates to False), the right-hand side of the assignment will be pval_list[t, :]
             # itself, meaning that the array will remain unchanged.
             pval_list[t, :] = pval_perms if np.any(pval_perms) else pval_list[t, :]
+
     pval =np.squeeze(pval) if np.abs(np.sum(pval))>0 else [] 
     corr_coef =np.squeeze(corr_coef) if corr_coef is not None else []
     test_statistic_list =np.squeeze(test_statistic_list) if test_statistic_list is not None else []
@@ -557,6 +506,7 @@ def across_visits(vpath_data, Y_data, n_states, method="regression", Nperm=1000,
     
     # Return results
     result = {
+        
         'pval': pval,
         'corr_coef': corr_coef,
         'test_statistic': test_statistic_list,
@@ -609,7 +559,7 @@ def get_input_shape(X_data, Y_data):
         X_data = np.expand_dims(X_data, axis=0)
         Y_data = np.expand_dims(Y_data, axis=0)
         n_T, n_ST, n_p = X_data.shape
-        
+        n_q = Y_data.shape[-1]
     elif len(X_data.shape) == 2:
         # Performing permutation testing for the whole data
         
@@ -617,6 +567,7 @@ def get_input_shape(X_data, Y_data):
         if X_data.ndim !=Y_data.ndim:
             Y_data = np.expand_dims(Y_data, axis=0)
         n_T, n_ST, n_p = X_data.shape
+        n_q = Y_data.shape[-1]
 
     else:
         # Performing permutation testing per timepoint
@@ -626,8 +577,8 @@ def get_input_shape(X_data, Y_data):
         # Tile the Y_data if it doesn't match the number of timepoints in X_data
         if Y_data.shape[0] != X_data.shape[0]:
             Y_data = np.tile(Y_data, (X_data.shape[0],1,1)) 
-        
-    return n_T, n_ST, n_p, X_data, Y_data
+        n_q = Y_data.shape[-1]
+    return n_T, n_ST, n_p, n_q, X_data, Y_data
 
 def fam_dict(dict_fam, Nperm):
     """
@@ -696,50 +647,15 @@ def fam_dict(dict_fam, Nperm):
     
     return dict_mfam
 
-def initialize_permutation_matrices(method, Nperm, n_p, n_q, Y_data):
-    """
-    Initializes the permutation matrices and projection matrix for permutation testing.
-
-    Parameters:
-    --------------
-        method (str): The method to use for permutation testing.
-        Nperm (int): The number of permutations.
-        n_p (int): The number of features.
-        n_q (int): The number of predictions.
-        Y_data (numpy.ndarray): The dependent variable.
-
-    Returns:
-    ----------  
-        test_statistic (numpy.ndarray): The permutation array.
-        pval_perms (numpy.ndarray): The p-value permutation array.
-        proj (numpy.ndarray or None): The projection matrix (None for correlation methods).
-    """
-    # Initialize the permutation matrices based on the selected method
-    if method in {"correlation", "correlation_com"}:
-        test_statistic = np.zeros((Nperm, n_p, n_q))
-        pval_perms = np.zeros((Nperm, n_p, n_q))
-        proj = None
-    else:
-        test_statistic = np.zeros((Nperm, n_p))
-        pval_perms = []
-        # Define regularization parameter
-        regularization = 0.001
-        # Regularized parameter estimation
-        regularization_matrix = regularization * np.eye(Y_data.shape[1])
-        # Projection matrix
-        # This matrix is then used to project permuted data matrix (Xin) to obtain the regression coefficients (beta)
-        proj = np.linalg.inv(np.dot(Y_data.T,Y_data) +regularization_matrix).dot(Y_data.T)
-    return test_statistic, pval_perms, proj
-
-
-def initialize_arrays(X_data, n_p, n_q, n_T, method, Nperm, test_statistic_option):
+def initialize_arrays(X_data, Y_data, n_p, n_q, n_T, method, Nperm, test_statistic_option):
     from itertools import combinations
     """
     Initializes the result arrays for permutation testing.
 
     Parameters:
     --------------
-        X_data (numpy.ndarray): The input data array.
+        X_data (numpy.ndarray): The independt variable
+        Y_data (numpy.ndarray): The dependent variable
         n_p (int): The number of features.
         n_q (int): The number of predictions.
         n_T (int): The number of timepoints.
@@ -756,15 +672,16 @@ def initialize_arrays(X_data, n_p, n_q, n_T, method, Nperm, test_statistic_optio
     """
 
     # Initialize the arrays based on the selected method and data dimensions
-    if len(X_data.shape) == 2:
-        pval = np.zeros((n_T, n_p))
-        corr_coef = np.zeros((n_T, n_p, n_q))
+    if  method == "regression":
+        pval = np.zeros((n_T, n_q))
+        corr_coef = None
         if test_statistic_option==True:
-            test_statistic_list = np.zeros((n_T, Nperm, n_p))
+            test_statistic_list = np.zeros((n_T, Nperm, n_q))
             pval_list = np.zeros((n_T, Nperm, n_p))
         else:
             test_statistic_list= None
             pval_list =None
+            
     elif method == "correlation_com" or method == "correlation" :
         pval = np.zeros((n_T, n_p, n_q))
         corr_coef = pval.copy()
@@ -776,50 +693,93 @@ def initialize_arrays(X_data, n_p, n_q, n_T, method, Nperm, test_statistic_optio
             test_statistic_list= None
             pval_list =None
     elif method == "state_pairs":
-        pval = np.zeros((n_T, X_data.shape[-1], X_data.shape[-1]))
+        pval = np.zeros((n_T, Y_data.shape[-1], Y_data.shape[-1]))
         corr_coef = []
-        pairwise_comparisons = list(combinations(range(1, X_data.shape[-1] + 1), 2))
+        pairwise_comparisons = list(combinations(range(1, Y_data.shape[-1] + 1), 2))
         if test_statistic_option==True:    
             test_statistic_list = np.zeros((n_T, Nperm, len(pairwise_comparisons)))
             pval_list = np.zeros((n_T, Nperm, n_p))
         else:
             test_statistic_list= None
             pval_list =None
-   
-    else:
-        pval = np.zeros((n_T, n_p))
+    elif method == "one_vs_rest":
+        pval = np.zeros((n_T, n_p, n_q))
         corr_coef = np.zeros((n_T, n_p, n_q))
         if test_statistic_option==True:
-            test_statistic_list = np.zeros((n_T, Nperm, n_p))
-            pval_list = np.zeros((n_T, Nperm, n_p))
+            test_statistic_list = np.zeros((n_T, Nperm, n_q))
+            pval_list = np.zeros((n_T, Nperm, n_q))
         else:
             test_statistic_list= None
-            pval_list =None
-        
+            pval_list =None   
+
     return pval, corr_coef, test_statistic_list, pval_list
 
 
-def calculate_X_t(X_data, confounds=None):
+def deconfound_Fnc(y_data, confounds=None):
     """
-    Calculate the X_t array for permutation testing.
+    Calculate the y_data array for permutation testing.
 
     Parameters:
     --------------
-        X_data (numpy.ndarray): The input data array.
+        y_data (numpy.ndarray): The input data array.
         confounds (numpy.ndarray or None): The confounds array (default: None).
 
     Returns:
     ----------  
-        numpy.ndarray: Calculated X_t array.
+        numpy.ndarray: Calculated Y_t array.
     """
+    
     # Calculate the centered data matrix based on confounds (if provided)
     if confounds is not None:
-        confounds -= np.mean(confounds, axis=0)
-        X_t = X_data - np.dot(confounds, np.linalg.pinv(confounds).dot(X_data))
+        # Centering confounds
+        confounds = confounds - np.mean(confounds, axis=0)
+        # Centering y_data
+        y_data = y_data - np.mean(y_data, axis=0)
+        # Regressing out confounds from y_data
+        Y_t = y_data - confounds @ np.linalg.pinv(confounds) @ y_data
     else:
-        X_t = X_data - np.mean(X_data, axis=0)
-    return X_t
+        # Centering y_data
+        Y_t = y_data - np.mean(y_data, axis=0)
+    return Y_t
 
+def initialize_permutation_matrices(method, Nperm, n_p, n_q, X_data):
+    """
+    Initializes the permutation matrices and projection matrix for permutation testing.
+
+    Parameters:
+    --------------
+        method (str): The method to use for permutation testing.
+        Nperm (int): The number of permutations.
+        n_p (int): The number of features.
+        n_q (int): The number of predictions.
+        X_data (numpy.ndarray): The independent variable.
+        
+
+    Returns:
+    ----------  
+        test_statistic (numpy.ndarray): The permutation array.
+        pval_perms (numpy.ndarray): The p-value permutation array.
+        proj (numpy.ndarray or None): The projection matrix (None for correlation methods).
+    """
+    # Initialize the permutation matrices based on the selected method
+    if method in {"correlation", "correlation_com"}:
+        test_statistic = np.zeros((Nperm, n_p, n_q))
+        pval_perms = np.zeros((Nperm, n_p, n_q))
+        proj = None
+    else:
+        # Regression got a N by q matrix
+        test_statistic = np.zeros((Nperm, n_q))
+        pval_perms = [] # empty
+        # Define regularization parameter
+        regularization = 0.001
+        # Regularized parameter estimation
+        regularization_matrix = regularization * np.eye(X_data.shape[1])
+        # Projection matrix
+        # This matrix is then used to project permuted data matrix (Xin) to obtain the regression coefficients (beta)
+        #proj = np.matmul(np.linalg.inv(np.matmul(X_data.T,X_data) +regularization_matrix),X_data.T
+        proj = np.linalg.inv(X_data.T @ X_data + regularization_matrix) @ X_data.T
+
+    return test_statistic, pval_perms, proj
 
 def across_subjects_permutation(Nperm, X_t):
     """
@@ -898,14 +858,14 @@ def get_indices_array(idx_data):
     return idx_array
 
 
-def within_session_across_trial_permutation(Nperm, X_t, idx_array):
+def within_session_across_trial_permutation(Nperm, Y_t, idx_array):
     """
     Generates permutation matrix of within-session across-trial data based on given indices.
 
     Parameters:
     --------------
         Nperm (int): The number of permutations.
-        X_t (numpy.ndarray): The preprocessed data array.
+        Y_t (numpy.ndarray): The preprocessed data array.
         idx_array (numpy.ndarray): The indices array.
 
     Returns:
@@ -914,19 +874,19 @@ def within_session_across_trial_permutation(Nperm, X_t, idx_array):
     """
     # Perform within-session between-trial permutation based on the given indices
     # Createing the permutation matrix
-    permute_idx_list = np.zeros((X_t.shape[0], Nperm), dtype=int)
+    permute_idx_list = np.zeros((Y_t.shape[0], Nperm), dtype=int)
     for perm in range(Nperm):
         if perm == 0:
-            permute_idx_list[:,perm] = np.arange(X_t.shape[0])
+            permute_idx_list[:,perm] = np.arange(Y_t.shape[0])
         else:
             unique_indices = np.unique(idx_array)
             count = 0
             for i in unique_indices:
                 if i ==0:
-                    count =count+X_t[idx_array == unique_indices[i], :].shape[0]
+                    count =count+Y_t[idx_array == unique_indices[i], :].shape[0]
                     permute_idx_list[0:count,perm]=np.random.permutation(np.arange(0,count))
                 else:
-                    idx_count=X_t[idx_array == unique_indices[i], :].shape[0]
+                    idx_count=Y_t[idx_array == unique_indices[i], :].shape[0]
                     count =count+idx_count
                     permute_idx_list[count-idx_count:count,perm]=np.random.permutation(np.arange(count-idx_count,count))
     return permute_idx_list
@@ -1181,7 +1141,7 @@ def calculate_statepair_difference(vpath_array, Y_data, state_1, state_2, stat):
     difference = state_1_Y_data - state_2_Y_data
     return difference
 
-def test_statistic_calculations(Xin, Y_data, perm, pval_perms, test_statistic, proj, method):
+def test_statistic_calculations(Xin, Yin, perm, pval_perms, test_statistic, proj, method):
     """
     Calculates the test_statistic array and pval_perms array based on the given data and method.
 
@@ -1202,20 +1162,20 @@ def test_statistic_calculations(Xin, Y_data, perm, pval_perms, test_statistic, p
     """
     if method == 'regression':
         # Calculate regression_coefficients (beta)
-        beta = np.dot(proj, Xin)
-         # Calculate the root mean squared error
-        test_statistic[perm,:] = np.sqrt(np.sum((np.dot(Y_data, beta) - Xin) ** 2, axis=0))
+        beta = proj @ Yin # proj works like X^-1
+        # Calculate the root mean squared error
+        test_statistic[perm,:] = np.sqrt(np.sum((Xin @ beta - Yin) ** 2, axis=0))
     elif method == 'correlation':
-        corr_coef = np.corrcoef(Xin, Y_data, rowvar=False)
+        corr_coef = np.corrcoef(Xin, Yin, rowvar=False)
         corr_matrix = corr_coef[:Xin.shape[1], Xin.shape[1]:]
         test_statistic[perm, :, :] = np.abs(corr_matrix)
     elif method == "correlation_com":
-        corr_coef = np.corrcoef(Xin, Y_data, rowvar=False)
+        corr_coef = np.corrcoef(Xin, Yin, rowvar=False)
         corr_matrix = corr_coef[:Xin.shape[1], Xin.shape[1]:]
         pval_matrix = np.zeros(corr_matrix.shape)
         for i in range(Xin.shape[1]):
-            for j in range(Y_data.shape[1]):
-                _, pval_matrix[i, j] = pearsonr(Xin[:, i], Y_data[:, j])
+            for j in range(Yin.shape[1]):
+                _, pval_matrix[i, j] = pearsonr(Xin[:, i], Yin[:, j])
 
         test_statistic[perm, :, :] = np.abs(corr_matrix)
         pval_perms[perm, :, :] = pval_matrix
@@ -1268,6 +1228,3 @@ def pval_test(pval, method='fdr_bh', alpha = 0.05):
         np.fill_diagonal(p_values_corrected_full, np.nan)
     # return the corrected p-values and boolean values indicating rejected null hypotheses
     return p_values_corrected_full,rejected_corrected
-
-
-
