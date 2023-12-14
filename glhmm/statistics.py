@@ -8,28 +8,27 @@ import pandas as pd
 from tqdm import tqdm
 import random
 from scipy.stats import pearsonr
-#from . import palm_functions
 
-def across_subjects(X_data, Y_data, method="regression", Nperm=1000, confounds = None, dict_fam = None ,test_statistic_option=False):
-    from palm_functions import palm_quickperms
+def across_subjects(D_data, R_data, method="regression", Nperm=1000, confounds = None, dict_fam = None ,test_statistic_option=False):
+    from glhmm.palm_functions import palm_quickperms
     """
     Perform across subjects permutation testing.
-    This function conducts statistical tests (regression, correlation, or correlation_com) between two datasets, `X_data`
-    representing the measured data and `Y_data` representing the dependent-variable, across different subjects using
+    This function conducts statistical tests (regression, correlation, or correlation_com) between two datasets, `D_data`
+    representing the measured data and `R_data` representing the dependent-variable, across different subjects using
     permutation testing. 
     This test is useful if we want to test for differences between the different subjects in ones study. 
     
                                     
     Parameters:
     --------------
-        X_data (numpy.ndarray): Input data array of shape that can be either a 2D array or a 3D array.
+        D_data (numpy.ndarray): Input data array of shape that can be either a 2D array or a 3D array.
                                 For 2D the data is represented as a (n, p) matrix, where n represent 
                                 the number of subjects, and p represents the number of predictors e (e.g., brain region)
                                 For a 3D array,it got a shape (T, n, q), where the first dimension 
                                 represents timepoints, the second dimension represents the number of subjects, 
                                 and the third dimension represents features. 
                                 For 3D, permutation testing is performed per timepoint for each subject.              
-        Y_data (numpy.ndarray): The dependent-variable can be either a 2D array or a 3D array. 
+        R_data (numpy.ndarray): The dependent-variable can be either a 2D array or a 3D array. 
                                 For 2D array, it got a shape of (n, q), where n represent 
                                 the number of subjects, and q represents the outcome of the dependent variable
                                 For a 3D array,it got a shape (T, n, q), where the first dimension 
@@ -41,7 +40,7 @@ def across_subjects(X_data, Y_data, method="regression", Nperm=1000, confounds =
                                 Note: "correlation_com" stands for correlation combined and returns the both the statistical significance of Pearson's correlation coefficient and 2-tailed p-value                                         
         Nperm (int): Number of permutations to perform (default: 1000).                       
         confounds (numpy.ndarray or None, optional): 
-                                The confounding variables to be regressed out from the input data (X_data).
+                                The confounding variables to be regressed out from the input data (D_data).
                                 If provided, the regression analysis is performed to remove the confounding effects. 
                                 (default: None):     
         dict_fam (dict): 
@@ -71,16 +70,16 @@ def across_subjects(X_data, Y_data, method="regression", Nperm=1000, confounds =
                   
     Note:
         - The function automatically determines whether permutation testing is performed per timepoint for each subject or
-          for the whole data based on the dimensionality of `X_data`.
-        - The function assumes that the number of rows in `X_data` and `Y_data` are equal
+          for the whole data based on the dimensionality of `D_data`.
+        - The function assumes that the number of rows in `D_data` and `R_data` are equal
                                   
         
     Example:
-        X_data = np.random.rand(100, 3)  # Simulated brain activity data (3 features)
-        Y_data = np.random.rand(100, 1)  # Simulated dependent variable data (1 variable)
+        D_data = np.random.rand(100, 3)  # Simulated brain activity data (3 features)
+        R_data = np.random.rand(100, 1)  # Simulated dependent variable data (1 variable)
         dict_fam_test = {'file_location': 'C:\\Users\\.....\\EB.csv',
                         'M': 'None'}
-        pval, test_statistic_list = across_subjects(X_data, Y_data, method="regression", Nperm=1000,
+        pval, test_statistic_list = across_subjects(D_data, R_data, method="regression", Nperm=1000,
                                                          confounds=None, dict_fam_test=dict_fam, test_statistic_option=True)
         print("P-values:", pval)
         print("Test Statistics:", test_statistic_list)
@@ -90,7 +89,7 @@ def across_subjects(X_data, Y_data, method="regression", Nperm=1000, confounds =
     check_value_error(method in valid_methods, "Invalid option specified for 'method'. Must be one of: " + ', '.join(valid_methods))
     
     # Get the shapes of the data
-    n_T, _, n_p, n_q, X_data, Y_data = get_input_shape(X_data, Y_data)
+    n_T, _, n_p, n_q, D_data, R_data = get_input_shape(D_data, R_data)
     # Note for convension we wrote (T, p, q) => (n_T, n_p, n_q)
     
     # Crate the family structure 
@@ -98,12 +97,12 @@ def across_subjects(X_data, Y_data, method="regression", Nperm=1000, confounds =
         dict_mfam=fam_dict(dict_fam, Nperm) # modified dictionary of family structure
 
     # Initialize arrays based on shape of data shape and defined options
-    pval, corr_coef, test_statistic_list, pval_list = initialize_arrays(X_data,Y_data, n_p, n_q, n_T, method, Nperm, test_statistic_option)
+    pval, corr_coef, test_statistic_list, pval_list = initialize_arrays(D_data,R_data, n_p, n_q, n_T, method, Nperm, test_statistic_option)
 
     for t in tqdm(range(n_T)) if n_T > 1 else range(n_T):
         # If confounds exist, perform confound regression on the dependent variables
-        Y_t = deconfound_Fnc(Y_data[t, :], confounds)
-        X_t = X_data[t, :]
+        Y_t = deconfound_Fnc(R_data[t, :], confounds)
+        X_t = D_data[t, :]
         # Create test_statistic and pval_perms based on method
         test_statistic, pval_perms, proj = initialize_permutation_matrices(method, Nperm, n_p, n_q, X_t)
 
@@ -148,29 +147,29 @@ def across_subjects(X_data, Y_data, method="regression", Nperm=1000, confounds =
 
 
 
-def across_trials_within_session(X_data, Y_data, idx_data, method="regression", Nperm=1000, permute_on="x", confounds=None,test_statistic_option=False):
+def across_trials_within_session(D_data, R_data, idD_data, method="regression", Nperm=1000, permute_on="x", confounds=None,test_statistic_option=False):
     """
-    This function conducts statistical tests (regression, correlation, or correlation_com) between two datasets, `X_data`
-    representing the measured data  and `Y_data` representing the dependent-variable, across different trials within a session 
+    This function conducts statistical tests (regression, correlation, or correlation_com) between two datasets, `D_data`
+    representing the measured data  and `R_data` representing the dependent-variable, across different trials within a session 
     using permutation testing. This test is useful if we want to test for differences between trials in one or more sessions. 
     An example could be if we want to test if any learning is happening during a session that might speed up reaction times.
                       
     Parameters:
     --------------
-        X_data (numpy.ndarray): Input data array of shape that can be either a 2D array or a 3D array.
+        D_data (numpy.ndarray): Input data array of shape that can be either a 2D array or a 3D array.
                                 For 2D array, it got a shape of (n, p), where n represent 
                                 the number of trials, and p represents the number of predictors (e.g., brain region)
                                 For a 3D array,it got a shape (T, n, p), where the first dimension 
                                 represents timepoints, the second dimension represents the number of trials, 
                                 and the third dimension represents features/predictors. 
                                 In the latter case, permutation testing is performed per timepoint for each subject.              
-        Y_data (numpy.ndarray): The dependent-variable can be either a 2D array or a 3D array. 
+        R_data (numpy.ndarray): The dependent-variable can be either a 2D array or a 3D array. 
                                 For 2D array, it got a shape of (n, q), where n represent 
                                 the number of trials, and q represents the outcome/dependent variable
                                 For a 3D array,it got a shape (T, n, q), where the first dimension 
                                 represents timepoints, the second dimension represents the number of trials, 
                                 and the third dimension represents a dependent variable                    
-        idx_data (numpy.ndarray): The indices for each trial within the session. It should be a 2D array where each row
+        idD_data (numpy.ndarray): The indices for each trial within the session. It should be a 2D array where each row
                                   represents the start and end index for a trial.    
         method (str, optional): The statistical method to be used for the permutation test. Valid options are
                                 "regression", "correlation", or "correlation_com". (default: "regression").
@@ -183,7 +182,7 @@ def across_trials_within_session(X_data, Y_data, idx_data, method="regression", 
                                 You do that to find the overall effect of the dependent variable. This could be to find the general effect of a cognitive task (e.g. IQ) on overall brain activity (independent variables), irrespective of specific regions.
                                 Valid options are "x" and "y". (default: "x").   
         confounds (numpy.ndarray or None, optional): 
-                                The confounding variables to be regressed out from the input data (X_data).
+                                The confounding variables to be regressed out from the input data (D_data).
                                 If provided, the regression analysis is performed to remove the confounding effects. 
                                 (default: None):                                                              
         test_statistic_option (bool, optional): 
@@ -205,14 +204,14 @@ def across_trials_within_session(X_data, Y_data, idx_data, method="regression", 
 
     Note:
         - The function automatically determines whether permutation testing is performed per timepoint for each subject or
-          for the whole data based on the dimensionality of `X_data`.
-        - The function assumes that the number of rows in `X_data` and `Y_data` are equal
+          for the whole data based on the dimensionality of `D_data`.
+        - The function assumes that the number of rows in `D_data` and `R_data` are equal
                                 
     Example:
-        X_data = np.random.rand(100, 3)  # Simulated brain activity data (3 features) for 100 trials
-        Y_data = np.random.rand(100, 1)  # Simulated dependent variable data (1 variable) for 100 trials
-        idx_data = np.array([[0, 49], [50, 99]])  # 50 trials within two sessions
-        pval, test_statistic_list = across_trials_within_session(X_data, Y_data, idx_data, method="correlation",
+        D_data = np.random.rand(100, 3)  # Simulated brain activity data (3 features) for 100 trials
+        R_data = np.random.rand(100, 1)  # Simulated dependent variable data (1 variable) for 100 trials
+        idD_data = np.array([[0, 49], [50, 99]])  # 50 trials within two sessions
+        pval, test_statistic_list = across_trials_within_session(D_data, R_data, idD_data, method="correlation",
                                                                      Nperm=1000, confounds=None,
                                                                      test_statistic_option=True)
         print("P-values:", pval)
@@ -228,23 +227,23 @@ def across_trials_within_session(X_data, Y_data, idx_data, method="regression", 
     check_value_error(permute_on in valid_permutations, "Invalid option specified for 'permutation_on'. Must be one of: " + ', '.join(valid_methods))
     
     # Get input shape information
-    n_T, _, n_p, n_q, X_data, Y_data = get_input_shape(X_data, Y_data)
-    n_q = Y_data.shape[-1]
+    n_T, _, n_p, n_q, D_data, R_data = get_input_shape(D_data, R_data)
+    n_q = R_data.shape[-1]
     
     # Get indices for permutation
-    if len(idx_data.shape)==2:
-        idx_array = get_indices_array(idx_data)
+    if len(idD_data.shape)==2:
+        idx_array = get_indices_array(idD_data)
     else:
-        idx_array =idx_data.copy()        
+        idx_array =idD_data.copy()        
 
     # Initialize arrays based on shape of data shape and defined options
-    pval, corr_coef, test_statistic_list, pval_list = initialize_arrays(X_data, Y_data, n_p, n_q, n_T, method, Nperm, test_statistic_option)
+    pval, corr_coef, test_statistic_list, pval_list = initialize_arrays(D_data, R_data, n_p, n_q, n_T, method, Nperm, test_statistic_option)
 
 
     for t in tqdm(range(n_T)) if n_T > 1 else range(n_T):
         # If confounds exist, perform confound regression on the dependent variables
-        Y_t = deconfound_Fnc(Y_data[t, :], confounds)
-        X_t = X_data[t, :]
+        Y_t = deconfound_Fnc(R_data[t, :], confounds)
+        X_t = D_data[t, :]
         
         # Create test_statistic and pval_perms based on method
         test_statistic, pval_perms, proj = initialize_permutation_matrices(method, Nperm, n_p, n_q, X_t)
@@ -281,29 +280,29 @@ def across_trials_within_session(X_data, Y_data, idx_data, method="regression", 
     
     return result
    
-def across_sessions_within_subject(X_data, Y_data, idx_data, method="regression", Nperm=1000, permute_on ="x", confounds=None,test_statistic_option=False):
+def across_sessions_within_subject(D_data, R_data, idD_data, method="regression", Nperm=1000, permute_on ="x", confounds=None,test_statistic_option=False):
     """
-    This function conducts statistical tests (regression, correlation, or correlation_com) between two datasets, `X_data`
-    representing the measured data and `Y_data` representing the dependent-variable, across sessions within the same subject 
+    This function conducts statistical tests (regression, correlation, or correlation_com) between two datasets, `D_data`
+    representing the measured data and `R_data` representing the dependent-variable, across sessions within the same subject 
     while keeping the trial order the same using permutation testing. This is useful for checking out the effects of 
     long-term treatments or tracking changes in brain responses across sessions over time 
                         
                                 
     Parameters:
     --------------
-        X_data (numpy.ndarray): Input data array of shape that can be either a 2D array or a 3D array.
+        D_data (numpy.ndarray): Input data array of shape that can be either a 2D array or a 3D array.
                                 For 2D array, it got a shape of (n, p), where n_ST represent 
                                 the number of subjects, and each column represents a feature (e.g., brain region). 
                                 For a 3D array,it got a shape (T, n, p), where the first dimension 
                                 represents timepoints, the second dimension represents the number of trials, 
                                 and the third dimension represents features/predictors.             
-        Y_data (numpy.ndarray): The dependent-variable can be either a 2D array or a 3D array. 
+        R_data (numpy.ndarray): The dependent-variable can be either a 2D array or a 3D array. 
                                 For 2D array, it got a shape of (n, q), where n represent 
                                 the number of trials, and q represents the outcome/dependent variable
                                 For a 3D array,it got a shape (T, n, q), where the first dimension 
                                 represents timepoints, the second dimension represents the number of trials, 
                                 and the third dimension represents a dependent variable                   
-        idx_data (numpy.ndarray): The indices for each trial within the session. It should be a 2D array where each row
+        idD_data (numpy.ndarray): The indices for each trial within the session. It should be a 2D array where each row
                                   represents the start and end index for a trial.    
         method (str, optional): The statistical method to be used for the permutation test. Valid options are
                                 "regression", "correlation", or "correlation_com". (default: "regression").
@@ -316,7 +315,7 @@ def across_sessions_within_subject(X_data, Y_data, idx_data, method="regression"
                                 You do that to find the overall effect of the dependent variable. This could be to find the general effect of a cognitive task (e.g. IQ) on overall brain activity (independent variables), irrespective of specific regions.
                                 Valid options are "x" and "y". (default: "x").                   
         confounds (numpy.ndarray or None, optional): 
-                                The confounding variables to be regressed out from the input data (X_data).
+                                The confounding variables to be regressed out from the input data (D_data).
                                 If provided, the regression analysis is performed to remove the confounding effects. 
                                 (default: None):                                                              
         test_statistic_option (bool, optional): 
@@ -339,14 +338,14 @@ def across_sessions_within_subject(X_data, Y_data, idx_data, method="regression"
                   
     Note:
         - The function automatically determines whether permutation testing is performed per timepoint for each subject or
-          for the whole data based on the dimensionality of `X_data`.
-        - The function assumes that the number of rows in `X_data` and `Y_data` are equal
+          for the whole data based on the dimensionality of `D_data`.
+        - The function assumes that the number of rows in `D_data` and `R_data` are equal
                                 
     Example:
-        X_data = np.random.rand(100, 3)  # Simulated brain activity data (3 features) for 100 trials
-        Y_data = np.random.rand(100, 1)  # Simulated dependent variable data (1 variable) for 100 trials
-        idx_data = np.array([[0, 49], [50, 99]])  # 50 trials within two sessions
-        pval, test_statistic_list = across_sessions_within_subject(X_data, Y_data, idx_data, method="correlation",
+        D_data = np.random.rand(100, 3)  # Simulated brain activity data (3 features) for 100 trials
+        R_data = np.random.rand(100, 1)  # Simulated dependent variable data (1 variable) for 100 trials
+        idD_data = np.array([[0, 49], [50, 99]])  # 50 trials within two sessions
+        pval, test_statistic_list = across_sessions_within_subject(D_data, R_data, idD_data, method="correlation",
                                                                      Nperm=1000, confounds=None,
                                                                      test_statistic_option=True)
         print("P-values:", pval)
@@ -360,25 +359,25 @@ def across_sessions_within_subject(X_data, Y_data, idx_data, method="regression"
     check_value_error(permute_on in valid_permutations, "Invalid option specified for 'permutation_on'. Must be one of: " + ', '.join(valid_methods))
 
     # Get indices for permutation
-    if len(idx_data.shape)==2:
-        idx_array = get_indices_array(idx_data)
+    if len(idD_data.shape)==2:
+        idx_array = get_indices_array(idD_data)
     else:
-        idx_array =idx_data.copy()
+        idx_array =idD_data.copy()
 
     _, trial_per_subject = np.unique(idx_array, return_counts=True)
     if len(set(trial_per_subject)) != 1:
         raise ValueError("Warning: Unequal number of trials per subject prohibs permutation between subjects when exchangeable is False.")
     
     # Get input shape information
-    n_T, _, n_p,n_q, X_data, Y_data = get_input_shape(X_data, Y_data)
-    #n_q = Y_data.shape[-1]
+    n_T, _, n_p,n_q, D_data, R_data = get_input_shape(D_data, R_data)
+    #n_q = R_data.shape[-1]
     
 # Initialize arrays based on shape of data shape and defined options
-    pval, corr_coef, test_statistic_list, pval_list = initialize_arrays(X_data, Y_data, n_p, n_q, n_T, method, Nperm, test_statistic_option)
+    pval, corr_coef, test_statistic_list, pval_list = initialize_arrays(D_data, R_data, n_p, n_q, n_T, method, Nperm, test_statistic_option)
     for t in tqdm(range(n_T)) if n_T > 1 else range(n_T):
         # If confounds exist, perform confound regression on the dependent variables
-        Y_t = deconfound_Fnc(Y_data[t, :], confounds)
-        X_t = X_data[t, :]
+        Y_t = deconfound_Fnc(R_data[t, :], confounds)
+        X_t = D_data[t, :]
         
         # Create test_statistic and pval_perms based on method
         test_statistic, pval_perms, proj = initialize_permutation_matrices(method, Nperm, n_p, n_q, X_t)
@@ -531,54 +530,54 @@ def check_value_error(condition, error_message):
         raise ValueError(error_message)
 
 
-def get_input_shape(X_data, Y_data):
+def get_input_shape(D_data, R_data):
     """
     Computes the input shape parameters for permutation testing.
 
     Parameters:
     --------------
-        X_data (numpy.ndarray): The input data array.
-        Y_data (numpy.ndarray): The dependent variable.
+        D_data (numpy.ndarray): The input data array.
+        R_data (numpy.ndarray): The dependent variable.
 
     Returns:
     ----------  
         n_T (int): The number of timepoints.
         n_ST (int): The number of subjects or trials.
         n_p (int): The number of features.
-        X_data (numpy.ndarray): The updated input data array.
-        Y_data (numpy.ndarray): The updated dependent variable.
+        D_data (numpy.ndarray): The updated input data array.
+        R_data (numpy.ndarray): The updated dependent variable.
     """
     # Get the input shape of the data and perform necessary expansions if needed
-    if Y_data.ndim == 1:
-        Y_data = np.expand_dims(Y_data, axis=1)
+    if R_data.ndim == 1:
+        R_data = np.expand_dims(R_data, axis=1)
     
-    if len(X_data.shape) == 1:
+    if len(D_data.shape) == 1:
         # This is normally the case when using viterbi path
         print("performing permutation testing for viterbi path")
-        X_data = np.expand_dims(X_data, axis=1)
-        X_data = np.expand_dims(X_data, axis=0)
-        Y_data = np.expand_dims(Y_data, axis=0)
-        n_T, n_ST, n_p = X_data.shape
-        n_q = Y_data.shape[-1]
-    elif len(X_data.shape) == 2:
+        D_data = np.expand_dims(D_data, axis=1)
+        D_data = np.expand_dims(D_data, axis=0)
+        R_data = np.expand_dims(R_data, axis=0)
+        n_T, n_ST, n_p = D_data.shape
+        n_q = R_data.shape[-1]
+    elif len(D_data.shape) == 2:
         # Performing permutation testing for the whole data
         
-        X_data = np.expand_dims(X_data, axis=0)
-        if X_data.ndim !=Y_data.ndim:
-            Y_data = np.expand_dims(Y_data, axis=0)
-        n_T, n_ST, n_p = X_data.shape
-        n_q = Y_data.shape[-1]
+        D_data = np.expand_dims(D_data, axis=0)
+        if D_data.ndim !=R_data.ndim:
+            R_data = np.expand_dims(R_data, axis=0)
+        n_T, n_ST, n_p = D_data.shape
+        n_q = R_data.shape[-1]
 
     else:
         # Performing permutation testing per timepoint
         print("performing permutation testing per timepoint")
-        n_T, n_ST, n_p = X_data.shape
+        n_T, n_ST, n_p = D_data.shape
 
-        # Tile the Y_data if it doesn't match the number of timepoints in X_data
-        if Y_data.shape[0] != X_data.shape[0]:
-            Y_data = np.tile(Y_data, (X_data.shape[0],1,1)) 
-        n_q = Y_data.shape[-1]
-    return n_T, n_ST, n_p, n_q, X_data, Y_data
+        # Tile the R_data if it doesn't match the number of timepoints in D_data
+        if R_data.shape[0] != D_data.shape[0]:
+            R_data = np.tile(R_data, (D_data.shape[0],1,1)) 
+        n_q = R_data.shape[-1]
+    return n_T, n_ST, n_p, n_q, D_data, R_data
 
 def fam_dict(dict_fam, Nperm):
     """
@@ -647,15 +646,15 @@ def fam_dict(dict_fam, Nperm):
     
     return dict_mfam
 
-def initialize_arrays(X_data, Y_data, n_p, n_q, n_T, method, Nperm, test_statistic_option):
+def initialize_arrays(D_data, R_data, n_p, n_q, n_T, method, Nperm, test_statistic_option):
     from itertools import combinations
     """
     Initializes the result arrays for permutation testing.
 
     Parameters:
     --------------
-        X_data (numpy.ndarray): The independt variable
-        Y_data (numpy.ndarray): The dependent variable
+        D_data (numpy.ndarray): The independt variable
+        R_data (numpy.ndarray): The dependent variable
         n_p (int): The number of features.
         n_q (int): The number of predictions.
         n_T (int): The number of timepoints.
@@ -693,9 +692,9 @@ def initialize_arrays(X_data, Y_data, n_p, n_q, n_T, method, Nperm, test_statist
             test_statistic_list= None
             pval_list =None
     elif method == "state_pairs":
-        pval = np.zeros((n_T, Y_data.shape[-1], Y_data.shape[-1]))
+        pval = np.zeros((n_T, R_data.shape[-1], R_data.shape[-1]))
         corr_coef = []
-        pairwise_comparisons = list(combinations(range(1, Y_data.shape[-1] + 1), 2))
+        pairwise_comparisons = list(combinations(range(1, R_data.shape[-1] + 1), 2))
         if test_statistic_option==True:    
             test_statistic_list = np.zeros((n_T, Nperm, len(pairwise_comparisons)))
             pval_list = np.zeros((n_T, Nperm, n_p))
@@ -715,13 +714,13 @@ def initialize_arrays(X_data, Y_data, n_p, n_q, n_T, method, Nperm, test_statist
     return pval, corr_coef, test_statistic_list, pval_list
 
 
-def deconfound_Fnc(y_data, confounds=None):
+def deconfound_Fnc(R_data, confounds=None):
     """
-    Calculate the y_data array for permutation testing.
+    Calculate the R_data array for permutation testing.
 
     Parameters:
     --------------
-        y_data (numpy.ndarray): The input data array.
+        R_data (numpy.ndarray): The input data array.
         confounds (numpy.ndarray or None): The confounds array (default: None).
 
     Returns:
@@ -733,16 +732,16 @@ def deconfound_Fnc(y_data, confounds=None):
     if confounds is not None:
         # Centering confounds
         confounds = confounds - np.mean(confounds, axis=0)
-        # Centering y_data
-        y_data = y_data - np.mean(y_data, axis=0)
-        # Regressing out confounds from y_data
-        Y_t = y_data - confounds @ np.linalg.pinv(confounds) @ y_data
+        # Centering R_data
+        R_data = R_data - np.mean(R_data, axis=0)
+        # Regressing out confounds from R_data
+        Y_t = R_data - confounds @ np.linalg.pinv(confounds) @ R_data
     else:
-        # Centering y_data
-        Y_t = y_data - np.mean(y_data, axis=0)
+        # Centering R_data
+        Y_t = R_data - np.mean(R_data, axis=0)
     return Y_t
 
-def initialize_permutation_matrices(method, Nperm, n_p, n_q, X_data):
+def initialize_permutation_matrices(method, Nperm, n_p, n_q, D_data):
     """
     Initializes the permutation matrices and projection matrix for permutation testing.
 
@@ -752,7 +751,7 @@ def initialize_permutation_matrices(method, Nperm, n_p, n_q, X_data):
         Nperm (int): The number of permutations.
         n_p (int): The number of features.
         n_q (int): The number of predictions.
-        X_data (numpy.ndarray): The independent variable.
+        D_data (numpy.ndarray): The independent variable.
         
 
     Returns:
@@ -773,11 +772,11 @@ def initialize_permutation_matrices(method, Nperm, n_p, n_q, X_data):
         # Define regularization parameter
         regularization = 0.001
         # Regularized parameter estimation
-        regularization_matrix = regularization * np.eye(X_data.shape[1])
+        regularization_matrix = regularization * np.eye(D_data.shape[1])
         # Projection matrix
         # This matrix is then used to project permuted data matrix (Xin) to obtain the regression coefficients (beta)
-        #proj = np.matmul(np.linalg.inv(np.matmul(X_data.T,X_data) +regularization_matrix),X_data.T
-        proj = np.linalg.inv(X_data.T @ X_data + regularization_matrix) @ X_data.T
+        #proj = np.matmul(np.linalg.inv(np.matmul(D_data.T,D_data) +regularization_matrix),D_data.T
+        proj = np.linalg.inv(D_data.T @ D_data + regularization_matrix) @ D_data.T
 
     return test_statistic, pval_perms, proj
 
@@ -838,22 +837,22 @@ def get_pval(test_statistic, pval_perms, Nperm, method, t, pval, corr_coef):
     return pval, corr_coef
 
 
-def get_indices_array(idx_data):
+def get_indices_array(idD_data):
     """
     Generates an indices array based on given data indices.
 
     Parameters:
     --------------
-        idx_data (numpy.ndarray): The data indices array.
+        idD_data (numpy.ndarray): The data indices array.
 
     Returns:
     ----------  
         idx_array (numpy.ndarray): The generated indices array.
     """
-    # Get an array of indices based on the given idx_data ranges
-    max_value = np.max(idx_data[:, 1])
+    # Get an array of indices based on the given idD_data ranges
+    max_value = np.max(idD_data[:, 1])
     idx_array = np.zeros(max_value + 1, dtype=int)
-    for count, (start, end) in enumerate(idx_data):
+    for count, (start, end) in enumerate(idD_data):
         idx_array[start:end + 1] = count
     return idx_array
 
@@ -1085,14 +1084,14 @@ def surrogate_viterbi_path(viterbi_path, n_states):
     
     return viterbi_path_surrogate.astype(int)
 
-def calculate_baseline_difference(vpath_array, Y_data, state, statistic):
+def calculate_baseline_difference(vpath_array, R_data, state, statistic):
     """
     Calculate the difference between the specified statistics of a state and all other states combined.
 
     Parameters:
     --------------
         vpath_data (numpy.ndarray): The Viterbi path as of integer values that range from 1 to n_states.
-        Y_data (numpy.ndarray):     The dependent-variable associated with each state.
+        R_data (numpy.ndarray):     The dependent-variable associated with each state.
         state(numpy.ndarray):       the state for which the difference is calculated.
         statistic (str)             The chosen statistic to be calculated. Valid options are "mean" or "median".
 
@@ -1101,26 +1100,26 @@ def calculate_baseline_difference(vpath_array, Y_data, state, statistic):
         difference (float)            the calculated difference between the specified state and all other states combined.
     """
     if statistic == 'median':
-        state_Y_data = np.median(Y_data[vpath_array == state])
-        other_Y_data = np.median(Y_data[vpath_array != state])
+        state_R_data = np.median(R_data[vpath_array == state])
+        other_R_data = np.median(R_data[vpath_array != state])
     elif statistic == 'mean':
-        state_Y_data = np.mean(Y_data[vpath_array == state])
-        other_Y_data = np.mean(Y_data[vpath_array != state])
+        state_R_data = np.mean(R_data[vpath_array == state])
+        other_R_data = np.mean(R_data[vpath_array != state])
     else:
         raise ValueError("Invalid stat value")
     # Detect any difference
-    difference = np.abs(state_Y_data) - np.abs(other_Y_data)
+    difference = np.abs(state_R_data) - np.abs(other_R_data)
     
     return difference
 
-def calculate_statepair_difference(vpath_array, Y_data, state_1, state_2, stat):
+def calculate_statepair_difference(vpath_array, R_data, state_1, state_2, stat):
     """
     Calculate the difference between the specified statistics of two states.
 
     Parameters:
     --------------
         vpath_data (numpy.ndarray): The Viterbi path as of integer values that range from 1 to n_states.
-        Y_data (numpy.ndarray):     The dependent-variable associated with each state.
+        R_data (numpy.ndarray):     The dependent-variable associated with each state.
         state_1 (int):              First state for comparison.
         state_2 (int):              Second state for comparison.
         statistic (str):            The chosen statistic to be calculated. Valid options are "mean" or "median".
@@ -1130,15 +1129,15 @@ def calculate_statepair_difference(vpath_array, Y_data, state_1, state_2, stat):
         difference (float):           The calculated difference between the two states.
     """
     if stat == 'mean':
-        state_1_Y_data = np.mean(Y_data[vpath_array == state_1])
-        state_2_Y_data = np.mean(Y_data[vpath_array == state_2])
+        state_1_R_data = np.mean(R_data[vpath_array == state_1])
+        state_2_R_data = np.mean(R_data[vpath_array == state_2])
     elif stat == 'median':
-        state_1_Y_data = np.median(Y_data[vpath_array == state_1])
-        state_2_Y_data = np.median(Y_data[vpath_array == state_2])
+        state_1_R_data = np.median(R_data[vpath_array == state_1])
+        state_2_R_data = np.median(R_data[vpath_array == state_2])
     else:
         raise ValueError("Invalid stat value")
     # Detect any difference
-    difference = state_1_Y_data - state_2_Y_data
+    difference = state_1_R_data - state_2_R_data
     return difference
 
 def test_statistic_calculations(Xin, Yin, perm, pval_perms, test_statistic, proj, method):
@@ -1148,7 +1147,7 @@ def test_statistic_calculations(Xin, Yin, perm, pval_perms, test_statistic, proj
     Parameters:
     --------------
         Xin (numpy.ndarray): The data array.
-        Y_data (numpy.ndarray): The dependent variable.
+        R_data (numpy.ndarray): The dependent variable.
         perm (int): The permutation index.
         pval_perms (numpy.ndarray): The p-value permutation array.
         test_statistic (numpy.ndarray): The permutation array.
@@ -1228,3 +1227,28 @@ def pval_test(pval, method='fdr_bh', alpha = 0.05):
         np.fill_diagonal(p_values_corrected_full, np.nan)
     # return the corrected p-values and boolean values indicating rejected null hypotheses
     return p_values_corrected_full,rejected_corrected
+
+
+def get_timestamp_indices(n_timestamps, n_subjects):
+    """
+    Generate indices of the timestamps for each subject in the data.
+
+    Parameters:
+    --------------
+    n_timestamps (int): Number of timestamps.
+    n_subjects (int): Number of subjects.
+
+    Returns:
+    ----------  
+    indices (ndarray): NumPy array representing the indices of the timestamps for each subject.
+
+    Example:
+    get_timestamp_indices(5, 3)
+    array([[ 0,  5],
+           [ 5, 10],
+           [10, 15]])
+    """
+    indices = np.column_stack([np.arange(0, n_timestamps * n_subjects, n_timestamps),
+                               np.arange(0 + n_timestamps, n_timestamps * n_subjects + n_timestamps, n_timestamps)])
+
+    return indices
