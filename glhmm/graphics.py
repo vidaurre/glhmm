@@ -323,3 +323,258 @@ def show_beta(hmm,only_active_states=True,recompute_states=False,
     #             d0 = np.sum(d0**2,axis=0)
 
     #             r2[j,:] = 1 - (d / d0)
+
+
+def plot_heatmap(pval, method, alpha = 0.05, normalize_vals=True, figsize=(12, 7), steps=11, title_text="Heatmap (p-values)", annot=True, cmap='default', xlabel="", ylabel="", xticklabels=None, none_diagonal = False):
+    from matplotlib import cm, colors
+    from mpl_toolkits.axes_grid1 import make_axes_locatable
+    """
+    Plot a heatmap of p-values.
+
+    Parameters:
+    --------------
+        pval (numpy.ndarray): The p-values data to be plotted.
+        method (str): The method used for the permutation test. Should be one of 'regression', 'correlation', or 'correlation_com'.
+        normalize_vals (bool, optional): If True, the data range will be normalized from 0 to 1. Default is True.
+        figsize (tuple, optional): Figure size in inches (width, height). Default is (12, 7).
+        steps (int, optional): Number of steps for x and y-axis ticks. Default is 11.
+        title_text (str, optional): Title text for the heatmap. If not provided, a default title will be used.
+        annot (bool, optional): If True, annotate each cell with the numeric value. Default is True.
+        cmap (str, optional): Colormap to use. Default is a custom colormap based on 'coolwarm'.
+        xlabel (str, optional): X-axis label. If not provided, default labels based on the method will be used.
+        ylabel (str, optional): Y-axis label. If not provided, default labels based on the method will be used.
+        xticklabels (str, optional): If not provided, labels will be numbers equal to shape of pval.shape[1]. Else you can define your own labels eg. xticklabels =['sex','age']   
+        none_diagonal (bool, optional): if you want do turn the diagonal into nan numbers. Default is False 
+
+    Returns:
+    ----------  
+        None (Displays the heatmap plot).
+
+    """
+    if pval.ndim==0:
+        pval = np.reshape(pval, (1, 1))
+        
+    fig, ax = plt.subplots(figsize=figsize)
+    if len(pval.shape)==1:
+        pval =np.expand_dims(pval,axis=0)
+
+    if cmap=='default':
+        # Reverse colormap
+        coolwarm_cmap = cm.coolwarm.reversed()
+        # Generate an array of values representing the colormap
+        num_colors = 256  # You can adjust the number of colors as needed
+        color_array = np.linspace(0, 1, num_colors).reshape(1, -1)
+        # Make a jump in color after alpha
+        color_array[color_array > alpha] += 0.3
+        # Create a new colormap with 
+        new_cmap_list = coolwarm_cmap(color_array)[0]
+        # if zero_white:
+        #     # white at the lowest value
+        #     new_cmap_list[0] = [1, 1, 1, 1]  # Set the first color to white
+
+        # Create a new colormap with the modified color_array
+        cmap = colors.ListedColormap(new_cmap_list)
+        # Set the value of 0 to white in the colormap
+
+    
+    if none_diagonal:
+        # Set the diagonal elements to NaN
+        np.fill_diagonal(pval, np.nan)
+
+    if normalize_vals:
+        # Normalize the data range from 0 to 1
+        norm = plt.Normalize(vmin=0, vmax=1)
+
+        heatmap = sb.heatmap(pval, ax=ax, cmap=cmap, annot=annot, fmt=".3f", cbar=False, norm=norm)
+    else:
+        heatmap = sb.heatmap(pval, ax=ax, cmap=cmap, annot=annot, fmt=".3f", cbar=False)
+
+    # Add labels and title
+    ax.set_xlabel(xlabel, fontsize=12)
+    ax.set_ylabel(ylabel, fontsize=12)
+    ax.set_title(title_text, fontsize=14)
+
+    # Set the x-axis ticks
+    if xticklabels is not None:
+        ax.set_xticks(np.arange(len(xticklabels)) + 0.5)
+        ax.set_xticklabels(xticklabels, rotation="horizontal", fontsize=10)
+    elif pval.shape[1]>1:
+        ax.set_xticks(np.linspace(0, pval.shape[1]-1, steps).astype(int)+0.5)
+        ax.set_xticklabels(np.linspace(1, pval.shape[1], steps).astype(int), rotation="horizontal", fontsize=10)
+    else:
+        ax.set_xticklabels([])
+    # Set the y-axis ticks
+    if pval.shape[0]>1:
+        ax.set_yticks(np.linspace(0, pval.shape[0]-1, steps).astype(int)+0.5)
+        ax.set_yticklabels(np.linspace(1, pval.shape[0], steps).astype(int), rotation="horizontal", fontsize=10)
+    else:
+        ax.set_yticklabels([])
+    # Create an axes on the right side of ax. The width of cax will be 5%
+    # of ax and the padding between cax and ax will be fixed at 0.05 inch.
+    divider = make_axes_locatable(ax)
+    cax = divider.append_axes("right", size="5%", pad=0.05)
+    # Create a custom colorbar
+    colorbar = plt.colorbar(heatmap.get_children()[0], cax=cax)
+    # colorbar.set_ticks([0, 0.25, 0.5, 1])  # Adjust ticks as needed
+
+
+    # Show the plot
+    plt.show()
+
+
+  
+def plot_permutation_distribution(test_statistic, title_text=""):
+    """
+    Plot the histogram of the permutation mean with the observed statistic marked.
+
+    Parameters:
+    --------------
+        test_statistic (numpy.ndarray): An array containing the permutation mean values.
+        title_text (str, optional): Additional text to include in the title of the plot. Default is an empty string.
+
+    Returns:
+    ----------  
+        None: Displays the histogram plot.
+
+    Example:
+        >>> import numpy as np
+        >>> test_statistic = np.random.normal(0, 1, 1000)
+        >>> plot_histograms(test_statistic, "Permutation Mean Distribution")
+
+    """
+    plt.figure()
+    sb.histplot(test_statistic, kde=True)
+    plt.axvline(x=test_statistic[0], color='red', linestyle='--', label='Observed Statistic')
+    plt.xlabel('Permutation mean')
+    plt.ylabel('Density')
+    
+    if not title_text:
+        plt.title('Distribution of Permutation Mean', fontsize=14)
+    else:
+        plt.title(title_text, fontsize=14)
+        
+    plt.legend()
+    plt.show()
+
+
+
+def plot_scatter_with_labels(p_values, alpha=0.05, title_text="", xlabel=None, ylabel=None, xlim_start=0.9, ylim_start=0):
+    """
+    Create a scatter plot to visualize p-values with labels indicating significant points.
+
+    Parameters:
+    --------------
+        p_values (array-like): An array of p-values. Can be a 1D array or a 2D array with shape (1, 5).
+        alpha (float): Threshold for significance (default: 0.05)
+        title_text (str, optional): The title text for the plot (default="").
+        xlabel (str, optional): The label for the x-axis (default=None).
+        ylabel (str, optional): The label for the y-axis (default=None).
+        xlim_start (float): start position of x-axis limits (default: -5)
+        ylim_start (float): start position of y-axis limits (default: -0.1)
+
+    Returns:
+    ----------  
+        None
+
+    Note:
+        - Points with p-values less than alpha are considered significant and marked with red text.
+
+    """
+
+    # If p_values is a 2D array with shape (1, 5), flatten it to 1D
+    if len(p_values.shape) == 2 and p_values.shape[0] == 1 and p_values.shape[1] == 5:
+        p_values = p_values.flatten()
+
+    # Create a binary mask based on condition (values below alpha)
+    mask = p_values < alpha
+
+    # Create a hue p_values based on the mask (True/False values)
+    hue = mask.astype(int)
+
+    # Set the color palette and marker style
+    markers = ["o", "s"]
+
+    # Create a scatter plot with hue and error bars
+    fig, ax = plt.subplots(figsize=(8, 6))
+    sb.scatterplot(x=np.arange(0, len(p_values)) + 1, y=-np.log(p_values), hue=hue, style=hue,
+                    markers=markers, s=40, edgecolor='k', linewidth=1, ax=ax)
+
+    # Add labels and title to the plot
+    if not title_text:
+        ax.set_title(f'Scatter Plot of P-values, alpha={alpha}', fontsize=14)
+    else:
+        ax.set_title(title_text, fontsize=14)
+
+    if xlabel is None:
+        ax.set_xlabel('Index', fontsize=12)
+    else:
+        ax.set_xlabel(xlabel, fontsize=12)
+
+    if ylabel is None:
+        ax.set_ylabel('-log(p-values)', fontsize=12)
+    else:
+        ax.set_ylabel(ylabel, fontsize=12)
+
+    # Add text labels for indices where the mask is True
+    for i, m in enumerate(mask):
+        if m:
+            ax.text(i + 1, -np.log(p_values[i]), str(i+1), ha='center', va='bottom', color='red', fontsize=10)
+
+    # Adjust legend position and font size
+    ax.legend(title="Significance", loc="upper right", fontsize=10, bbox_to_anchor=(1.25, 1))
+
+    # Set axis limits to focus on the relevant data range
+    ax.set_xlim(xlim_start, len(p_values) + 1)
+    ax.set_ylim(ylim_start, np.max(-np.log(p_values)) * 1.2)
+
+    # Customize plot background and grid style
+    sb.set_style("white")
+    ax.grid(color='lightgray', linestyle='--')
+
+    # Show the plot
+    plt.tight_layout()
+    plt.show()
+    
+    
+def plot_vpath(vpath, signal =[], xlabel = "Time Steps", figsize=(7, 4), ylabel = "", yticks=None,line_width=2, label_signal="Signal"):
+    # Assuming vpath is your data matrix
+    num_states = vpath.shape[1]
+
+    # Create a Seaborn color palette
+    colors = sb.color_palette("Set3", n_colors=num_states)
+
+    # Plot the stack plot using Seaborn
+    fig, axes = plt.subplots(figsize=figsize)  # Adjust the figure size for better readability
+    axes.stackplot(np.arange(vpath.shape[0]), vpath.T, colors=colors, labels=[f'State {i + 1}' for i in range(num_states)])
+
+    # Set labels and legend to the right of the figure
+    axes.set_xlabel(xlabel, fontsize=14)
+    axes.set_ylabel(ylabel, fontsize=14)
+    axes.legend(title='States', loc='upper left', bbox_to_anchor=(1, 1))  # Adjusted legend position
+
+    if yticks:
+        scaled_values = [int(val * len(np.unique(signal))) for val in np.unique(signal)]
+        # Set y-ticks with formatted integers
+        axes.set_yticks(np.unique(signal), scaled_values)
+    else:
+        # Remove x-axis tick labels
+        axes.set_yticks([])
+
+    # Remove the frame around the plot
+    axes.spines['top'].set_visible(False)
+    axes.spines['right'].set_visible(False)
+    axes.spines['bottom'].set_visible(False)
+    axes.spines['left'].set_visible(False)
+
+    # Add a plot of the signal (replace this with your actual signal data)
+    # com_signal = np.sin(np.linspace(0, 10, vpath.shape[0])) + 2
+    if signal is not None:
+        axes.plot(signal, color='black', label=label_signal, linewidth=line_width)
+    axes.legend(loc='upper left', bbox_to_anchor=(1, 0.8))  # Adjusted legend position
+
+
+    # Increase tick label font size
+    axes.tick_params(axis='both', labelsize=12)
+    plt.tight_layout() 
+    # Show the plot
+    plt.show()
