@@ -36,10 +36,14 @@ class glhmm():
         or 'diag' to have a diagonal full covariance matrix for each state, 
         or 'sharedfull' to have a shared full covariance matrix for all states,
         or 'full' to have a full covariance matrix for each state.
-    model_mean : str, {'state', 'no'}, default 'state'
-        Model for the mean. If `no` the mean of the timeseries will not be used to drive the states.
-    model_beta : str, {'state', 'no'}, default 'state'
-        Model for the beta. If `no` the regression coefficients will not be used to drive the states.
+    model_mean : str, {'state', 'shared', 'no'}, default 'state'
+        Model for the mean. If 'state', the mean will be modelled state-dependent.
+        If 'shared', the mean will be modelled globally (shared between all states).
+        If 'no' the mean of the timeseries will not be used to drive the states.
+    model_beta : str, {'state', 'shared', 'no'}, default 'state'
+        Model for the beta. If 'state', the regression coefficients will be modelled state-dependent.
+        If 'shared', the regression coefficients will be modelled globally (shared between all states).
+        If 'no' the regression coefficients will not be used to drive the states.
     dirichlet_diag : float, default=10
         The value of the diagonal of the Dirichlet distribution for the transition probabilities. 
         The higher the value, the more persistent the states will be. 
