@@ -1,5 +1,4 @@
 # GLHMM
-> Gaussian Linear Hidden Markov Models.
 
 [![Documentation Status](https://readthedocs.org/projects/glhmm/badge/?version=latest)](https://glhmm.readthedocs.io/en/latest/?badge=latest)
 
