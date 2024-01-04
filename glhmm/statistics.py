@@ -610,7 +610,7 @@ def fam_dict(dict_fam, Nperm):
 
     # Validate and load family structure data
     if 'file_location' not in dict_mfam:
-        raise ValueError("The 'file_location' variable must be defined in dict_fam".)
+        raise ValueError("The 'file_location' variable must be defined in dict_fam.")
     
     # Convert the DataFrame to a matrix
     EB = pd.read_csv(dict_mfam['file_location'], header=None).to_numpy()
@@ -1350,17 +1350,17 @@ def reconstruct_concatenated_design(D_con,D_sessions=None, n_timepoints=None, n_
     # Input validation and initialization
     if D_sessions is not None and len([arg for arg in [n_timepoints, n_trials, n_channels] if arg is not None]) == 0:
         if not isinstance(D_sessions, np.ndarray) or D_sessions.ndim != 3:
-            raise ValueError("Invalid input: D_sessions must be a 3D numpy array".)
+            raise ValueError("Invalid input: D_sessions must be a 3D numpy array.")
         n_timepoints, n_trials, n_channels = D_sessions.shape
         D_reconstruct = np.zeros_like(D_sessions)
     else:
         if None in [n_timepoints, n_trials, n_channels]:
-            raise ValueError("Invalid input: n_timepoints, n_trials, and n_channels must be provided if D_sessions is not provided".)
+            raise ValueError("Invalid input: n_timepoints, n_trials, and n_channels must be provided if D_sessions is not provided.")
         D_reconstruct = np.zeros((n_timepoints, n_trials, n_channels))
     
     # Check if the shape of D_con matches the expected shape
     if D_con.shape != (n_timepoints * n_trials, n_channels):
-        raise ValueError("Invalid input: D_con does not match the expected shape".)
+        raise ValueError("Invalid input: D_con does not match the expected shape.")
 
     # Assign values from D_con to D_reconstruct
     for i in range(n_trials):
