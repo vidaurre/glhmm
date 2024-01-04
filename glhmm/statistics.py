@@ -10,7 +10,8 @@ import random
 from scipy.stats import pearsonr
 
 def across_subjects(D_data, R_data, method="regression", Nperm=1000, confounds = None, dict_fam = None, test_statistic_option=False):
-    from glhmm.palm_functions import palm_quickperms
+    #from glhmm.palm_functions import palm_quickperms
+    from palm_functions import palm_quickperms
     """
     Perform across subjects permutation testing.
     This function conducts statistical tests (regression, correlation, or correlation_com) between two datasets, `D_data`
@@ -136,12 +137,12 @@ def across_subjects(D_data, R_data, method="regression", Nperm=1000, confounds =
 
 
 
-def across_trials_within_session(D_data, R_data, idD_data, method="regression", Nperm=1000, confounds=None,test_statistic_option=False):
+def across_trials_within_session(D_data, R_data, idx_data, method="regression", Nperm=1000, confounds=None, trial_timepoints=None,test_statistic_option=False):
     """
     This function conducts statistical tests (regression, correlation, or correlation_com) between two datasets, `D_data`
     representing the measured data  and `R_data` representing the dependent-variable, across different trials within a session 
     using permutation testing. This test is useful if we want to test for differences between trials in one or more sessions. 
-    An example could be if we want to test if any learning is happening during a session that might speed up reaction times.
+    An example could be if we want to test if any learning is happening during a session that might speed up times.
                       
     Parameters:
     --------------
@@ -158,7 +159,7 @@ def across_trials_within_session(D_data, R_data, idD_data, method="regression", 
                                 For a 3D array,it got a shape (T, n, q), where the first dimension 
                                 represents timepoints, the second dimension represents the number of trials, 
                                 and the third dimension represents a dependent variable                    
-        idD_data (numpy.ndarray): The indices for each trial within the session. It should be a 2D array where each row
+        idx_data (numpy.ndarray): The indices for each trial within the session. It should be a 2D array where each row
                                   represents the start and end index for a trial.    
         method (str, optional): The statistical method to be used for the permutation test. Valid options are
                                 "regression", "correlation", or "correlation_com". (default: "regression").
@@ -167,7 +168,8 @@ def across_trials_within_session(D_data, R_data, idD_data, method="regression", 
         confounds (numpy.ndarray or None, optional): 
                                 The confounding variables to be regressed out from the input data (D_data).
                                 If provided, the regression analysis is performed to remove the confounding effects. 
-                                (default: None):                                                              
+                                (default: None):    
+        trial_timepoints (int): Number of timepoints for each trial (default: None)                                                          
         test_statistic_option (bool, optional): 
                                 If True, the function will return the test statistic for each permutation.
                                 (default: False) 
@@ -200,10 +202,10 @@ def across_trials_within_session(D_data, R_data, idD_data, method="regression", 
     n_q = R_data.shape[-1]
     
     # Get indices for permutation
-    if len(idD_data.shape)==2:
-        idx_array = get_indices_array(idD_data)
+    if len(idx_data.shape)==2:
+        idx_array = get_indices_array(idx_data)
     else:
-        idx_array =idD_data.copy()        
+        idx_array =idx_data.copy()        
 
     # Initialize arrays based on shape of data shape and defined options
     pval, corr_coef, test_statistic_list, pval_list = initialize_arrays(D_data, R_data, n_p, n_q, n_T, method, Nperm, test_statistic_option)
@@ -218,7 +220,7 @@ def across_trials_within_session(D_data, R_data, idD_data, method="regression", 
         test_statistic, pval_perms, proj = initialize_permutation_matrices(method, Nperm, n_p, n_q, D_t)
         
         # Calculate permutation matrix of D_t 
-        permute_idx_list = within_session_across_trial_permutation(Nperm,R_t, idx_array)
+        permute_idx_list = within_session_across_trial_permutation(Nperm,R_t, idx_array,trial_timepoints)
                  
         for perm in range(Nperm):
         #for perm in tqdm(range(Nperm)) if n_T == 1 else range(n_T):
@@ -249,7 +251,7 @@ def across_trials_within_session(D_data, R_data, idD_data, method="regression", 
     
     return result
    
-def across_sessions_within_subject(D_data, R_data, idD_data, method="regression", Nperm=1000, confounds=None,test_statistic_option=False):
+def across_sessions_within_subject(D_data, R_data, idx_data, method="regression", Nperm=1000, confounds=None,test_statistic_option=False):
     """
     This function conducts statistical tests (regression, correlation, or correlation_com) between two datasets, `D_data`
     representing the measured data and `R_data` representing the dependent-variable, across sessions within the same subject 
@@ -271,7 +273,7 @@ def across_sessions_within_subject(D_data, R_data, idD_data, method="regression"
                                 For a 3D array,it got a shape (T, n, q), where the first dimension 
                                 represents timepoints, the second dimension represents the number of trials, 
                                 and the third dimension represents a dependent variable                   
-        idD_data (numpy.ndarray): The indices for each trial within the session. It should be a 2D array where each row
+        idx_data (numpy.ndarray): The indices for each trial within the session. It should be a 2D array where each row
                                   represents the start and end index for a trial.    
         method (str, optional): The statistical method to be used for the permutation test. Valid options are
                                 "regression", "correlation", or "correlation_com". (default: "regression").
@@ -310,15 +312,11 @@ def across_sessions_within_subject(D_data, R_data, idD_data, method="regression"
     check_value_error(method in valid_methods, "Invalid option specified for 'method'. Must be one of: " + ', '.join(valid_methods))
     
     # Get indices for permutation
-    if len(idD_data.shape)==2:
-        idx_array = get_indices_array(idD_data)
+    if len(idx_data.shape)==2:
+        idx_array = get_indices_array(idx_data)
     else:
-        idx_array =idD_data.copy()
+        idx_array =idx_data.copy()
 
-    _, trial_per_subject = np.unique(idx_array, return_counts=True)
-    if len(set(trial_per_subject)) != 1:
-        raise ValueError("Warning: Unequal number of trials per subject prohibs permutation between subjects when exchangeable is False.")
-    
     # Get input shape information
     n_T, _, n_p,n_q, D_data, R_data = get_input_shape(D_data, R_data)
     #n_q = R_data.shape[-1]
@@ -332,9 +330,9 @@ def across_sessions_within_subject(D_data, R_data, idD_data, method="regression"
         
         # Create test_statistic and pval_perms based on method
         test_statistic, pval_perms, proj = initialize_permutation_matrices(method, Nperm, n_p, n_q, D_t)
-        
+    
         # Calculate permutation matrix of D_t 
-        permute_idx_list = within_session_across_session_permutation(Nperm, D_t, idx_array)
+        permute_idx_list = within_subject_across_sessions_permutation(Nperm, D_t, idx_array)
         
         for perm in range(Nperm):
         #for perm in tqdm(range(Nperm)) if n_T == 1 else range(n_T):
@@ -612,7 +610,7 @@ def fam_dict(dict_fam, Nperm):
 
     # Validate and load family structure data
     if 'file_location' not in dict_mfam:
-        raise ValueError("The 'file_location' variable must be defined in dict_fam.")
+        raise ValueError("The 'file_location' variable must be defined in dict_fam".)
     
     # Convert the DataFrame to a matrix
     EB = pd.read_csv(dict_mfam['file_location'], header=None).to_numpy()
@@ -826,27 +824,35 @@ def get_pval(test_statistic, pval_perms, Nperm, method, t, pval, corr_coef):
     return pval, corr_coef
 
 
-def get_indices_array(idD_data):
+def get_indices_array(idx_data):
     """
     Generates an indices array based on given data indices.
 
     Parameters:
     --------------
-        idD_data (numpy.ndarray): The data indices array.
+        idx_data (numpy.ndarray): The data indices array.
 
     Returns:
     ----------  
         idx_array (numpy.ndarray): The generated indices array.
     """
-    # Get an array of indices based on the given idD_data ranges
-    max_value = np.max(idD_data[:, 1])
+    # Create a copy of idx_data to avoid modifying the original outside the function
+    idx_data_copy = np.copy(idx_data)
+    
+    # Check if any values in column 1 are equal to any values in column 2
+    # If equal remove one value from the second column
+    if np.any(np.isin(idx_data_copy[:, 0], idx_data_copy[:, 1])):
+        idx_data_copy[:, 1] -= 1
+    
+    # Get an array of indices based on the given idx_data ranges
+    max_value = np.max(idx_data_copy[:, 1])
     idx_array = np.zeros(max_value + 1, dtype=int)
-    for count, (start, end) in enumerate(idD_data):
+    for count, (start, end) in enumerate(idx_data_copy):
         idx_array[start:end + 1] = count
     return idx_array
 
 
-def within_session_across_trial_permutation(Nperm, R_t, idx_array):
+def within_session_across_trial_permutation(Nperm, R_t, idx_array, trial_timepoints=None):
     """
     Generates permutation matrix of within-session across-trial data based on given indices.
 
@@ -855,6 +861,7 @@ def within_session_across_trial_permutation(Nperm, R_t, idx_array):
         Nperm (int): The number of permutations.
         R_t (numpy.ndarray): The preprocessed data array.
         idx_array (numpy.ndarray): The indices array.
+        trial_timepoints (int): Number of timepoints for each trial (default: None)
 
     Returns:
     ----------  
@@ -868,15 +875,51 @@ def within_session_across_trial_permutation(Nperm, R_t, idx_array):
             permute_idx_list[:,perm] = np.arange(R_t.shape[0])
         else:
             unique_indices = np.unique(idx_array)
-            count = 0
-            for i in unique_indices:
-                if i ==0:
-                    count =count+R_t[idx_array == unique_indices[i], :].shape[0]
-                    permute_idx_list[0:count,perm]=np.random.permutation(np.arange(0,count))
-                else:
-                    idx_count=R_t[idx_array == unique_indices[i], :].shape[0]
-                    count =count+idx_count
-                    permute_idx_list[count-idx_count:count,perm]=np.random.permutation(np.arange(count-idx_count,count))
+            if trial_timepoints is None:
+                count = 0
+                for i in unique_indices:
+                    if i ==0:
+                        count =count+R_t[idx_array == unique_indices[i], :].shape[0]
+                        permute_idx_list[0:count,perm]=np.random.permutation(np.arange(0,count))
+                    else:
+                        idx_count=R_t[idx_array == unique_indices[i], :].shape[0]
+                        count =count+idx_count
+                        permute_idx_list[count-idx_count:count,perm]=np.random.permutation(np.arange(count-idx_count,count))
+    
+            else:
+                # Initialize the array to store permutation indices
+                permutation_array = []
+
+                # Iterate over unique session indices
+                for count, session_idx in enumerate(unique_indices):
+                    # Extract data for the current session
+                    session_data = R_t[idx_array == session_idx, :]
+                    # Get number of data points for each session
+                    num_datapoints = session_data.shape[0]
+
+                    # Calculate the number of trials based on trial_timepoints
+                    # This step is required because each session can have a different number of trials
+                    num_trials = num_datapoints // trial_timepoints
+
+                    # Generate indices for each trial and repeat them based on trial_timepoints
+                    idx_trials = np.repeat(np.arange(num_trials), trial_timepoints)
+
+                    # Count unique indices and their occurrences
+                    unique_values, value_counts = np.unique(idx_trials, return_counts=True)
+
+                    # Randomly permute the unique indices
+                    unique_values_perm = np.random.permutation(unique_values)
+
+                    # Repeat each unique value according to its count in value_counts
+                    permuted_array = np.concatenate([np.repeat(value, count) for value, count in zip(unique_values_perm, value_counts)])
+
+                    # Get positions for each unique trial
+                    positions_permute = [np.where(permuted_array == i)[0] for i in unique_values]
+
+                    # Extend the permutation_array with adjusted positions
+                    permutation_array.extend(np.concatenate(positions_permute) + num_datapoints * count)
+                permute_idx_list[:,perm] =np.array(permutation_array)
+
     return permute_idx_list
 
 def permute_subject_trial_idx(idx_array):
@@ -902,7 +945,7 @@ def permute_subject_trial_idx(idx_array):
     return permuted_array
 
 
-def within_session_across_session_permutation(Nperm, D_t, idx_array):
+def within_subject_across_sessions_permutation(Nperm, D_t, idx_array):
     """
     Generates permutation matrix of within-session across-session data based on given indices.
 
@@ -1148,11 +1191,16 @@ def test_statistic_calculations(Din, Rin, perm, pval_perms, test_statistic, proj
         test_statistic (numpy.ndarray): Updated test_statistic array.
         pval_perms (numpy.ndarray): Updated pval_perms array.
     """
+    
     if method == 'regression':
+        #np.linalg.inv(Din.T @ Din + 0.001 * np.eye(Din.shape[1])) @ Din.T
         # Calculate regression_coefficients (beta)
         beta = proj @ Rin 
         # Calculate the root mean squared error
         test_statistic[perm,:] = np.sqrt(np.sum((Din @ beta - Rin) ** 2, axis=0))
+        # Observed R^2
+        # test_statistic[perm,:] = 1 - np.sum((Rin - Din @ beta) ** 2) / np.sum((Rin - np.mean(Rin)) ** 2)
+
     elif method == 'correlation':
         corr_coef = np.corrcoef(Din, Rin, rowvar=False)
         corr_matrix = corr_coef[:Din.shape[1], Din.shape[1]:]
@@ -1161,9 +1209,11 @@ def test_statistic_calculations(Din, Rin, perm, pval_perms, test_statistic, proj
         corr_coef = np.corrcoef(Din, Rin, rowvar=False)
         corr_matrix = corr_coef[:Din.shape[1], Din.shape[1]:]
         pval_matrix = np.zeros(corr_matrix.shape)
+        pval_threshold = 1e-32 # like a regularization parameter
         for i in range(Din.shape[1]):
             for j in range(Rin.shape[1]):
                 _, pval_matrix[i, j] = pearsonr(Din[:, i], Rin[:, j])
+                pval_matrix[i, j] = max(pval_matrix[i, j], pval_threshold)
 
         test_statistic[perm, :, :] = np.abs(corr_matrix)
         pval_perms[perm, :, :] = pval_matrix
@@ -1224,12 +1274,12 @@ def get_timestamp_indices(n_timestamps, n_subjects):
 
     Parameters:
     --------------
-    n_timestamps (int): Number of timestamps.
-    n_subjects (int): Number of subjects.
+        n_timestamps (int): Number of timestamps.
+        n_subjects (int): Number of subjects.
 
     Returns:
     ----------  
-    indices (ndarray): NumPy array representing the indices of the timestamps for each subject.
+        indices (ndarray): NumPy array representing the indices of the timestamps for each subject.
 
     Example:
     get_timestamp_indices(5, 3)
@@ -1241,3 +1291,80 @@ def get_timestamp_indices(n_timestamps, n_subjects):
                                np.arange(0 + n_timestamps, n_timestamps * n_subjects + n_timestamps, n_timestamps)])
 
     return indices
+
+
+def get_concatenate_sessions(D_sessions, R_sessions, idx_sessions):
+    """
+    Converts a  3D matrix into a 2D matrix by concatenating timepoints of every trial session into a new design matrix.
+
+
+    Parameters:
+    --------------
+        D_sessions (numpy.ndarray): Design matrix for each session.
+        R_sessions (numpy.ndarray): R  matrix time for each trial.
+        idx_sessions (numpy.ndarray): Indices representing the start and end of trials for each session.
+
+    Returns:
+    ----------  
+        D_con (numpy.ndarray): Concatenated design matrix.
+        R_con (numpy.ndarray): Concatenated R matrix.
+        idx_sessions_con (numpy.ndarray): Updated indices after concatenation.
+    """
+    D_con, R_con, idx_sessions_con = [], [], np.zeros_like(idx_sessions)
+
+    for i, (start_idx, end_idx) in enumerate(idx_sessions):
+        # Iterate over trials in each session
+        for j in range(start_idx, end_idx):
+            # Extend data matrix with selected trials
+            D_con.extend(D_sessions[:, j, :])
+            # Extend time list for each trial
+            R_con.extend([R_sessions[j]] * D_sessions.shape[0])
+
+        # Update end index for the concatenated data matrix
+        idx_sessions_con[i, 1] = len(D_con)
+
+        if i < len(idx_sessions) - 1:
+            # Update start index for the next session if not the last iteration
+            idx_sessions_con[i + 1, 0] = idx_sessions_con[i, 1]
+
+    # Convert lists to numpy arrays
+    return np.array(D_con), np.array(R_con), idx_sessions_con
+
+
+def reconstruct_concatenated_design(D_con,D_sessions=None, n_timepoints=None, n_trials=None, n_channels = None):
+    """
+    Reconstructs the concatenated design matrix to the original session variables.
+
+    Parameters:
+    --------------
+        D_con (numpy.ndarray): Concatenated design matrix.
+        D_sessions (numpy.ndarray, optional): Original design matrix for each session.
+        n_timepoints (int, optional): Number of timepoints per trial.
+        n_trials (int, optional): Number of trials per session.
+        n_channels (int, optional): Number of channels.
+
+    Returns:
+    ----------  
+        D_reconstruct (numpy.ndarray): Reconstructed design matrix for each session.
+    """
+    # Input validation and initialization
+    if D_sessions is not None and len([arg for arg in [n_timepoints, n_trials, n_channels] if arg is not None]) == 0:
+        if not isinstance(D_sessions, np.ndarray) or D_sessions.ndim != 3:
+            raise ValueError("Invalid input: D_sessions must be a 3D numpy array".)
+        n_timepoints, n_trials, n_channels = D_sessions.shape
+        D_reconstruct = np.zeros_like(D_sessions)
+    else:
+        if None in [n_timepoints, n_trials, n_channels]:
+            raise ValueError("Invalid input: n_timepoints, n_trials, and n_channels must be provided if D_sessions is not provided".)
+        D_reconstruct = np.zeros((n_timepoints, n_trials, n_channels))
+    
+    # Check if the shape of D_con matches the expected shape
+    if D_con.shape != (n_timepoints * n_trials, n_channels):
+        raise ValueError("Invalid input: D_con does not match the expected shape".)
+
+    # Assign values from D_con to D_reconstruct
+    for i in range(n_trials):
+        start_idx = i * n_timepoints
+        end_idx = (i + 1) * n_timepoints
+        D_reconstruct[:, i, :] = D_con[start_idx:end_idx, :]
+    return D_reconstruct
