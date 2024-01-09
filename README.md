@@ -1,9 +1,9 @@
 # GLHMM
-> Gaussian Linear Hidden Markov Models.
 
 [![Documentation Status](https://readthedocs.org/projects/glhmm/badge/?version=latest)](https://glhmm.readthedocs.io/en/latest/?badge=latest)
 
-This  library contains Hidden Markov Models (HMMs) for analysing neuroimaging data (EEG, MEG, fMRI, ECoG, etc)
+The GLHMM toolbox provides facilities to fit a variety of Hidden Markov models (HMM) based on the Gaussian distribution, which we generalise as the Gaussian-Linear HMM. 
+Crucially, the toolbox has a focus on finding associations at various levels between brain data (EEG, MEG, fMRI, ECoG, etc) and non-brain data, such as behavioural or physiological variables.
 
 ## Important links
 
