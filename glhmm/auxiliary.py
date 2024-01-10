@@ -435,4 +435,79 @@ def Gamma_entropy(Gamma,Xi,indices):
         Xi_norm[:,k,:] = Xi[:,k,:] / np.expand_dims(np.sum(Xi[:,k,:],axis=1),axis=1)
     Entr -= np.sum(Xi * np.log(Xi_norm))
     return Entr
-    
+
+def get_T(idx_data):
+    """
+    Returns the timepoints spent for each trial/session based on the given indices.
+    We want to get the variable "T" when we are using the function padGamma
+                       
+    Parameters:
+    --------------
+        idx_data (numpy.ndarray): The indices that mark the timepoints for when each trial/session starts and ends.
+        It should be a 2D array where each row represents the start and end index for a trial.
+        Example: idx_data = np.array([[0, 150], [150, 300], [300, 500]])
+
+    Returns:
+    --------------
+        T (numpy.ndarray): An array containing the timepoints spent for each trial/session.
+        For example, given idx_data = np.array([[0, 150], [150, 300], [300, 500]]),
+        the function would return T = np.array([150, 150, 200]).
+    """
+    T = np.diff(idx_data)  # Calculate the difference between consecutive indices to get timepoints spent
+    return T
+
+def padGamma(Gamma, T, options):
+    """
+    Adjusts the state time courses to have the same size as the data time series.
+
+    Parameters:
+    --------------
+        Gamma (numpy.ndarray): The state time courses.
+        T (numpy.ndarray): Timepoints spent for each trial/session.
+        options (dict): Dictionary containing various options.
+        - 'embeddedlags' (list): Array of lagging times if 'embeddedlags' is specified.
+        - 'order' (int): Integer value if 'order' is specified.
+
+    Returns:
+    --------------
+        Gamma (numpy.ndarray): Adjusted state time courses.
+    """
+    do_chop = 0
+
+    # Check if 'embeddedlags' is in options and has more than one value
+    if 'embeddedlags' in options and isinstance(options['embeddedlags'], list) and len(options['embeddedlags']) > 1:
+        d = [-min(options['embeddedlags']), max(options['embeddedlags'])]  # Define d based on 'embeddedlags'
+        do_chop = 1
+    # Check if 'order' is in options and its value is greater than 1
+    elif 'order' in options and isinstance(options['order'], int) and options['order'] > 1:
+        d = [options['order'], 0]  # Define d based on 'order'
+        do_chop = 1
+
+    if not do_chop:
+        return Gamma  # If no chopping is needed, return the original Gamma
+
+    if isinstance(T, list):
+        if len(T) == 1:
+            T = np.transpose(T)  # Transpose T if it is a single-row list
+        T = np.array(T)  # Convert T to a numpy array if it is a list
+
+    K = Gamma.shape[1]  # Number of columns in Gamma
+    #offset = sum(d)  # Calculate the offset based on d
+    offset = len(options['embeddedlags'])-1 # Calculate the offset
+    N = len(T)  # Number of trials/sessions
+    Tshifted = T - offset  # Shift timepoints based on offset
+
+    if do_chop:
+        Gamma_orig = Gamma.copy()  # Create a copy of the original Gamma
+        Gamma = np.zeros((int(sum(T)), K))  # Initialize adjusted Gamma with zeros
+
+        # Iterate over trials/sessions
+        for j in range(N):
+            t1 = np.arange(1, Tshifted[j] + 1) + sum(Tshifted[:j])  # Create indices for the shifted timepoints
+            t2 = np.arange(1, T[j] + 1) + sum(T[:j])  # Create indices for the original timepoints
+            mg = np.mean(Gamma_orig[t1 - 1, :], axis=0)  # Calculate the mean of Gamma within the shifted indices
+            # Concatenate the chopped Gamma for the current trial/session
+            Gamma[t2 - 1, :] = np.vstack([np.tile(mg, (d[0], 1)), Gamma_orig[t1 - 1, :], np.tile(mg, (d[1], 1))])
+
+    return Gamma  # Return the adjusted Gamma
+
