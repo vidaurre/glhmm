@@ -10,8 +10,8 @@ import random
 from scipy.stats import pearsonr
 
 def across_subjects(D_data, R_data, method="regression", Nperm=1000, confounds = None, dict_fam = None, test_statistic_option=False):
-    #from glhmm.palm_functions import palm_quickperms
-    from palm_functions import palm_quickperms
+    from glhmm.palm_functions import palm_quickperms
+    # from palm_functions import palm_quickperms
     """
     Perform across subjects permutation testing.
     This function conducts statistical tests (regression, correlation, or correlation_com) between two datasets, `D_data`
