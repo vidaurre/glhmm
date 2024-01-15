@@ -428,15 +428,13 @@ def across_visits(input_data, vpath_data, n_states, method="regression", Nperm=1
     # Print tqdm over n_T if there are more than one timepoint
     for t in tqdm(range(n_T)) if n_T > 1 else range(n_T):
         # Correct for confounds and center data_t
-        data_t = deconfound_Fnc(input_data[t, :], confounds)
-        R_t, D_t = deconfound_Fnc(R_data[t, :],D_data[t, :], confounds)
+        data_t, _ = deconfound_Fnc(data_t,None, confounds)
         # Create test_statistic and pval_perms based on method
         if method != "state_pairs":
             ###################### Permutation testing for other tests beside state pairs #################################
             # Create test_statistic and pval_perms based on method
             test_statistic, pval_perms, proj = initialize_permutation_matrices(method, Nperm, n_p, n_q, 
                                                                                data_t)
-        
             # Perform permutation testing
             for perm in tqdm(range(Nperm)) if n_T == 1 else range(n_T):
                 # Create vpath_surrogate
@@ -453,13 +451,13 @@ def across_visits(input_data, vpath_data, n_states, method="regression", Nperm=1
                     # Apply t-statistic on the vpath_surrogate
                     test_statistic, pval_perms = test_statistic_calculations(data_t,vpath_surrogate_onehot , perm, pval_perms,
                                                                                 test_statistic, proj, method)
-
             pval, corr_coef = get_pval(test_statistic, pval_perms, Nperm, method, t, pval, corr_coef)
         ###################### Permutation testing for state pairs #################################
         elif method =="state_pairs":
             # Run this code if it is "state_pairs"
             # Correct for confounds and center data_t
-            data_t = deconfound_Fnc(input_data[t, :], confounds)
+            data_t, _ = deconfound_Fnc(data_t,None, confounds)
+            
             # Generates all unique combinations of length 2 
             pairwise_comparisons = list(combinations(range(1, n_states + 1), 2))
             test_statistic = np.zeros((Nperm, len(pairwise_comparisons)))
@@ -699,7 +697,7 @@ def initialize_arrays(D_data, R_data, n_p, n_q, n_T, method, Nperm, test_statist
     return pval, corr_coef, test_statistic_list, pval_list
 
 
-def deconfound_Fnc(R_data, D_data=None, confounds=None):
+def deconfound_Fnc(R_data, D_data, confounds=None):
     """
     Deconfound the variables R_data and D_data for permutation testing.
 
@@ -723,10 +721,8 @@ def deconfound_Fnc(R_data, D_data=None, confounds=None):
         confounds = confounds - np.mean(confounds, axis=0)
         # Centering R_data
         R_data = R_data - np.mean(R_data, axis=0)
-        
         # Regressing out confounds from R_data
         R_t = R_data - confounds @ np.linalg.pinv(confounds) @ R_data
-        
         # Check if D_data is provided
         if D_data is not None:
             # Centering D_data
@@ -739,6 +735,7 @@ def deconfound_Fnc(R_data, D_data=None, confounds=None):
         # Centering R_data and D_data
         R_t = R_data - np.mean(R_data, axis=0)
         D_t = None if D_data is None else D_data - np.mean(D_data, axis=0)
+    
     return R_t, D_t
 
 def initialize_permutation_matrices(method, Nperm, n_p, n_q, D_data):
@@ -1206,7 +1203,7 @@ def test_statistic_calculations(Din, Rin, perm, pval_perms, test_statistic, proj
     if method == 'regression':
         # Fit the original model 
         beta = proj @ Rin  # Calculate regression_coefficients (beta)
-        # Calculate the root mean squared error for each column
+        # Calculate the root mean squared error
         test_statistic[perm] = np.sqrt(np.mean((Din @ beta - Rin) ** 2, axis=0))
     elif method == 'correlation':
         corr_coef = np.corrcoef(Din, Rin, rowvar=False)
