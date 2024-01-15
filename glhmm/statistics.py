@@ -91,8 +91,7 @@ def across_subjects(D_data, R_data, method="regression", Nperm=1000, confounds =
 
     for t in tqdm(range(n_T)) if n_T > 1 else range(n_T):
         # If confounds exist, perform confound regression on the dependent variables
-        R_t = deconfound_Fnc(R_data[t, :], confounds)
-        D_t = D_data[t, :]
+        R_t, D_t = deconfound_Fnc(R_data[t, :],D_data[t, :], confounds)
         # Create test_statistic and pval_perms based on method
         test_statistic, pval_perms, proj = initialize_permutation_matrices(method, Nperm, n_p, n_q, D_t)
 
@@ -106,7 +105,7 @@ def across_subjects(D_data, R_data, method="regression", Nperm=1000, confounds =
             permute_idx_list = permute_idx_list-1
             
         #for perm in range(Nperm):
-        for perm in tqdm(range(Nperm)) if n_T == 1 else range(n_T):
+        for perm in tqdm(range(Nperm)) if n_T == 1 else range(Nperm):
             # Perform permutation on R_t
             Rin = R_t[permute_idx_list[:, perm]]
             # Calculate the permutation distribution
@@ -213,8 +212,7 @@ def across_trials_within_session(D_data, R_data, idx_data, method="regression", 
 
     for t in tqdm(range(n_T)) if n_T > 1 else range(n_T):
         # If confounds exist, perform confound regression on the dependent variables
-        R_t = deconfound_Fnc(R_data[t, :], confounds)
-        D_t = D_data[t, :]
+        R_t, D_t = deconfound_Fnc(R_data[t, :],D_data[t, :], confounds)
         
         # Create test_statistic and pval_perms based on method
         test_statistic, pval_perms, proj = initialize_permutation_matrices(method, Nperm, n_p, n_q, D_t)
@@ -325,8 +323,7 @@ def across_sessions_within_subject(D_data, R_data, idx_data, method="regression"
     pval, corr_coef, test_statistic_list, pval_list = initialize_arrays(D_data, R_data, n_p, n_q, n_T, method, Nperm, test_statistic_option)
     for t in tqdm(range(n_T)) if n_T > 1 else range(n_T):
         # If confounds exist, perform confound regression on the dependent variables
-        R_t = deconfound_Fnc(R_data[t, :], confounds)
-        D_t = D_data[t, :]
+        R_t, D_t = deconfound_Fnc(R_data[t, :],D_data[t, :], confounds)
         
         # Create test_statistic and pval_perms based on method
         test_statistic, pval_perms, proj = initialize_permutation_matrices(method, Nperm, n_p, n_q, D_t)
@@ -432,6 +429,7 @@ def across_visits(input_data, vpath_data, n_states, method="regression", Nperm=1
     for t in tqdm(range(n_T)) if n_T > 1 else range(n_T):
         # Correct for confounds and center data_t
         data_t = deconfound_Fnc(input_data[t, :], confounds)
+        R_t, D_t = deconfound_Fnc(R_data[t, :],D_data[t, :], confounds)
         # Create test_statistic and pval_perms based on method
         if method != "state_pairs":
             ###################### Permutation testing for other tests beside state pairs #################################
@@ -701,7 +699,7 @@ def initialize_arrays(D_data, R_data, n_p, n_q, n_T, method, Nperm, test_statist
     return pval, corr_coef, test_statistic_list, pval_list
 
 
-def deconfound_Fnc(R_data, confounds=None):
+def deconfound_Fnc(R_data, D_data, confounds=None):
     """
     Calculate the R_data array for permutation testing.
 
@@ -719,14 +717,18 @@ def deconfound_Fnc(R_data, confounds=None):
     if confounds is not None:
         # Centering confounds
         confounds = confounds - np.mean(confounds, axis=0)
-        # Centering R_data
+        # Centering R_data and D_data
         R_data = R_data - np.mean(R_data, axis=0)
-        # Regressing out confounds from R_data
+        D_data = D_data - np.mean(D_data, axis=0)
+        
+        # Regressing out confounds from R_data and D_data
         R_t = R_data - confounds @ np.linalg.pinv(confounds) @ R_data
+        D_t = D_data - confounds @ np.linalg.pinv(confounds) @ D_data
     else:
-        # Centering R_data
+        # Centering R_data and D_data
         R_t = R_data - np.mean(R_data, axis=0)
-    return R_t
+        D_t = D_data - np.mean(D_data, axis=0)
+    return R_t, D_t
 
 def initialize_permutation_matrices(method, Nperm, n_p, n_q, D_data):
     """
@@ -753,18 +755,16 @@ def initialize_permutation_matrices(method, Nperm, n_p, n_q, D_data):
         pval_perms = np.zeros((Nperm, n_p, n_q))
         proj = None
     else:
-        # Regression got a N by q matrix
+        # Regression got a N by q matrix 
         test_statistic = np.zeros((Nperm, n_q))
         pval_perms = [] # empty
         # Define regularization parameter
         regularization = 0.001
         # Regularized parameter estimation
-        regularization_matrix = regularization * np.eye(D_data.shape[1])
-        # Projection matrix
-        # This matrix is then used to project permuted data matrix (Din) to obtain the regression coefficients (beta)
-        #proj = np.matmul(np.linalg.inv(np.matmul(D_data.T,D_data) +regularization_matrix),D_data.T
-        proj = np.linalg.inv(D_data.T @ D_data + regularization_matrix) @ D_data.T
-
+        regularization_matrix = regularization * np.eye(D_data.shape[1])  # Regularization term for Ridge regression
+        # Fit the Ridge regression model
+        # The projection matrix is then used to project permuted data matrix (Din) to obtain the regression coefficients (beta)
+        proj = np.linalg.inv(D_data.T @ D_data + regularization_matrix) @ D_data.T  # Projection matrix for Ridge regression
     return test_statistic, pval_perms, proj
 
 def across_subjects_permutation(Nperm, D_t):
@@ -813,7 +813,10 @@ def get_pval(test_statistic, pval_perms, Nperm, method, t, pval, corr_coef):
     # Positive direction
     if method == "regression" or method == "one_vs_rest":
         # Count every time there is an higher estimated explaied variace (R^2)
-        pval[t, :] = np.sum(test_statistic >= test_statistic[0,:], axis=0) / (Nperm + 1)
+        #pval[t, :] = np.sum(test_statistic >= test_statistic[0,:], axis=0) / (Nperm + 1)
+        pval[t, :] = np.sum(test_statistic <= test_statistic[0,:], axis=0) / (Nperm + 1)
+        #np.mean(permuted_rmse <= observed_rmse)
+        
     elif method == "correlation":
         corr_coef[t, :] = np.sum(test_statistic >= test_statistic[0,:], axis=0) / (Nperm + 1)
     elif method == "correlation_com":
@@ -1193,14 +1196,10 @@ def test_statistic_calculations(Din, Rin, perm, pval_perms, test_statistic, proj
     """
     
     if method == 'regression':
-        #np.linalg.inv(Din.T @ Din + 0.001 * np.eye(Din.shape[1])) @ Din.T
-        # Calculate regression_coefficients (beta)
-        beta = proj @ Rin 
+        # Fit the original model 
+        beta = proj @ Rin  # Calculate regression_coefficients (beta)
         # Calculate the root mean squared error
-        test_statistic[perm,:] = np.sqrt(np.sum((Din @ beta - Rin) ** 2, axis=0))
-        # Observed R^2
-        # test_statistic[perm,:] = 1 - np.sum((Rin - Din @ beta) ** 2) / np.sum((Rin - np.mean(Rin)) ** 2)
-
+        test_statistic[perm] = np.sqrt(np.mean((Din @ beta - Rin) ** 2, axis=0))
     elif method == 'correlation':
         corr_coef = np.corrcoef(Din, Rin, rowvar=False)
         corr_matrix = corr_coef[:Din.shape[1], Din.shape[1]:]
