@@ -820,8 +820,8 @@ def get_pval(test_statistic, pval_perms, Nperm, method, t, pval, corr_coef):
     # Ref: https://github.com/OHBA-analysis/HMM-MAR/blob/master/utils/testing/permtest_aux.m
     """
     if method == "regression" or method == "one_vs_rest":
-        # Count every time there is a higher estimated RMSE
-        pval[t, :] = np.sum(test_statistic >= test_statistic[0,:], axis=0) / (Nperm + 1)
+        # Count every time there is a smaller estimated RMSE (better fit)
+        pval[t, :] = np.sum(test_statistic <= test_statistic[0,:], axis=0) / (Nperm + 1)
     elif method == "correlation":
          # Count every time there is a higher correlation coefficient
         corr_coef[t, :] = np.sum(test_statistic >= test_statistic[0,:], axis=0) / (Nperm + 1)
