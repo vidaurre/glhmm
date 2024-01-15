@@ -699,35 +699,46 @@ def initialize_arrays(D_data, R_data, n_p, n_q, n_T, method, Nperm, test_statist
     return pval, corr_coef, test_statistic_list, pval_list
 
 
-def deconfound_Fnc(R_data, D_data, confounds=None):
+def deconfound_Fnc(R_data, D_data=None, confounds=None):
     """
-    Calculate the R_data array for permutation testing.
+    Deconfound the variables R_data and D_data for permutation testing.
 
     Parameters:
     --------------
         R_data (numpy.ndarray): The input data array.
+        D_data (numpy.ndarray or None): The second input data array (default: None).
+            If None, assumes we are working across visits, and D_data represents the Viterbi path of a sequence.
         confounds (numpy.ndarray or None): The confounds array (default: None).
 
     Returns:
     ----------  
-        numpy.ndarray: Calculated R_t array.
+        numpy.ndarray: Deconfounded R_data array.
+        numpy.ndarray: Deconfounded D_data array (returns None if D_data is None).
+            If D_data is None, assumes we are working across visits
     """
     
     # Calculate the centered data matrix based on confounds (if provided)
     if confounds is not None:
         # Centering confounds
         confounds = confounds - np.mean(confounds, axis=0)
-        # Centering R_data and D_data
+        # Centering R_data
         R_data = R_data - np.mean(R_data, axis=0)
-        D_data = D_data - np.mean(D_data, axis=0)
         
-        # Regressing out confounds from R_data and D_data
+        # Regressing out confounds from R_data
         R_t = R_data - confounds @ np.linalg.pinv(confounds) @ R_data
-        D_t = D_data - confounds @ np.linalg.pinv(confounds) @ D_data
+        
+        # Check if D_data is provided
+        if D_data is not None:
+            # Centering D_data
+            D_data = D_data - np.mean(D_data, axis=0)
+            # Regressing out confounds from D_data
+            D_t = D_data - confounds @ np.linalg.pinv(confounds) @ D_data
+        else:
+            D_t = None
     else:
         # Centering R_data and D_data
         R_t = R_data - np.mean(R_data, axis=0)
-        D_t = D_data - np.mean(D_data, axis=0)
+        D_t = None if D_data is None else D_data - np.mean(D_data, axis=0)
     return R_t, D_t
 
 def initialize_permutation_matrices(method, Nperm, n_p, n_q, D_data):
@@ -813,10 +824,7 @@ def get_pval(test_statistic, pval_perms, Nperm, method, t, pval, corr_coef):
     # Positive direction
     if method == "regression" or method == "one_vs_rest":
         # Count every time there is an higher estimated explaied variace (R^2)
-        #pval[t, :] = np.sum(test_statistic >= test_statistic[0,:], axis=0) / (Nperm + 1)
         pval[t, :] = np.sum(test_statistic <= test_statistic[0,:], axis=0) / (Nperm + 1)
-        #np.mean(permuted_rmse <= observed_rmse)
-        
     elif method == "correlation":
         corr_coef[t, :] = np.sum(test_statistic >= test_statistic[0,:], axis=0) / (Nperm + 1)
     elif method == "correlation_com":
@@ -1198,7 +1206,7 @@ def test_statistic_calculations(Din, Rin, perm, pval_perms, test_statistic, proj
     if method == 'regression':
         # Fit the original model 
         beta = proj @ Rin  # Calculate regression_coefficients (beta)
-        # Calculate the root mean squared error
+        # Calculate the root mean squared error for each column
         test_statistic[perm] = np.sqrt(np.mean((Din @ beta - Rin) ** 2, axis=0))
     elif method == 'correlation':
         corr_coef = np.corrcoef(Din, Rin, rowvar=False)
