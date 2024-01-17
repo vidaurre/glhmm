@@ -602,3 +602,64 @@ def plot_vpath(vpath, signal =[], xlabel = "Time Steps", figsize=(7, 4), ylabel 
     plt.tight_layout() 
     # Show the plot
     plt.show()
+    
+    def plot_average_probability(Gamma_reconstruct, title='Average probability for each state', fontsize=16, figsize=(8, 6), vertical_lines=None, line_colors=None, highlight_boxes=False):
+    import matplotlib.patches as patches
+    import random
+    """
+    Plots the average probability for each state over time.
+
+    Parameters:
+        Gamma_reconstruct (numpy.ndarray): 3D array representing reconstructed gamma values.
+                                        Shape: (num_timepoints, num_trials, num_states)
+        title (str): Title for the plot (Default='Average probability for each state').
+        fontsize (int): Font size for labels and title (Default= 16).
+        figsize (tuple): Figure size (width, height) in inche (Default=(8, 6)).
+        vertical_lines (list of tuples): List of pairs specifying indices for vertical lines (Default=None).
+        line_colors (list of str or bool): List of colors for each pair of vertical lines. If True, generates random colors (unless a list is provided) (Default= None).
+        highlight_boxes (bool): Whether to include highlighted boxes for each pair of vertical lines (Default=False).
+    """
+
+    # Initialize an array for average gamma values
+    Gamma_avg = np.zeros((Gamma_reconstruct.shape[0], Gamma_reconstruct.shape[-1]))
+
+    # Calculate and store average gamma values
+    for i in range(Gamma_reconstruct.shape[0]):
+        filtered_values = Gamma_reconstruct[i, :, :]
+        Gamma_avg[i, :] = np.mean(filtered_values, axis=0).round(3)
+
+    # Set figure size
+    plt.figure(figsize=figsize)
+
+    # Plot each line with a label
+    for state in range(Gamma_reconstruct.shape[-1]):
+        plt.plot(Gamma_avg[:, state], label=f'State {state + 1}')
+
+    # Add vertical lines and highlight boxes
+    if vertical_lines:
+        for idx, pair in enumerate(vertical_lines):
+            if line_colors is True:
+                if isinstance(line_colors, list) and len(line_colors) == len(vertical_lines):
+                    color = line_colors[idx]
+                else:
+                    color = "#{:06x}".format(random.randint(0, 0xFFFFFF))
+            else:
+                color = line_colors[idx] if line_colors and len(line_colors) > idx else 'gray'
+            
+            plt.axvline(x=pair[0], color=color, linestyle='--', linewidth=1)
+            plt.axvline(x=pair[1], color=color, linestyle='--', linewidth=1)
+
+            if highlight_boxes:
+                rect = patches.Rectangle((pair[0], plt.ylim()[0]), pair[1] - pair[0], plt.ylim()[1] - plt.ylim()[0], linewidth=0, edgecolor='none', facecolor=color, alpha=0.2)
+                plt.gca().add_patch(rect)
+
+    # Add labels and legend
+    plt.xlabel('Timepoints', fontsize=fontsize)
+    plt.ylabel('Average probability', fontsize=fontsize)
+    plt.title(title, fontsize=fontsize)
+
+    # Place legend to the right of the figure
+    plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+
+    # Show the plot
+    plt.show()
