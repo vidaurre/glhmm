@@ -325,8 +325,10 @@ def show_beta(hmm,only_active_states=True,recompute_states=False,
     #             r2[j,:] = 1 - (d / d0)
 
 
-def plot_heatmap(pval, method, alpha = 0.05, normalize_vals=True, figsize=(12, 7), steps=11, title_text="Heatmap (p-values)", annot=True, cmap='default', xlabel="", ylabel="", xticklabels=None, none_diagonal = False):
+import warnings
+def plot_heatmap(pval, plot_method="pval", alpha = 0.05, normalize_vals=True, figsize=(12, 7), steps=11, title_text="Heatmap (p-values)", annot=True, cmap='default', xlabel="", ylabel="", xticklabels=None, none_diagonal = False):
     from matplotlib import cm, colors
+    import seaborn as sb
     from mpl_toolkits.axes_grid1 import make_axes_locatable
     """
     Plot a heatmap of p-values.
@@ -334,66 +336,98 @@ def plot_heatmap(pval, method, alpha = 0.05, normalize_vals=True, figsize=(12, 7
     Parameters:
     --------------
         pval (numpy.ndarray): The p-values data to be plotted.
-        method (str): The method used for the permutation test. Should be one of 'regression', 'correlation', or 'correlation_com'.
-        normalize_vals (bool, optional): If True, the data range will be normalized from 0 to 1. Default is True.
-        figsize (tuple, optional): Figure size in inches (width, height). Default is (12, 7).
-        steps (int, optional): Number of steps for x and y-axis ticks. Default is 11.
-        title_text (str, optional): Title text for the heatmap. If not provided, a default title will be used.
-        annot (bool, optional): If True, annotate each cell with the numeric value. Default is True.
+        plot_method (str, optional): This variable is used to define what kind of plot we are making. Valid options are
+                        "pval", "corr_coef" (Default="pval").                      
+        normalize_vals (bool, optional): If True, the data range will be normalized from 0 to 1 (Default=True).
+        figsize (tuple, optional): Figure size in inches (width, height) (Default=(12, 7)).
+        steps (int, optional): Number of steps for x and y-axis ticks (Default= 11).
+        title_text (str, optional): Title text for the heatmap (Default= Heatmap (p-values)).
+        annot (bool, optional): If True, annotate each cell with the numeric value (Default= True).
         cmap (str, optional): Colormap to use. Default is a custom colormap based on 'coolwarm'.
         xlabel (str, optional): X-axis label. If not provided, default labels based on the method will be used.
         ylabel (str, optional): Y-axis label. If not provided, default labels based on the method will be used.
         xticklabels (str, optional): If not provided, labels will be numbers equal to shape of pval.shape[1]. Else you can define your own labels eg. xticklabels =['sex','age']   
-        none_diagonal (bool, optional): if you want do turn the diagonal into nan numbers. Default is False 
+        none_diagonal (bool, optional): if you want do turn the diagonal into nan numbers (Default=False) 
 
     Returns:
     ----------  
         None (Displays the heatmap plot).
 
     """
+    allowed_methods = ["pval", "corr_coef"]
+
+    if plot_method not in allowed_methods:
+        message = f"Warning: Unexpected method '{method}'. Please use 'pval' or 'corr_coeff'."
+        warnings.warn(message, UserWarning)
+        
     if pval.ndim==0:
         pval = np.reshape(pval, (1, 1))
         
     fig, ax = plt.subplots(figsize=figsize)
     if len(pval.shape)==1:
         pval =np.expand_dims(pval,axis=0)
+    if plot_method =="pval":
+        if cmap=='default':
+            # Reverse colormap
+            coolwarm_cmap = cm.coolwarm.reversed()
+            # Generate an array of values representing the colormap
+            num_colors = 256  # You can adjust the number of colors as needed
+            color_array = np.linspace(0, 1, num_colors).reshape(1, -1)
+            # Make a jump in color after alpha
+            color_array[color_array > alpha] += 0.3
+            # Create a new colormap with 
+            new_cmap_list = coolwarm_cmap(color_array)[0]
+            # if zero_white:
+            #     # white at the lowest value
+            #     new_cmap_list[0] = [1, 1, 1, 1]  # Set the first color to white
 
-    if cmap=='default':
-        # Reverse colormap
-        coolwarm_cmap = cm.coolwarm.reversed()
-        # Generate an array of values representing the colormap
-        num_colors = 256  # You can adjust the number of colors as needed
-        color_array = np.linspace(0, 1, num_colors).reshape(1, -1)
-        # Make a jump in color after alpha
-        color_array[color_array > alpha] += 0.3
-        # Create a new colormap with 
-        new_cmap_list = coolwarm_cmap(color_array)[0]
-        # if zero_white:
-        #     # white at the lowest value
-        #     new_cmap_list[0] = [1, 1, 1, 1]  # Set the first color to white
+            # Create a new colormap with the modified color_array
+            cmap = colors.ListedColormap(new_cmap_list)
+            # Set the value of 0 to white in the colormap
+        if none_diagonal:
+            # Set the diagonal elements to NaN
+            np.fill_diagonal(pval, np.nan)
 
-        # Create a new colormap with the modified color_array
-        cmap = colors.ListedColormap(new_cmap_list)
-        # Set the value of 0 to white in the colormap
+        if normalize_vals:
+            # Normalize the data range from 0 to 1
+            norm = plt.Normalize(vmin=0, vmax=1)
 
-    
-    if none_diagonal:
-        # Set the diagonal elements to NaN
-        np.fill_diagonal(pval, np.nan)
+            heatmap = sb.heatmap(pval, ax=ax, cmap=cmap, annot=annot, fmt=".3f", cbar=False, norm=norm)
+        else:
+            heatmap = sb.heatmap(pval, ax=ax, cmap=cmap, annot=annot, fmt=".3f", cbar=False)
 
-    if normalize_vals:
-        # Normalize the data range from 0 to 1
-        norm = plt.Normalize(vmin=0, vmax=1)
+    elif plot_method =="corr_coef":
+        if cmap=='default':
+            # seismic_cmap = cm.seismic.reversed()
+            seismic_cmap = cm.seismic.reversed()
+            #seismic_cmap = cm.RdBu.reversed()
+            # Generate an array of values representing the colormap
+            num_colors = 256  # You can adjust the number of colors as needed
+            color_array = np.linspace(0, 1, num_colors).reshape(1, -1)
+            # # Make a jump in color after alpha
+            # color_array[color_array<0.5]+=0.1
+            # color_array[color_array>0.5]-=0.1
+            # # Set values in the specified index intervals to 0.5
+            # indices=np.where(color_array == 0.5)[1]
 
-        heatmap = sb.heatmap(pval, ax=ax, cmap=cmap, annot=annot, fmt=".3f", cbar=False, norm=norm)
-    else:
-        heatmap = sb.heatmap(pval, ax=ax, cmap=cmap, annot=annot, fmt=".3f", cbar=False)
+            # # Set values in the specified index range to 5
+            # color_array[0,np.min(indices):np.max(indices) + 1] = 0.49
+            # Create a new colormap with 
+            new_cmap_list = seismic_cmap(color_array)[0]
+            cmap = colors.ListedColormap(new_cmap_list)
+            
+        if normalize_vals:
+            # Normalize the data range from 0 to 1
+            norm = plt.Normalize(vmin=-1, vmax=1)
+
+            heatmap = sb.heatmap(pval, ax=ax, cmap=cmap, annot=annot, fmt=".3f", cbar=False, norm=norm)
+        else:
+            heatmap = sb.heatmap(pval, ax=ax, cmap=cmap, annot=annot, fmt=".3f", cbar=False)
 
     # Add labels and title
     ax.set_xlabel(xlabel, fontsize=12)
     ax.set_ylabel(ylabel, fontsize=12)
     ax.set_title(title_text, fontsize=14)
-
     # Set the x-axis ticks
     if xticklabels is not None:
         ax.set_xticks(np.arange(len(xticklabels)) + 0.5)
@@ -417,41 +451,31 @@ def plot_heatmap(pval, method, alpha = 0.05, normalize_vals=True, figsize=(12, 7
     colorbar = plt.colorbar(heatmap.get_children()[0], cax=cax)
     # colorbar.set_ticks([0, 0.25, 0.5, 1])  # Adjust ticks as needed
 
-
     # Show the plot
     plt.show()
-
-
   
-def plot_permutation_distribution(test_statistic, title_text=""):
+def plot_permutation_distribution(test_statistic, title_text="Permutation Distribution",xlabel="Test Statistic Values",ylabel="Density"):
     """
-    Plot the histogram of the permutation mean with the observed statistic marked.
+    Plot the histogram of the permutation with the observed statistic marked.
 
     Parameters:
     --------------
-        test_statistic (numpy.ndarray): An array containing the permutation mean values.
-        title_text (str, optional): Additional text to include in the title of the plot. Default is an empty string.
+        test_statistic (numpy.ndarray): An array containing the permutation values.
+        title_text (str, optional): Title text of the plot (Default="Permutation Distribution")
+        xlabel (str, optional): Text of the xlabel (Default="Test Statistic Values")
+        ylabel (str, optional): Text of the ylabel (Default="Density")
 
     Returns:
     ----------  
         None: Displays the histogram plot.
 
-    Example:
-        >>> import numpy as np
-        >>> test_statistic = np.random.normal(0, 1, 1000)
-        >>> plot_histograms(test_statistic, "Permutation Mean Distribution")
-
     """
     plt.figure()
     sb.histplot(test_statistic, kde=True)
     plt.axvline(x=test_statistic[0], color='red', linestyle='--', label='Observed Statistic')
-    plt.xlabel('Permutation mean')
-    plt.ylabel('Density')
-    
-    if not title_text:
-        plt.title('Distribution of Permutation Mean', fontsize=14)
-    else:
-        plt.title(title_text, fontsize=14)
+    plt.xlabel(xlabel)
+    plt.ylabel(ylabel)
+    plt.title(title_text, fontsize=14)
         
     plt.legend()
     plt.show()
@@ -465,12 +489,12 @@ def plot_scatter_with_labels(p_values, alpha=0.05, title_text="", xlabel=None, y
     Parameters:
     --------------
         p_values (array-like): An array of p-values. Can be a 1D array or a 2D array with shape (1, 5).
-        alpha (float): Threshold for significance (default: 0.05)
-        title_text (str, optional): The title text for the plot (default="").
-        xlabel (str, optional): The label for the x-axis (default=None).
-        ylabel (str, optional): The label for the y-axis (default=None).
-        xlim_start (float): start position of x-axis limits (default: -5)
-        ylim_start (float): start position of y-axis limits (default: -0.1)
+        alpha (float): Threshold for significance (Default=0.05)
+        title_text (str, optional): The title text for the plot (Default="").
+        xlabel (str, optional): The label for the x-axis (Default=None).
+        ylabel (str, optional): The label for the y-axis (Default=None).
+        xlim_start (float): start position of x-axis limits (Default= -5)
+        ylim_start (float): start position of y-axis limits (Default= -0.1)
 
     Returns:
     ----------  
