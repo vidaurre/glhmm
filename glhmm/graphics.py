@@ -333,26 +333,39 @@ def plot_heatmap(pval, plot_method="pval", alpha = 0.05, normalize_vals=True, fi
     """
     Plot a heatmap of p-values.
 
-    Parameters:
-    --------------
-        pval (numpy.ndarray): The p-values data to be plotted.
-        plot_method (str, optional): This variable is used to define what kind of plot we are making. Valid options are
-                        "pval", "corr_coef" (Default="pval").                      
-        normalize_vals (bool, optional): If True, the data range will be normalized from 0 to 1 (Default=True).
-        figsize (tuple, optional): Figure size in inches (width, height) (Default=(12, 7)).
-        steps (int, optional): Number of steps for x and y-axis ticks (Default= 11).
-        title_text (str, optional): Title text for the heatmap (Default= Heatmap (p-values)).
-        annot (bool, optional): If True, annotate each cell with the numeric value (Default= True).
-        cmap (str, optional): Colormap to use. Default is a custom colormap based on 'coolwarm'.
-        xlabel (str, optional): X-axis label. If not provided, default labels based on the method will be used.
-        ylabel (str, optional): Y-axis label. If not provided, default labels based on the method will be used.
-        xticklabels (str, optional): If not provided, labels will be numbers equal to shape of pval.shape[1]. Else you can define your own labels eg. xticklabels =['sex','age']   
-        none_diagonal (bool, optional): if you want do turn the diagonal into nan numbers (Default=False) 
+    Parameters
+    ----------
+    pval : numpy.ndarray
+        The p-values data to be plotted.
+    plot_method : str, optional
+        This variable is used to define what kind of plot we are making.
+        Valid options are "pval", "corr_coef" (Default="pval").
+    normalize_vals : bool, optional
+        If True, the data range will be normalized from 0 to 1 (Default=True).
+    figsize : tuple, optional
+        Figure size in inches (width, height) (Default=(12, 7)).
+    steps : int, optional
+        Number of steps for x and y-axis ticks (Default= 11).
+    title_text : str, optional
+        Title text for the heatmap (Default= Heatmap (p-values)).
+    annot : bool, optional
+        If True, annotate each cell with the numeric value (Default= True).
+    cmap : str, optional
+        Colormap to use. Default is a custom colormap based on 'coolwarm'.
+    xlabel : str, optional
+        X-axis label. If not provided, default labels based on the method will be used.
+    ylabel : str, optional
+        Y-axis label. If not provided, default labels based on the method will be used.
+    xticklabels : List[str], optional
+        If not provided, labels will be numbers equal to shape of pval.shape[1].
+        Else you can define your own labels, e.g., xticklabels=['sex', 'age'].
+    none_diagonal : bool, optional
+        If you want to turn the diagonal into NaN numbers (Default=False).
 
-    Returns:
-    ----------  
-        None (Displays the heatmap plot).
-
+    Returns
+    -------
+    None
+        Displays the heatmap plot.
     """
     allowed_methods = ["pval", "corr_coef"]
 
@@ -458,17 +471,21 @@ def plot_permutation_distribution(test_statistic, title_text="Permutation Distri
     """
     Plot the histogram of the permutation with the observed statistic marked.
 
-    Parameters:
-    --------------
-        test_statistic (numpy.ndarray): An array containing the permutation values.
-        title_text (str, optional): Title text of the plot (Default="Permutation Distribution")
-        xlabel (str, optional): Text of the xlabel (Default="Test Statistic Values")
-        ylabel (str, optional): Text of the ylabel (Default="Density")
+    Parameters
+    ----------
+    test_statistic : numpy.ndarray
+        An array containing the permutation values.
+    title_text : str, optional
+        Title text of the plot (Default="Permutation Distribution").
+    xlabel : str, optional
+        Text of the xlabel (Default="Test Statistic Values").
+    ylabel : str, optional
+        Text of the ylabel (Default="Density").
 
-    Returns:
-    ----------  
-        None: Displays the histogram plot.
-
+    Returns
+    -------
+    None
+        Displays the histogram plot.
     """
     plt.figure()
     sb.histplot(test_statistic, kde=True)
@@ -486,23 +503,30 @@ def plot_scatter_with_labels(p_values, alpha=0.05, title_text="", xlabel=None, y
     """
     Create a scatter plot to visualize p-values with labels indicating significant points.
 
-    Parameters:
-    --------------
-        p_values (array-like): An array of p-values. Can be a 1D array or a 2D array with shape (1, 5).
-        alpha (float): Threshold for significance (Default=0.05)
-        title_text (str, optional): The title text for the plot (Default="").
-        xlabel (str, optional): The label for the x-axis (Default=None).
-        ylabel (str, optional): The label for the y-axis (Default=None).
-        xlim_start (float): start position of x-axis limits (Default= -5)
-        ylim_start (float): start position of y-axis limits (Default= -0.1)
+    Parameters
+    ----------
+    p_values : numpy.ndarray
+        An array of p-values. Can be a 1D array or a 2D array with shape (1, 5).
+    alpha : float, optional
+        Threshold for significance (Default=0.05).
+    title_text : str, optional
+        The title text for the plot (Default="").
+    xlabel : str, optional
+        The label for the x-axis (Default=None).
+    ylabel : str, optional
+        The label for the y-axis (Default=None).
+    xlim_start : float, optional
+        Start position of x-axis limits (Default=-5).
+    ylim_start : float, optional
+        Start position of y-axis limits (Default=-0.1).
 
-    Returns:
-    ----------  
-        None
+    Returns
+    -------
+    None
 
-    Note:
-        - Points with p-values less than alpha are considered significant and marked with red text.
-
+    Note
+    ----
+    Points with p-values less than alpha are considered significant and marked with red text.
     """
 
     # If p_values is a 2D array with shape (1, 5), flatten it to 1D
@@ -603,21 +627,34 @@ def plot_vpath(vpath, signal =[], xlabel = "Time Steps", figsize=(7, 4), ylabel 
     # Show the plot
     plt.show()
     
-    def plot_average_probability(Gamma_reconstruct, title='Average probability for each state', fontsize=16, figsize=(8, 6), vertical_lines=None, line_colors=None, highlight_boxes=False):
+def plot_average_probability(Gamma_reconstruct, title='Average probability for each state', fontsize=16, figsize=(8, 6), vertical_lines=None, line_colors=None, highlight_boxes=False):
     import matplotlib.patches as patches
     import random
     """
     Plots the average probability for each state over time.
 
-    Parameters:
-        Gamma_reconstruct (numpy.ndarray): 3D array representing reconstructed gamma values.
-                                        Shape: (num_timepoints, num_trials, num_states)
-        title (str): Title for the plot (Default='Average probability for each state').
-        fontsize (int): Font size for labels and title (Default= 16).
-        figsize (tuple): Figure size (width, height) in inche (Default=(8, 6)).
-        vertical_lines (list of tuples): List of pairs specifying indices for vertical lines (Default=None).
-        line_colors (list of str or bool): List of colors for each pair of vertical lines. If True, generates random colors (unless a list is provided) (Default= None).
-        highlight_boxes (bool): Whether to include highlighted boxes for each pair of vertical lines (Default=False).
+    Parameters
+    ----------
+    Gamma_reconstruct : numpy.ndarray
+        3D array representing reconstructed gamma values.
+        Shape: (num_timepoints, num_trials, num_states)
+    title : str, optional
+        Title for the plot (Default='Average probability for each state').
+    fontsize : int, optional
+        Font size for labels and title (Default=16).
+    figsize : tuple, optional
+        Figure size (width, height) in inches (Default=(8, 6)).
+    vertical_lines : list of tuples, optional
+        List of pairs specifying indices for vertical lines (Default=None).
+    line_colors : list of str or bool, optional
+        List of colors for each pair of vertical lines. If True, generates random colors
+        (unless a list is provided) (Default=None).
+    highlight_boxes : bool, optional
+        Whether to include highlighted boxes for each pair of vertical lines (Default=False).
+    
+    Returns
+    -------
+    None
     """
 
     # Initialize an array for average gamma values
@@ -662,4 +699,85 @@ def plot_vpath(vpath, signal =[], xlabel = "Time Steps", figsize=(7, 4), ylabel 
     plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
 
     # Show the plot
+    plt.show()
+
+def plot_condition_difference(Gamma_reconstruct, R_trials, title='Average Probability and Difference', fontsize=16, figsize=(9, 2), vertical_lines=None, line_colors=None, highlight_boxes=False):
+    """
+    Plots the average probability for each state over time for two conditions and their difference.
+
+    Parameters:
+    -----------
+    Gamma_reconstruct : numpy.ndarray
+        3D array representing reconstructed gamma values.
+        Shape: (num_timepoints, num_trials, num_states)
+    R_trials : numpy.ndarray
+        1D array representing the condition for each trial.
+        Should have the same length as the second dimension of Gamma_reconstruct.
+    title : str, optional
+        Title for the plot (Default='Average Probability and Difference').
+    fontsize : int, optional
+        Font size for labels and title (Default=16).
+    figsize : tuple, optional
+        Figure size (width, height) in inches (Default=(9, 2)).
+    vertical_lines : list of tuples, optional
+        List of pairs specifying indices for vertical lines (Default=None).
+    line_colors : list of str or bool, optional
+        List of colors for each pair of vertical lines. If True, generates random colors
+        (unless a list is provided) (Default= None).
+    highlight_boxes : bool, optional
+        Whether to include highlighted boxes for each pair of vertical lines (Default=False).
+
+    Example usage:
+    --------------
+    plot_condition_difference(Gamma_reconstruct, R_trials, vertical_lines=[(10, 100)], highlight_boxes=True)
+    """
+
+    filt_val = np.zeros((2, Gamma_reconstruct.shape[0], Gamma_reconstruct.shape[2]))
+
+    # Create subplots
+    fig, axes = plt.subplots(1, 3, figsize=figsize)
+
+    # Plot for each condition
+    for condition in range(2):
+        for i in range(Gamma_reconstruct.shape[0]):
+            filtered_values = Gamma_reconstruct[i, (R_trials == condition + 1), :]
+            filt_val[condition, i, :] = np.mean(filtered_values, axis=0).round(3)
+        axes[condition].plot(filt_val[condition, :, :])
+        axes[condition].set_title(f"Condition {condition + 1}")
+        axes[condition].set_xticks(np.linspace(0, Gamma_reconstruct.shape[0] - 1, 5).astype(int))
+        axes[condition].set_yticks(np.linspace(axes[condition].get_ylim()[0], axes[condition].get_ylim()[1], 5).round(2))
+
+    # Find the element-wise difference
+    difference = filt_val[0, :, :] - filt_val[1, :, :]
+
+    # Plot the difference
+    axes[2].plot(difference)
+    axes[2].set_title("Difference")
+    axes[2].set_xticks(np.linspace(0, Gamma_reconstruct.shape[0] - 1, 5).astype(int))
+    axes[2].set_yticks(np.linspace(axes[2].get_ylim()[0], axes[2].get_ylim()[1], 5).round(2))
+
+    # Add vertical lines, line colors, and highlight boxes
+    if vertical_lines:
+        for idx, pair in enumerate(vertical_lines):
+            color = line_colors[idx] if line_colors and len(line_colors) > idx else 'gray'
+            axes[2].axvline(x=pair[0], color=color, linestyle='--', linewidth=1)
+            axes[2].axvline(x=pair[1], color=color, linestyle='--', linewidth=1)
+
+            if highlight_boxes:
+                rect = plt.Rectangle((pair[0], axes[2].get_ylim()[0]), pair[1] - pair[0], axes[2].get_ylim()[1] - axes[2].get_ylim()[0], linewidth=0, edgecolor='none', facecolor=color, alpha=0.2)
+                axes[2].add_patch(rect)
+
+    # Set labels fontsize
+    for ax in axes:
+        ax.set_xlabel('Timepoints', fontsize=12)
+        ax.set_ylabel('Average probability', fontsize=12)
+
+    # Label each state on the right for the last figure (axes[2])
+    state_labels = [f"State {state+1}" for state in range(Gamma_reconstruct.shape[2])]
+    axes[2].legend(state_labels, loc='center left', bbox_to_anchor=(1, 0.5), fontsize=12)
+
+    fig.suptitle(title, fontsize=fontsize)
+
+    # Show the plot
+    plt.tight_layout(rect=[0, 0, 1, 0.96])
     plt.show()
