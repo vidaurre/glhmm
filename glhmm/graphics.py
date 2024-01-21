@@ -324,9 +324,8 @@ def show_beta(hmm,only_active_states=True,recompute_states=False,
 
     #             r2[j,:] = 1 - (d / d0)
 
-
 import warnings
-def plot_heatmap(pval, plot_method="pval", alpha = 0.05, normalize_vals=True, figsize=(12, 7), steps=11, title_text="Heatmap (p-values)", annot=True, cmap='default', xlabel="", ylabel="", xticklabels=None, none_diagonal = False):
+def plot_heatmap(pval, plot_method="pval", alpha = 0.05, normalize_vals=False, figsize=(12, 7), steps=11, title_text="Heatmap (p-values)", annot=True, cmap_type='default', cmap_reverse=True, xlabel="", ylabel="", xticklabels=None, none_diagonal = False):
     from matplotlib import cm, colors
     import seaborn as sb
     from mpl_toolkits.axes_grid1 import make_axes_locatable
@@ -341,7 +340,7 @@ def plot_heatmap(pval, plot_method="pval", alpha = 0.05, normalize_vals=True, fi
         This variable is used to define what kind of plot we are making.
         Valid options are "pval", "corr_coef" (Default="pval").
     normalize_vals : bool, optional
-        If True, the data range will be normalized from 0 to 1 (Default=True).
+        If True, the data range will be normalized from 0 to 1 (Default=False).
     figsize : tuple, optional
         Figure size in inches (width, height) (Default=(12, 7)).
     steps : int, optional
@@ -370,7 +369,7 @@ def plot_heatmap(pval, plot_method="pval", alpha = 0.05, normalize_vals=True, fi
     allowed_methods = ["pval", "corr_coef"]
 
     if plot_method not in allowed_methods:
-        message = f"Warning: Unexpected method '{method}'. Please use 'pval' or 'corr_coeff'."
+        message = f"Warning: Unexpected method '{plot_method}'. Please use 'pval' or 'corr_coeff'."
         warnings.warn(message, UserWarning)
         
     if pval.ndim==0:
@@ -380,7 +379,7 @@ def plot_heatmap(pval, plot_method="pval", alpha = 0.05, normalize_vals=True, fi
     if len(pval.shape)==1:
         pval =np.expand_dims(pval,axis=0)
     if plot_method =="pval":
-        if cmap=='default':
+        if cmap_type=='default':
             # Reverse colormap
             coolwarm_cmap = cm.coolwarm.reversed()
             # Generate an array of values representing the colormap
@@ -398,8 +397,12 @@ def plot_heatmap(pval, plot_method="pval", alpha = 0.05, normalize_vals=True, fi
             cmap = colors.ListedColormap(new_cmap_list)
             # Set the value of 0 to white in the colormap
         if none_diagonal:
-            # Set the diagonal elements to NaN
-            np.fill_diagonal(pval, np.nan)
+            # Create a copy of the pval matrix
+            pval_with_nan_diagonal = np.copy(pval)
+
+            # Set the diagonal elements to NaN in the copied matrix
+            np.fill_diagonal(pval_with_nan_diagonal, np.nan)
+            pval = pval_with_nan_diagonal.copy()
 
         if normalize_vals:
             # Normalize the data range from 0 to 1
@@ -410,9 +413,10 @@ def plot_heatmap(pval, plot_method="pval", alpha = 0.05, normalize_vals=True, fi
             heatmap = sb.heatmap(pval, ax=ax, cmap=cmap, annot=annot, fmt=".3f", cbar=False)
 
     elif plot_method =="corr_coef":
-        if cmap=='default':
+        if cmap_type=='default':
             # seismic_cmap = cm.seismic.reversed()
-            seismic_cmap = cm.seismic.reversed()
+            coolwarm_cmap = cm.coolwarm.reversed()
+            
             #seismic_cmap = cm.RdBu.reversed()
             # Generate an array of values representing the colormap
             num_colors = 256  # You can adjust the number of colors as needed
@@ -426,15 +430,21 @@ def plot_heatmap(pval, plot_method="pval", alpha = 0.05, normalize_vals=True, fi
             # # Set values in the specified index range to 5
             # color_array[0,np.min(indices):np.max(indices) + 1] = 0.49
             # Create a new colormap with 
-            new_cmap_list = seismic_cmap(color_array)[0]
+            new_cmap_list = coolwarm_cmap(color_array)[0]
             cmap = colors.ListedColormap(new_cmap_list)
-            
+        else:
+            # Get the colormap dynamically based on the input string
+            cmap = getattr(cm, cmap_type, None)
+            if cmap_reverse:
+                cmap =cmap.reversed()
+
         if normalize_vals:
             # Normalize the data range from 0 to 1
             norm = plt.Normalize(vmin=-1, vmax=1)
 
             heatmap = sb.heatmap(pval, ax=ax, cmap=cmap, annot=annot, fmt=".3f", cbar=False, norm=norm)
         else:
+
             heatmap = sb.heatmap(pval, ax=ax, cmap=cmap, annot=annot, fmt=".3f", cbar=False)
 
     # Add labels and title
