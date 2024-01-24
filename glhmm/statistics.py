@@ -9,9 +9,9 @@ import random
 import copy
 from tqdm import tqdm
 from glhmm.palm_functions import *
+import sys
 
-
-def test_across_subjects(D_data, R_data, method="regression", Nperm=0, confounds = None, dict_family = None, base_statistic_option=False, FWER_correction=False, identify_binary=True):
+def test_across_subjects(D_data, R_data, method="regression", Nperm=0, confounds = None, dict_family = None, test_statistics_option=False, FWER_correction=False, identify_binary=False):
     """
     This function performs statistical tests between a independent variable (`D_data`) and the dependent-variable (`R_data`) using permutation testing.
     The permutation testing is performed across across different subjects and it is possible to take family structure into account.
@@ -55,25 +55,25 @@ def test_across_subjects(D_data, R_data, method="regression", Nperm=0, confounds
                                               Defaults to False.
                                 - EE (bool, optional): A flag indicating whether to assume exchangeable errors, which allows permutation.
                                               Defaults to True. Other options are not available.            
-    base_statistic_option (bool, optional): 
-                            If True, the function will return the base statistic for each permutation.
+    test_statistics_option (bool, optional): 
+                            If True, the function will return the test statistics for each permutation.
                             (default: False) 
     FWER_correction (bool, optional): 
                             Specify whether to perform family-wise error rate (FWER) correction for multiple comparisons using the MaxT method(default: False).                     
                                 
     Returns:
     ----------  
-    result (dict): A dictionary containing the following keys. Depending on the `base_statistic_option` and `method`, it can return the p-values, 
-        correlation coefficients, base statistics.
+    result (dict): A dictionary containing the following keys. Depending on the `test_statistics_option` and `method`, it can return the p-values, 
+        correlation coefficients, test statisticss.
         'pval': P-values for the test with shapes based on the method:
             - method=="Regression": (T, p)
             - method=="univariate": (T, p, q)
             - method=="cca": (T, 1)
-        'base_statistic': base statistic is the permutation distribution if `base_statistic_option` is True, else None.
+        'test_statistics': test statistics is the permutation distribution if `test_statistics_option` is True, else None.
             - method=="Regression": (T, Nperm, p)
             - method=="univariate": (T, Nperm, p, q)
             - method=="cca": (T, Nperm, 1)
-        'corr_coef': Correlation coefficients for the test with shape (T, p, q) if method=="univariate", else None.
+        'base_statistics': Correlation coefficients for the test with shape (T, p, q) if method=="univariate", else None.
         'test_type': the type of test, which is the name of the function
         'method': the method used for analysis Valid options are
                 "regression", "univariate", or "cca", "one_vs_rest" and "state_pairs" (default: "regression").
@@ -92,15 +92,6 @@ def test_across_subjects(D_data, R_data, method="regression", Nperm=0, confounds
     if Nperm==0:
         Nperm+=1
     
-    # Perform t-statistics for binary columns
-    if identify_binary == True or isinstance(identify_binary, (list,np.ndarray)):
-        if identify_binary==True:
-            # Identify binary columns automatically in R_data
-            binary_columns = [col for col in range(R_data.shape[1]) if np.unique(R_data[:, col]).size == 2]
-        else:
-            # Customize columns defined by the user
-            binary_columns=identify_binary.copy()
-
     # Check validity of method and data_type
     valid_methods = ["regression", "univariate", "cca"]
     validate_condition(method in valid_methods, "Invalid option specified for 'method'. Must be one of: " + ', '.join(valid_methods))
@@ -109,27 +100,41 @@ def test_across_subjects(D_data, R_data, method="regression", Nperm=0, confounds
     n_T, _, n_p, n_q, D_data, R_data = get_input_shape(D_data, R_data)
     # Note for convension we wrote (T, p, q) => (n_T, n_p, n_q)
     
+    # Perform t-statistics for binary columns
+    if identify_binary == True or isinstance(identify_binary, (list,np.ndarray)):
+        if identify_binary==True:
+            # Identify binary columns automatically in R_data
+            binary_columns = [col for col in range(R_data.shape[-1]) if np.unique(R_data[:, col]).size == 2]
+            print("Performing t-statistics on binary columns.")
+        else:
+            # Customize columns defined by the user
+            binary_columns=identify_binary.copy()
+    if binary_columns!=[]:
+        if FWER_correction and len(binary_columns) is not R_data.shape[-1]:
+            print("Warning: Cannot perform FWER_correction with different test statisticss.\nConsider to set identify_binary=False")
+            raise ValueError("Cannot perform FWER_correction")
+    
     # Crate the family structure by looking at the dictionary 
     if dict_family is not None:
         # process dictionary of family structure
         dict_mfam=process_family_structure(dict_family, Nperm) 
         
     # Initialize arrays based on shape of data shape and defined options
-    pval, corr_coef, base_statistic_list = initialize_arrays(R_data, n_p, n_q, n_T, method, Nperm, base_statistic_option)
+    pval, base_statistics, test_statistics_list = initialize_arrays(R_data, n_p, n_q, n_T, method, Nperm, test_statistics_option)
 
     for t in tqdm(range(n_T)) if n_T > 1 else range(n_T):
         # If confounds exist, perform confound regression on the dependent variables
         D_t, R_t = deconfound_values(D_data[t, :],R_data[t, :], confounds)
         
         # Removing rows that contain nan-values
-        # D_t, R_t= remove_nan_values(D_t, R_t, t, n_T) ### can be optmized
+        D_t, R_t= remove_nan_values(D_t, R_t, t, n_T, method) ### can be optmized
         
-        if method == "univariate":
+        if method == "univariate" and binary_columns == []:
             # Calculate correlation coefficient
-            corr_coef[t, :] = get_corr_coef(D_t, R_t)
-            base_statistic= None
-        # Create base_statistic based on method
-        base_statistic, proj = initialize_permutation_matrices(method, Nperm, n_p, n_q, D_t)
+            base_statistics[t, :] = get_correlation_coefficients(D_t, R_t)
+            test_statistics= None
+        # Create test_statistics based on method
+        test_statistics, proj = initialize_permutation_matrices(method, Nperm, n_p, n_q, D_t)
 
         if dict_family is None:
             # Get indices for permutation
@@ -146,18 +151,25 @@ def test_across_subjects(D_data, R_data, method="regression", Nperm=0, confounds
             # Perform permutation on R_t
             Rin = R_t[permutation_matrix[:, perm]]
             # Calculate the permutation distribution
-            base_statistic = base_statistic_calculations(D_t, Rin, perm, base_statistic, proj, method, binary_columns)
+            test_statistics = test_statistics_calculations(D_t, Rin, perm, test_statistics, proj, method, binary_columns)
+
+        # Fill base statistics
+        if method == "univariate" and binary_columns is not []:
+            # Fill numbers in base statistics
+            base_statistics[t, :] =test_statistics[0,:]
         # Calculate p-values
-        pval = get_pval(base_statistic, Nperm, method, t, pval, FWER_correction, binary_columns) if Nperm>1 else 0
+        pval = get_pval(test_statistics, Nperm, method, t, pval, FWER_correction) if Nperm>1 else 0
         
-        # Output base statistic if it is set to True can be hard for memory otherwise
-        if base_statistic_option==True:
-            base_statistic_list[t,:] = base_statistic
+        # Output test statistics if it is set to True can be hard for memory otherwise
+        if test_statistics_option==True:
+            test_statistics_list[t,:] = test_statistics
+
         elif method !="univariate":
-            base_statistic_list[t,:] = base_statistic[0,:]
-    pval =np.squeeze(pval) if np.abs(np.sum(pval))>0 else np.nan 
-    corr_coef =np.squeeze(corr_coef) if corr_coef is not None else [] 
-    base_statistic_list =np.squeeze(base_statistic_list) if base_statistic_list is not None else []
+            test_statistics_list[t,:] = test_statistics[0,:]
+            
+    pval =np.squeeze(pval) if np.abs(np.nansum(pval))>0 else np.nan 
+    base_statistics =np.squeeze(base_statistics) if base_statistics is not None else [] 
+    test_statistics_list =np.squeeze(test_statistics_list) if test_statistics_list is not None else []
     Nperm = 0 if Nperm==1 else Nperm
     
     if np.sum(np.isnan(pval))>0:
@@ -167,8 +179,8 @@ def test_across_subjects(D_data, R_data, method="regression", Nperm=0, confounds
     # Return results
     result = {
         'pval': pval,
-        'corr_coef': corr_coef,
-        'base_statistic': base_statistic_list,
+        'base_statistics': base_statistics,
+        'test_statistics': test_statistics_list,
         'test_type': 'test_across_subjects',
         'method': method,
         'FWER_correction':FWER_correction,
@@ -177,7 +189,7 @@ def test_across_subjects(D_data, R_data, method="regression", Nperm=0, confounds
 
 
 
-def test_across_trials_within_session(D_data, R_data, idx_data, method="regression", Nperm=0, confounds=None, trial_timepoints=None,base_statistic_option=False, FWER_correction=False, identify_binary=True):
+def test_across_trials_within_session(D_data, R_data, idx_data, method="regression", Nperm=0, confounds=None, trial_timepoints=None,test_statistics_option=False, FWER_correction=False, identify_binary=False):
     """
     This function performs statistical tests between a independent variable (`D_data`) and the dependent-variable (`R_data`) using permutation testing.
     The permutation testing is performed across different trials within a session using permutation testing
@@ -215,25 +227,25 @@ def test_across_trials_within_session(D_data, R_data, idx_data, method="regressi
                                 If provided, the regression analysis is performed to remove the confounding effects. 
                                 (default: None):    
         trial_timepoints (int): Number of timepoints for each trial (default: None)                                                          
-        base_statistic_option (bool, optional): 
-                                If True, the function will return the base statistic for each permutation.
+        test_statistics_option (bool, optional): 
+                                If True, the function will return the test statistics for each permutation.
                                 (default: False) 
         FWER_correction (bool, optional): 
                                 Specify whether to perform family-wise error rate (FWER) correction for multiple comparisons using the MaxT method(default: False).                        
                                                       
     Returns:
     ----------  
-    result (dict): A dictionary containing the following keys. Depending on the `base_statistic_option` and `method`, it can return the p-values, 
-        correlation coefficients, base statistics.
+    result (dict): A dictionary containing the following keys. Depending on the `test_statistics_option` and `method`, it can return the p-values, 
+        correlation coefficients, test statisticss.
         'pval': P-values for the test with shapes based on the method:
             - method=="Regression": (T, p)
             - method=="univariate": (T, p, q)
             - method=="cca": (T, 1)
-        'base_statistic': base statistic is the permutation distribution if `base_statistic_option` is True, else None.
+        'test_statistics': test statistics is the permutation distribution if `test_statistics_option` is True, else None.
             - method=="Regression": (T, Nperm, p)
             - method=="univariate": (T, Nperm, p, q)
             - method=="cca": (T, Nperm, 1)
-        'corr_coef': Correlation coefficients for the test with shape (T, p, q) if method=="univariate", else None.
+        'base_statistics': Correlation coefficients for the test with shape (T, p, q) if method=="univariate", else None.
         'test_type': the type of test, which is the name of the function
         'method': the method used for analysis Valid options are
                 "regression", "univariate", or "cca", "one_vs_rest" and "state_pairs" (default: "regression").
@@ -251,22 +263,27 @@ def test_across_trials_within_session(D_data, R_data, idx_data, method="regressi
     if Nperm==0:
         Nperm+=1 
         
-    # Perform t-statistics for binary columns
-    if identify_binary == True or isinstance(identify_binary, (list,np.ndarray)):
-        if identify_binary==True:
-            # Identify binary columns automatically in R_data
-            binary_columns = [col for col in range(R_data.shape[1]) if np.unique(R_data[:, col]).size == 2]
-        else:
-            # Customize columns defined by the user
-            binary_columns=identify_binary.copy()
-            
+          
     # Check validity of method
     valid_methods = ["regression", "univariate", "cca"]
     validate_condition(method in valid_methods, "Invalid option specified for 'method'. Must be one of: " + ', '.join(valid_methods))
 
     # Get input shape information
     n_T, _, n_p, n_q, D_data, R_data = get_input_shape(D_data, R_data)
-    n_q = R_data.shape[-1]
+
+    # Perform t-statistics for binary columns
+    if identify_binary == True or isinstance(identify_binary, (list,np.ndarray)):
+        if identify_binary==True:
+            # Identify binary columns automatically in R_data
+            binary_columns = [col for col in range(R_data.shape[-1]) if np.unique(R_data[:, col]).size == 2]
+            print("Performing t-statistics on binary columns.")
+        else:
+            # Customize columns defined by the user
+            binary_columns=identify_binary.copy()
+    if binary_columns!=[]:
+        if FWER_correction and len(binary_columns) is not R_data.shape[-1]:
+            print("Warning: Cannot perform FWER_correction with different test statisticss.\nConsider to set identify_binary=False")
+            raise ValueError("Cannot perform FWER_correction")
     
     # Get indices for permutation
     if len(idx_data.shape)==2:
@@ -275,7 +292,7 @@ def test_across_trials_within_session(D_data, R_data, idx_data, method="regressi
         idx_array =idx_data.copy()        
 
     # Initialize arrays based on shape of data shape and defined options
-    pval, corr_coef, base_statistic_list = initialize_arrays(R_data, n_p, n_q, n_T, method, Nperm, base_statistic_option)
+    pval, base_statistics, test_statistics_list = initialize_arrays(R_data, n_p, n_q, n_T, method, Nperm, test_statistics_option)
 
 
     for t in tqdm(range(n_T)) if n_T > 1 else range(n_T):
@@ -283,16 +300,16 @@ def test_across_trials_within_session(D_data, R_data, idx_data, method="regressi
         D_t, R_t = deconfound_values(D_data[t, :],R_data[t, :], confounds)
         
         # Removing rows that contain nan-values
-        # D_t, R_t= remove_nan_values(D_t, R_t, t, n_T) ### can be optmized
+        D_t, R_t= remove_nan_values(D_t, R_t, t, n_T, method) ### can be optmized
         
         if method == "univariate":
             # Calculate correlation coefficient
-            corr_coef[t, :] = get_corr_coef(D_t,R_t)
+            base_statistics[t, :] = get_correlation_coefficients(D_t,R_t)
         
-        # Create base_statistic and pval_perms based on method
-        base_statistic, proj = initialize_permutation_matrices(method, Nperm, n_p, n_q, D_t)
+        # Create test_statistics and pval_perms based on method
+        test_statistics, proj = initialize_permutation_matrices(method, Nperm, n_p, n_q, D_t)
     
-            
+
         # Calculate permutation matrix of D_t 
         permutation_matrix = permutation_matrix_across_trials_within_session(Nperm,R_t, idx_array,trial_timepoints)
                 
@@ -302,14 +319,23 @@ def test_across_trials_within_session(D_data, R_data, idx_data, method="regressi
             Rin = R_t[permutation_matrix[:, perm]]
 
             # Calculate the permutation distribution
-            base_statistic = base_statistic_calculations(D_t, Rin, perm, base_statistic, proj, method, binary_columns)
+            test_statistics = test_statistics_calculations(D_t, Rin, perm, test_statistics, proj, method, binary_columns)
+                # Fill numbers in base statistics
+            if  np.sum(base_statistics[t, :])==0:
+                base_statistics[t, :] =test_statistics[0,:]
+        
+        # Fill base statistics
+        if method == "univariate" and binary_columns is not []:
+            # Fill numbers in base statistics
+            base_statistics[t, :] =test_statistics[0,:]
+
         # Calculate p-values
-        pval = get_pval(base_statistic, Nperm, method, t, pval, FWER_correction, binary_columns) if Nperm>1 else 0
-        if base_statistic_option==True:
-            base_statistic_list[t,:] = base_statistic
-    pval =np.squeeze(pval) if np.abs(np.sum(pval))>0 else np.nan
-    corr_coef =np.squeeze(corr_coef) if corr_coef is not None  else []
-    base_statistic_list =np.squeeze(base_statistic_list) if base_statistic_list is not None else []
+        pval = get_pval(test_statistics, Nperm, method, t, pval, FWER_correction) if Nperm>1 else 0
+        if test_statistics_option==True:
+            test_statistics_list[t,:] = test_statistics
+    pval =np.squeeze(pval) if np.abs(np.nansum(pval))>0 else np.nan
+    base_statistics =np.squeeze(base_statistics) if base_statistics is not None  else []
+    test_statistics_list =np.squeeze(test_statistics_list) if test_statistics_list is not None else []
     Nperm = 0 if Nperm==1 else Nperm
     
     if np.sum(np.isnan(pval))>0:
@@ -319,8 +345,8 @@ def test_across_trials_within_session(D_data, R_data, idx_data, method="regressi
     # Return results
     result = {
         'pval': pval,
-        'corr_coef': corr_coef,
-        'base_statistic': base_statistic_list,
+        'base_statistics': base_statistics,
+        'test_statistics': test_statistics_list,
         'test_type': 'test_across_trials_within_session',
         'method': method,
         'FWER_correction':FWER_correction,
@@ -328,7 +354,7 @@ def test_across_trials_within_session(D_data, R_data, idx_data, method="regressi
     
     return result
 
-def test_across_sessions_within_subject(D_data, R_data, idx_data, method="regression", Nperm=0, confounds=None,base_statistic_option=False,FWER_correction=False, identify_binary=True):
+def test_across_sessions_within_subject(D_data, R_data, idx_data, method="regression", Nperm=0, confounds=None,test_statistics_option=False,FWER_correction=False, identify_binary=False):
     """
     This function performs statistical tests between a independent variable (`D_data`) and the dependent-variable (`R_data`) using permutation testing. 
     The permutation testing is performed across sessions within the same subject, while keeping the trial order the same.
@@ -363,25 +389,25 @@ def test_across_sessions_within_subject(D_data, R_data, idx_data, method="regres
                                 The confounding variables to be regressed out from the input data (D_data).
                                 If provided, the regression analysis is performed to remove the confounding effects. 
                                 (default: None):                                                              
-        base_statistic_option (bool, optional): 
-                                If True, the function will return the base statistic for each permutation.
+        test_statistics_option (bool, optional): 
+                                If True, the function will return the test statistics for each permutation.
                                 (default: False) 
         FWER_correction (bool, optional): 
                                 Specify whether to perform family-wise error rate (FWER) correction for multiple comparisons using the MaxT method(default: False).
                                 
     Returns:
     ----------  
-        result (dict): A dictionary containing the following keys. Depending on the `base_statistic_option` and `method`, it can return the p-values, 
-            correlation coefficients, base statistics.
+        result (dict): A dictionary containing the following keys. Depending on the `test_statistics_option` and `method`, it can return the p-values, 
+            correlation coefficients, test statisticss.
             'pval': P-values for the test with shapes based on the method:
                 - method=="Regression": (T, p)
                 - method=="univariate": (T, p, q)
                 - method=="cca": (T, 1)
-            'base_statistic': base statistic is the permutation distribution if `base_statistic_option` is True, else None.
+            'test_statistics': test statistics is the permutation distribution if `test_statistics_option` is True, else None.
                 - method=="Regression": (T, Nperm, p)
                 - method=="univariate": (T, Nperm, p, q)
                 - method=="cca": (T, Nperm, 1)
-            'corr_coef': Correlation coefficients for the test with shape (T, p, q) if method=="univariate", else None.
+            'base_statistics': Correlation coefficients for the test with shape (T, p, q) if method=="univariate", else None.
             'test_type': the type of test, which is the name of the function
             'method': the method used for analysis Valid options are
                     "regression", "univariate", or "cca", "one_vs_rest" and "state_pairs" (default: "regression").
@@ -400,14 +426,6 @@ def test_across_sessions_within_subject(D_data, R_data, idx_data, method="regres
     if Nperm==0:
         Nperm+=1
     
-    # Perform t-statistics for binary columns
-    if identify_binary == True or isinstance(identify_binary, (list,np.ndarray)):
-        if identify_binary==True:
-            # Identify binary columns automatically in R_data
-            binary_columns = [col for col in range(R_data.shape[1]) if np.unique(R_data[:, col]).size == 2]
-        else:
-            # Customize columns defined by the user
-            binary_columns=identify_binary.copy()
             
     # Check validity of method
     valid_methods = ["regression", "univariate", "cca"]
@@ -420,24 +438,38 @@ def test_across_sessions_within_subject(D_data, R_data, idx_data, method="regres
         idx_array =idx_data.copy()
 
     # Get input shape information
-    n_T, _, n_p,n_q, D_data, R_data = get_input_shape(D_data, R_data)
-    #n_q = R_data.shape[-1]
+    n_T, _, n_p, n_q, D_data, R_data = get_input_shape(D_data, R_data)
     
+    # Perform t-statistics for binary columns
+    if identify_binary == True or isinstance(identify_binary, (list,np.ndarray)):
+        if identify_binary==True:
+            # Identify binary columns automatically in R_data
+            binary_columns = [col for col in range(R_data.shape[-1]) if np.unique(R_data[:, col]).size == 2]
+            print("Performing t-statistics on binary columns.")
+        else:
+            # Customize columns defined by the user
+            binary_columns=identify_binary.copy()
+    if binary_columns!=[]:
+        if FWER_correction and len(binary_columns) is not R_data.shape[-1]:
+            print("Warning: Cannot perform FWER_correction with different test statisticss.\nConsider to set identify_binary=False")
+            raise ValueError("Cannot perform FWER_correction")
+
+
 # Initialize arrays based on shape of data shape and defined options
-    pval, corr_coef, base_statistic_list = initialize_arrays(R_data, n_p, n_q, n_T, method, Nperm, base_statistic_option)
+    pval, base_statistics, test_statistics_list = initialize_arrays(R_data, n_p, n_q, n_T, method, Nperm, test_statistics_option)
     for t in tqdm(range(n_T)) if n_T > 1 else range(n_T):
         # If confounds exist, perform confound regression on the dependent variables
         D_t, R_t = deconfound_values(D_data[t, :],R_data[t, :], confounds)
         
         # Removing rows that contain nan-values
-        # D_t, R_t= remove_nan_values(D_t, R_t, t, n_T) ### can be optmized
+        D_t, R_t= remove_nan_values(D_t, R_t, t, n_T, method) ### can be optmized
         
         if method == "univariate":
             # Calculate correlation coefficient
-            corr_coef[t, :] = get_corr_coef(D_t, R_t)
+            base_statistics[t, :] = get_correlation_coefficients(D_t, R_t)
 
-        # Create base_statistic and pval_perms based on method
-        base_statistic, proj = initialize_permutation_matrices(method, Nperm, n_p, n_q, D_t)
+        # Create test_statistics and pval_perms based on method
+        test_statistics, proj = initialize_permutation_matrices(method, Nperm, n_p, n_q, D_t)
 
         # Calculate permutation matrix of D_t 
         permutation_matrix = permutation_matrix_within_subject_across_sessions(Nperm, D_t, idx_array)
@@ -447,14 +479,19 @@ def test_across_sessions_within_subject(D_data, R_data, idx_data, method="regres
             # Perform permutation on R_t
             Rin = R_t[permutation_matrix[:, perm]]
             # Calculate the permutation distribution
-            base_statistic = base_statistic_calculations(D_t, Rin, perm, base_statistic, proj, method, binary_columns)
+            test_statistics = test_statistics_calculations(D_t, Rin, perm, test_statistics, proj, method, binary_columns)
+        # Fill base statistics
+        if method == "univariate" and binary_columns is not []:
+            # Fill numbers in base statistics
+            base_statistics[t, :] =test_statistics[0,:]
+        # Calculate p-values
         # Caluclate p-values
-        pval = get_pval(base_statistic, Nperm, method, t, pval, FWER_correction, binary_columns) if Nperm>1 else 0
-        if base_statistic_option==True:
-            base_statistic_list[t,:] = base_statistic
-    pval =np.squeeze(pval) if np.abs(np.sum(pval))>0 else np.nan 
-    corr_coef =np.squeeze(corr_coef) if corr_coef is not None  else []
-    base_statistic_list =np.squeeze(base_statistic_list) if base_statistic_list is not None  else []
+        pval = get_pval(test_statistics, Nperm, method, t, pval, FWER_correction) if Nperm>1 else 0
+        if test_statistics_option==True:
+            test_statistics_list[t,:] = test_statistics
+    pval =np.squeeze(pval) if np.abs(np.nansum(pval))>0 else np.nan 
+    base_statistics =np.squeeze(base_statistics) if base_statistics is not None  else []
+    test_statistics_list =np.squeeze(test_statistics_list) if test_statistics_list is not None  else []
     Nperm = 0 if Nperm==1 else Nperm    
     if np.sum(np.isnan(pval))>0:
         print("Warning: Permutation testing resulted in p-values equal to NaN.")
@@ -463,15 +500,15 @@ def test_across_sessions_within_subject(D_data, R_data, idx_data, method="regres
     # Return values
     result = {
         'pval': pval,
-        'corr_coef': [] if np.sum(corr_coef)==0 else corr_coef,
-        'base_statistic': [] if np.sum(base_statistic_list)==0 else base_statistic_list,
+        'base_statistics': [] if np.sum(base_statistics)==0 else base_statistics,
+        'test_statistics': [] if np.sum(test_statistics_list)==0 else test_statistics_list,
         'test_type': 'test_across_sessions_within_subject',
         'method': method,
         'FWER_correction':FWER_correction,
         'Nperm': Nperm}
     return result
 
-def test_across_visits(input_data, vpath_data, n_states, method="regression", Nperm=0, confounds=None, base_statistic_option=False, pairwise_statistic ="mean",FWER_correction=False):
+def test_across_visits(input_data, vpath_data, n_states, method="regression", Nperm=0, confounds=None, test_statistics_option=False, pairwise_statistic ="mean",FWER_correction=False):
     from itertools import combinations
     """
     Perform permutation testing within a session for continuous data.
@@ -493,8 +530,8 @@ def test_across_visits(input_data, vpath_data, n_states, method="regression", Np
                                     "regression", "univariate", "cca", "one_vs_rest" or "state_pairs". 
                                     Note: "cca" stands for Canonical Correlation Analysis.   
         Nperm (int):                Number of permutations to perform (default: 0). 
-        base_statistic_option (bool, optional): 
-                                    If True, the function will return the base statistic for each permutation.
+        test_statistics_option (bool, optional): 
+                                    If True, the function will return the test statistics for each permutation.
                                     (default: False) 
         pairwise_statistic (str, optional)  
                                     The chosen statistic when applying methods "one_vs_rest" or "state_pairs". 
@@ -504,17 +541,17 @@ def test_across_visits(input_data, vpath_data, n_states, method="regression", Np
                      
     Returns:
     ----------  
-        result (dict): A dictionary containing the following keys. Depending on the `base_statistic_option` and `method`, it can return the p-values, 
-            correlation coefficients, base statistics.
+        result (dict): A dictionary containing the following keys. Depending on the `test_statistics_option` and `method`, it can return the p-values, 
+            correlation coefficients, test statisticss.
             'pval': P-values for the test with shapes based on the method:
                 - method=="Regression": (T, p)
                 - method=="univariate": (T, p, q)
                 - method=="cca": (T, 1)
-            'base_statistic': base statistic is the permutation distribution if `base_statistic_option` is True, else None.
+            'test_statistics': test statistics is the permutation distribution if `test_statistics_option` is True, else None.
                 - method=="Regression": (T, Nperm, p)
                 - method=="univariate": (T, Nperm, p, q)
                 - method=="cca": (T, Nperm, 1)
-            'corr_coef': Correlation coefficients for the test with shape (T, p, q) if method=="univariate", else None.
+            'base_statistics': Correlation coefficients for the test with shape (T, p, q) if method=="univariate", else None.
             'test_type': the type of test, which is the name of the function
             'method': the method used for analysis Valid options are
                     "regression", "univariate", or "cca", "one_vs_rest" and "state_pairs" (default: "regression").
@@ -546,9 +583,9 @@ def test_across_visits(input_data, vpath_data, n_states, method="regression", Np
         n_T, _, n_p, n_q, input_data, vpath_data= get_input_shape(input_data, vpath_data)  
 
     # Initialize arrays based on shape of data shape and defined options
-    pval, corr_coef, base_statistic_list = initialize_arrays(input_data,vpath_data, n_p, n_q,
+    pval, base_statistics, test_statistics_list = initialize_arrays(input_data,vpath_data, n_p, n_q,
                                                                             n_T, method, Nperm,
-                                                                            base_statistic_option)
+                                                                            test_statistics_option)
 
     # Print tqdm over n_T if there are more than one timepoint
     for t in tqdm(range(n_T)) if n_T > 1 else range(n_T):
@@ -556,18 +593,18 @@ def test_across_visits(input_data, vpath_data, n_states, method="regression", Np
         data_t, _ = deconfound_values(input_data[t, :],None, confounds)
         
         # Removing rows that contain nan-values
-        # data_t, vpath_array= remove_nan_values(data_t, vpath_array, t, n_T) ### can be optmized
+        data_t, vpath_array= remove_nan_values(data_t, vpath_array, t, n_T, method) ### can be optmized
         
         if method == "univariate":
             # Calculate correlation coefficient
-            corr_coef[t, :] = get_corr_coef(data_t, vpath_data[t,:,:])
+            base_statistics[t, :] = get_correlation_coefficients(data_t, vpath_data[t,:,:])
 
         # Perform permutation test
-        # Create base_statistic and pval_perms based on method
+        # Create test_statistics and pval_perms based on method
         if method != "state_pairs":
             ###################### Permutation testing for other tests beside state pairs #################################
-            # Create base_statistic and pval_perms based on method
-            base_statistic, proj = initialize_permutation_matrices(method, Nperm, n_p, n_q, 
+            # Create test_statistics and pval_perms based on method
+            test_statistics, proj = initialize_permutation_matrices(method, Nperm, n_p, n_q, 
                                                                             data_t)
             # Perform permutation testing
             for perm in tqdm(range(Nperm)) if n_T == 1 else range(n_T):
@@ -579,17 +616,20 @@ def test_across_visits(input_data, vpath_data, n_states, method="regression", Np
                         break  # Exit the loop if the condition is satisfied
                 if method =="one_vs_rest":
                     for state in range(n_states):
-                        base_statistic[perm,state] =calculate_baseline_difference(vpath_surrogate, data_t, state+1, pairwise_statistic.lower())
+                        test_statistics[perm,state] =calculate_baseline_difference(vpath_surrogate, data_t, state+1, pairwise_statistic.lower())
                 elif method =="regression":
-                    base_statistic = base_statistic_calculations(data_t,vpath_surrogate , perm,
-                                                                            base_statistic, proj, method)
+                    test_statistics = test_statistics_calculations(data_t,vpath_surrogate , perm,
+                                                                            test_statistics, proj, method)
                 else:
                     # Apply 1 hot encoding
                     vpath_surrogate_onehot = viterbi_path_to_stc(vpath_surrogate,n_states)
                     # Apply t-statistic on the vpath_surrogate
-                    base_statistic = base_statistic_calculations(data_t,vpath_surrogate_onehot , perm,
-                                                                                base_statistic, proj, method)
-            pval = get_pval(base_statistic, Nperm, method, t, pval, FWER_correction) if Nperm>1 else 0
+                    test_statistics = test_statistics_calculations(data_t,vpath_surrogate_onehot , perm,
+                                                                                test_statistics, proj, method)
+            # Fill numbers in base statistics
+            if  np.sum(base_statistics[t, :])==0:
+                base_statistics[t, :] =test_statistics[0,:]
+            pval = get_pval(test_statistics, Nperm, method, t, pval, FWER_correction) if Nperm>1 else 0
         ###################### Permutation testing for state pairs #################################
         elif method =="state_pairs":
             # Run this code if it is "state_pairs"
@@ -598,7 +638,7 @@ def test_across_visits(input_data, vpath_data, n_states, method="regression", Np
             
             # Generates all unique combinations of length 2 
             pairwise_comparisons = list(combinations(range(1, n_states + 1), 2))
-            base_statistic = np.zeros((Nperm, len(pairwise_comparisons)))
+            test_statistics = np.zeros((Nperm, len(pairwise_comparisons)))
             pval = np.zeros((n_states, n_states))
             # Iterate over pairwise state comparisons
             for idx, (state_1, state_2) in tqdm(enumerate(pairwise_comparisons), total=len(pairwise_comparisons), desc="Pairwise comparisons"):    
@@ -610,20 +650,22 @@ def test_across_visits(input_data, vpath_data, n_states, method="regression", Np
                         vpath_surrogate = surrogate_state_time(perm, vpath_array, n_states)
                         if len(np.unique(vpath_surrogate)) == n_states:
                             break  # Exit the loop if the condition is satisfied
-                    base_statistic[perm,idx] = calculate_statepair_difference(vpath_surrogate, data_t, state_1, state_2, pairwise_statistic)
+                    test_statistics[perm,idx] = calculate_statepair_difference(vpath_surrogate, data_t, state_1, state_2, pairwise_statistic)
                 
                 if Nperm>1:
-                    p_val= np.sum(base_statistic[:,idx] >= base_statistic[0,idx], axis=0) / (Nperm + 1)
+                    p_val= np.sum(test_statistics[:,idx] >= test_statistics[0,idx], axis=0) / (Nperm + 1)
                     pval[state_1-1, state_2-1] = p_val
                     pval[state_2-1, state_1-1] = 1 - p_val
-            corr_coef =[]
+            # Fill numbers in base statistics
+            if  np.sum(base_statistics[t, :])==0:
+                base_statistics[t, :] =test_statistics[0,:]
                 
-        if base_statistic_option:
-            base_statistic_list[t, :] = base_statistic
+        if test_statistics_option:
+            test_statistics_list[t, :] = test_statistics
 
-    pval =np.squeeze(pval) if np.abs(np.sum(pval))>0 else np.nan 
-    corr_coef =np.squeeze(corr_coef) if corr_coef is not None else []
-    base_statistic_list =np.squeeze(base_statistic_list) if base_statistic_list is not None else []
+    pval =np.squeeze(pval) if np.abs(np.nansum(pval))>0 else np.nan 
+    base_statistics =np.squeeze(base_statistics) if base_statistics is not None else []
+    test_statistics_list =np.squeeze(test_statistics_list) if test_statistics_list is not None else []
     Nperm = 0 if Nperm==1 else Nperm
     
     if np.sum(np.isnan(pval))>0:
@@ -634,15 +676,15 @@ def test_across_visits(input_data, vpath_data, n_states, method="regression", Np
     result = {
         
         'pval': pval,
-        'corr_coef': corr_coef,
-        'base_statistic': base_statistic_list,
+        'base_statistics': base_statistics,
+        'test_statistics': test_statistics_list,
         'test_type': 'test_across_visits',
         'method': method,
         'FWER_correction':FWER_correction,
         'Nperm': Nperm} 
     return result
 
-def remove_nan_values(D_data, R_data, t, n_T):
+def remove_nan_values(D_data, R_data, t, n_T, method):
     """
     Remove rows with NaN values from input data arrays.
 
@@ -664,17 +706,21 @@ def remove_nan_values(D_data, R_data, t, n_T):
         Cleaned response data (R_data) with NaN values removed.
     """
     FLAG = 0
+    removed_indices = None
+    
     if R_data.ndim == 1:
         FLAG = 1
         R_data = R_data.reshape(-1,1) 
-       
+    # Can make a function where I set the method and mask the rows differently.
     # Check for NaN values and remove corresponding rows
     nan_mask = np.isnan(D_data).any(axis=1) | np.isnan(R_data).any(axis=1)
+    # nan_mask = np.isnan(D_data).any(axis=1)
     # Get indices or rows that have been removed
     removed_indices = np.where(nan_mask)[0]
 
     D_data = D_data[~nan_mask]
     R_data = R_data[~nan_mask]
+
     # Only print this 1 time
     # Check if the array is empty
     if n_T==1 and np.any(removed_indices): 
@@ -749,6 +795,8 @@ def get_input_shape(D_data, R_data):
         if R_data.shape[0] != D_data.shape[0]:
             R_data = np.tile(R_data, (D_data.shape[0],1,1)) 
         n_q = R_data.shape[-1]
+    
+    
     return n_T, n_ST, n_p, n_q, D_data, R_data
 
 def process_family_structure(dict_family, Nperm):
@@ -818,7 +866,7 @@ def process_family_structure(dict_family, Nperm):
     
     return dict_mfam
 
-def initialize_arrays(R_data, n_p, n_q, n_T, method, Nperm, base_statistic_option):
+def initialize_arrays(R_data, n_p, n_q, n_T, method, Nperm, test_statistics_option):
     from itertools import combinations
     """
     Initializes arrays for permutation testing.
@@ -831,55 +879,55 @@ def initialize_arrays(R_data, n_p, n_q, n_T, method, Nperm, base_statistic_optio
         n_T (int): The number of timepoints.
         method (str): The method to use for permutation testing.
         Nperm (int): Number of permutations.
-        base_statistic_option (bool): If True, return the base statistic values.
+        test_statistics_option (bool): If True, return the test statistics values.
 
     Returns:
     ----------  
-        pval (numpy array): p-values for the test (n_T, n_p) if base_statistic_option is False, else None.
-        corr_coef (numpy array): Correlation coefficient for the test (n_T, n_p, n_q) if method="univariate", else None.
-        base_statistic_list (numpy array): base statistic values (n_T, Nperm, n_p) or (n_T, Nperm, n_p, n_q) if method="univariate" , else None.
+        pval (numpy array): p-values for the test (n_T, n_p) if test_statistics_option is False, else None.
+        base_statistics (numpy array): Correlation coefficient for the test (n_T, n_p, n_q) if method="univariate", else None.
+        test_statistics_list (numpy array): test statistics values (n_T, Nperm, n_p) or (n_T, Nperm, n_p, n_q) if method="univariate" , else None.
     """
 
     # Initialize the arrays based on the selected method and data dimensions
     if  method == "regression":
         pval = np.zeros((n_T, n_q))
-        corr_coef = None
-        if base_statistic_option==True:
-            base_statistic_list = np.zeros((n_T, Nperm, n_q))
+        base_statistics = None
+        if test_statistics_option==True:
+            test_statistics_list = np.zeros((n_T, Nperm, n_q))
         else:
-            base_statistic_list= np.zeros((n_T, 1, n_q))
+            test_statistics_list= np.zeros((n_T, 1, n_q))
     elif  method == "cca":
         pval = np.zeros((n_T, 1))
-        corr_coef = None
-        if base_statistic_option==True:
-            base_statistic_list = np.zeros((n_T, Nperm, 1))
+        base_statistics = None
+        if test_statistics_option==True:
+            test_statistics_list = np.zeros((n_T, Nperm, 1))
         else:
-            base_statistic_list= np.zeros((n_T, 1, 1))        
+            test_statistics_list= np.zeros((n_T, 1, 1))        
     elif method == "univariate" :
         pval = np.zeros((n_T, n_p, n_q))
-        corr_coef = pval.copy()
+        base_statistics = pval.copy()
         
-        if base_statistic_option==True:    
-            base_statistic_list = np.zeros((n_T, Nperm, n_p, n_q))
+        if test_statistics_option==True:    
+            test_statistics_list = np.zeros((n_T, Nperm, n_p, n_q))
         else:
-            base_statistic_list= None
+            test_statistics_list= None
     elif method == "state_pairs":
         pval = np.zeros((n_T, R_data.shape[-1], R_data.shape[-1]))
-        corr_coef = []
+        base_statistics = []
         pairwise_comparisons = list(combinations(range(1, R_data.shape[-1] + 1), 2))
-        if base_statistic_option==True:    
-            base_statistic_list = np.zeros((n_T, Nperm, len(pairwise_comparisons)))
+        if test_statistics_option==True:    
+            test_statistics_list = np.zeros((n_T, Nperm, len(pairwise_comparisons)))
         else:
-            base_statistic_list= np.zeros((n_T, 1, len(pairwise_comparisons)))
+            test_statistics_list= np.zeros((n_T, 1, len(pairwise_comparisons)))
     elif method == "one_vs_rest":
         pval = np.zeros((n_T, n_p, n_q))
-        corr_coef = []
-        if base_statistic_option==True:
-            base_statistic_list = np.zeros((n_T, Nperm, n_q))
+        base_statistics = []
+        if test_statistics_option==True:
+            test_statistics_list = np.zeros((n_T, Nperm, n_q))
         else:
-            base_statistic_list= np.zeros((n_T, 1, n_q))
+            test_statistics_list= np.zeros((n_T, 1, n_q))
 
-    return pval, corr_coef, base_statistic_list
+    return pval, base_statistics, test_statistics_list
 
 
 def deconfound_values(D_data, R_data, confounds=None):
@@ -938,7 +986,7 @@ def initialize_permutation_matrices(method, Nperm, n_p, n_q, D_data):
 
     Returns:
     ----------  
-        base_statistic (numpy.ndarray): The permutation array.
+        test_statistics (numpy.ndarray): The permutation array.
         pval_perms (numpy.ndarray): The p-value permutation array.
         proj (numpy.ndarray or None): The projection matrix (None for correlation methods).
     """
@@ -946,23 +994,24 @@ def initialize_permutation_matrices(method, Nperm, n_p, n_q, D_data):
     proj = None
     # Initialize the permutation matrices based on the selected method
     if method in {"univariate"}:
-        # Initialize base statistic output matrix based on the selected method
-        base_statistic = np.zeros((Nperm, n_p, n_q))
+        # Initialize test statistics output matrix based on the selected method
+        test_statistics = np.zeros((Nperm, n_p, n_q))
         proj = None
     elif method =="cca":
-        # Initialize base statistic output matrix based on the selected method
-        base_statistic = np.zeros((Nperm, 1))
+        # Initialize test statistics output matrix based on the selected method
+        test_statistics = np.zeros((Nperm, 1))
     else:
         # Regression got a N by q matrix 
-        base_statistic = np.zeros((Nperm, n_q))
+        test_statistics = np.zeros((Nperm, n_q))
         # Define regularization parameter
         regularization = 0.001
         # Regularized parameter estimation
         regularization_matrix = regularization * np.eye(D_data.shape[1])  # Regularization term for Ridge regression
+        
         # Fit the Ridge regression model
         # The projection matrix is then used to project permuted data matrix (Din) to obtain the regression coefficients (beta)
         proj = np.linalg.inv(D_data.T @ D_data + regularization_matrix) @ D_data.T  # Projection matrix for Ridge regression
-    return base_statistic, proj
+    return test_statistics, proj
 
 def permutation_matrix_across_subjects(Nperm, D_t):
     """
@@ -985,13 +1034,13 @@ def permutation_matrix_across_subjects(Nperm, D_t):
             permutation_matrix[:,perm] = np.random.permutation(D_t.shape[0])
     return permutation_matrix
 
-def get_pval(base_statistic, Nperm, method, t, pval, FWER_correction, binary_columns=[]):
+def get_pval(test_statistics, Nperm, method, t, pval, FWER_correction):
     """
     Computes p-values and correlation matrix for permutation testing.
 
     Parameters:
     --------------
-        base_statistic (numpy.ndarray): The permutation array.
+        test_statistics (numpy.ndarray): The permutation array.
         pval_perms (numpy.ndarray): The p-value permutation array.
         Nperm (int): The number of permutations.
         method (str): The method used for permutation testing.
@@ -1009,52 +1058,30 @@ def get_pval(base_statistic, Nperm, method, t, pval, FWER_correction, binary_col
         if FWER_correction:
             # Perform family wise permutation correction
             # Define the number of columns and rows
-            nCols = base_statistic[0,:].shape[-1]
-            nRows = len(base_statistic)
+            nCols = test_statistics[0,:].shape[-1]
+            nRows = len(test_statistics)
             # Get the maximum explained variance for each column
-            max_base_statistic =np.tile(np.max(base_statistic, axis=1), (1, nCols)).reshape(nCols, nRows).T
+            max_test_statistics =np.tile(np.max(test_statistics, axis=1), (1, nCols)).reshape(nCols, nRows).T
             # Count every time there is a higher estimated R2 (better fit)
-            pval[t, :] = np.sum(max_base_statistic>= base_statistic[0,:], axis=0) / (Nperm + 1)
+            pval[t, :] = np.nansum(max_test_statistics>= test_statistics[0,:], axis=0) / (Nperm + 1)
         else:
             # Count every time there is a higher estimated R2 (better fit)
-            pval[t, :] = np.sum(base_statistic >= base_statistic[0,:], axis=0) / (Nperm + 1)
+            pval[t, :] = np.nansum(test_statistics >= test_statistics[0,:], axis=0) / (Nperm + 1)
         
     elif method == "univariate" or method =="cca":
-        if FWER_correction and binary_columns is not []:
-            print("To correct for FWER, we standardize 'base_statistic' since t-tests were applied to binary columns earlier.")
-            # mean_values = np.mean(base_statistic, axis=0)
-            # std_dev_values = np.std(base_statistic, axis=0)
-
-            # # Standardize the matrix
-            # standardized_statistic = (base_statistic - mean_values) / std_dev_values
-            # Calculate the minimum and maximum values for each column
-            min_values = np.min(base_statistic, axis=0)
-            max_values = np.max(base_statistic, axis=0)
-
-            # Min-Max scaling to standardize the matrix to the range [0, 1]
-            standardized_statistic = (base_statistic - min_values) / (max_values - min_values)
-
-            nCols = standardized_statistic.shape[-1]
-            nRows = standardized_statistic.shape[1]
-            nPerm = standardized_statistic.shape[0]
-            # Get the maximum explained variance for each column
-            max_base_statistic =np.tile(np.max(standardized_statistic, axis=1), (1, nRows)).reshape(nCols,nRows, nPerm).T
-            # Count every time there is a higher correlation coefficient
-            pval[t, :] = np.sum(max_base_statistic>= standardized_statistic[0,:], axis=0) / (Nperm + 1)
-            
-        if FWER_correction and binary_columns==[]:
+        if FWER_correction:
             # Perform family wise permutation correction
             # Define the number of columns and rows
-            nCols = base_statistic.shape[-1]
-            nRows = base_statistic.shape[1]
-            nPerm = base_statistic.shape[0]
+            nCols = test_statistics.shape[-1]
+            nRows = test_statistics.shape[1]
+            nPerm = test_statistics.shape[0]
             # Get the maximum explained variance for each column
-            max_base_statistic =np.tile(np.max(base_statistic, axis=1), (1, nRows)).reshape(nCols,nRows, nPerm).T
+            max_test_statistics =np.tile(np.nanmax(test_statistics, axis=1), (1, nRows)).reshape(nCols,nRows, nPerm).T
             # Count every time there is a higher correlation coefficient
-            pval[t, :] = np.sum(max_base_statistic>= base_statistic[0,:], axis=0) / (Nperm + 1)
+            pval[t, :] = np.nansum(max_test_statistics>= test_statistics[0,:], axis=0) / (Nperm + 1)
         else:    
             # Count every time there is a higher correlation coefficient
-            pval[t, :] = np.sum(base_statistic >= base_statistic[0,:], axis=0) / (Nperm + 1)
+            pval[t, :] = np.nansum(test_statistics >= test_statistics[0,:], axis=0) / (Nperm + 1)
     
     # Convert 0 values to NaN
     pval[pval == 0] = np.nan
@@ -1410,11 +1437,11 @@ def calculate_statepair_difference(vpath_array, R_data, state_1, state_2, stat):
     difference = state_1_R_data - state_2_R_data
     return difference
 
-def base_statistic_calculations(Din, Rin, perm, base_statistic, proj, method, binary_columns=[]):
+def test_statistics_calculations(Din, Rin, perm, test_statistics, proj, method, binary_columns=[]):
     from sklearn.cross_decomposition import CCA
     from scipy.stats import ttest_ind
     """
-    Calculates the base_statistic array and pval_perms array based on the given data and method.
+    Calculates the test_statistics array and pval_perms array based on the given data and method.
 
     Parameters:
     --------------
@@ -1422,17 +1449,21 @@ def base_statistic_calculations(Din, Rin, perm, base_statistic, proj, method, bi
         Rin (numpy.ndarray): The dependent variable.
         perm (int): The permutation index.
         pval_perms (numpy.ndarray): The p-value permutation array.
-        base_statistic (numpy.ndarray): The permutation array.
+        test_statistics (numpy.ndarray): The permutation array.
         proj (numpy.ndarray or None): The projection matrix (None for correlation methods).
         method (str): The method used for permutation testing.
 
     Returns:
     ----------  
-        base_statistic (numpy.ndarray): Updated base_statistic array.
+        test_statistics (numpy.ndarray): Updated test_statistics array.
         pval_perms (numpy.ndarray): Updated pval_perms array.
     """
     
     if method == 'regression':
+        # Replace NaN values with zero using np.nan_to_num
+        # proj_no_nan = np.nan_to_num(proj, nan=0)
+        # Rin_no_nan = np.nan_to_num(Rin, nan=0)
+        # Din_no_nan = np.nan_to_num(Din, nan=0)
         # Fit the original model 
         beta = proj @ Rin  # Calculate regression_coefficients (beta)
         # Calculate the predicted values
@@ -1443,30 +1474,33 @@ def base_statistic_calculations(Din, Rin, perm, base_statistic, proj, method, bi
         ssr = np.sum((predicted_values - Rin)**2, axis=0)
         # Calculate R^2
         r_squared = 1 - (ssr / sst)
-        # Store the R^2 values in the base_statistic array
-        base_statistic[perm] = r_squared
+        # Store the R^2 values in the test_statistics array
+        test_statistics[perm] = r_squared
         
     elif method == "univariate":
         if binary_columns==[]:
             # Calculate correlation coefficient matrix
-            corr_coef = np.corrcoef(Din, Rin, rowvar=False)
-            corr_matrix = corr_coef[:Din.shape[1], Din.shape[1]:]
-            # Update base_statistic
-            base_statistic[perm, :, :] = np.abs(corr_matrix)
+            base_statistics = np.corrcoef(Din, Rin, rowvar=False)
+            corr_matrix = base_statistics[:Din.shape[1], Din.shape[1]:]
+            # Update test_statistics
+            test_statistics[perm, :, :] = np.abs(corr_matrix)
         else:
             for col in range(Rin.shape[1]):
                 if col in binary_columns:
                     # Get the t-statistic
-                    t_statistic, _ = ttest_ind(Din, Rin[:, col])
-                    # Update base_statistic
-                    base_statistic[perm, :, col] = np.abs(t_statistic)
+                    t_test_group = np.unique(Rin)
+                    #ttest_ind(Din[Rin == t_test_group[0]], Din[Rin == t_test_group[1]])
+                    t_statistic, pval = ttest_ind(Din[Rin[:, col] == t_test_group[0]], Din[Rin[:, col] == t_test_group[1]])
+                    # np.std(Din, axis=0)==0
+                    # Update test_statistics
+                    test_statistics[perm, :, col] = np.abs(t_statistic)
                     
                 else:
                     # Calculate correlation coefficient matrix
-                    corr_coef = np.corrcoef(Din, Rin[:, col], rowvar=False)
-                    corr_matrix = corr_coef[:Din.shape[1], Din.shape[1]:]
-                    # Update base_statistic
-                    base_statistic[perm, :, col] = np.squeeze(np.abs(corr_matrix))
+                    base_statistics = np.corrcoef(Din, Rin[:, col], rowvar=False)
+                    corr_matrix = base_statistics[:Din.shape[1], Din.shape[1]:]
+                    # Update test_statistics
+                    test_statistics[perm, :, col] = np.squeeze(np.abs(corr_matrix))
 
             
     elif method =="cca":
@@ -1477,16 +1511,25 @@ def base_statistic_calculations(Din, Rin, perm, base_statistic, proj, method, bi
         # Transform the input data using the learned CCA model
         X_c, Y_c = cca.transform(Din, Rin)
         # Calcualte the correlation coefficients between X_c and Y_c
-        corr_coef = np.corrcoef(X_c, Y_c, rowvar=False)[0, 1]
-        # Update base_statistic
-        base_statistic[perm] = np.abs(corr_coef)
+        base_statistics = np.corrcoef(X_c, Y_c, rowvar=False)[0, 1]
+        # Update test_statistics
+        test_statistics[perm] = np.abs(base_statistics)
         
-    return base_statistic
+    return test_statistics
 
-def get_corr_coef(Din,Rin):
-    # Calculate correlation coefficient matrix
-    corr_coef = np.corrcoef(Din, Rin, rowvar=False)
-    corr_matrix = corr_coef[:Din.shape[1], Din.shape[1]:]
+def get_correlation_coefficients(Din,Rin):
+    # If there are NaN values
+    if np.sum(np.isnan(Din))>0 or np.sum(np.isnan(Rin))>0:
+        # Create masked arrays to handle NaN values
+        masked_Din = np.ma.masked_invalid(Din)
+        masked_Rin = np.ma.masked_invalid(Rin)
+
+        # Calculate correlation coefficient ignoring NaN values
+        corr_matrix = np.ma.corrcoef(masked_Din, masked_Rin)
+    else:
+        # Calculate correlation coefficient matrix
+        base_statistics = np.corrcoef(Din, Rin, rowvar=False)
+        corr_matrix = base_statistics[:Din.shape[1], Din.shape[1]:]
     return corr_matrix
 
 
