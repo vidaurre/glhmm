@@ -6,10 +6,10 @@ Permutation testing from Gaussian Linear Hidden Markov Model
 import numpy as np
 import pandas as pd
 import random
-import copy
 from tqdm import tqdm
 from glhmm.palm_functions import *
-import sys
+from statsmodels.stats import multitest as smt
+
 
 def test_across_subjects(D_data, R_data, method="regression", Nperm=0, confounds = None, dict_family = None, test_statistics_option=False, FWER_correction=False, identify_binary=False):
     """
@@ -59,12 +59,13 @@ def test_across_subjects(D_data, R_data, method="regression", Nperm=0, confounds
                             If True, the function will return the test statistics for each permutation.
                             (default: False) 
     FWER_correction (bool, optional): 
-                            Specify whether to perform family-wise error rate (FWER) correction for multiple comparisons using the MaxT method(default: False).                     
+                            Specify whether to perform family-wise error rate (FWER) correction using the MaxT method (default: False).   
+         
                                 
     Returns:
     ----------  
     result (dict): A dictionary containing the following keys. Depending on the `test_statistics_option` and `method`, it can return the p-values, 
-        correlation coefficients, test statisticss.
+        correlation coefficients, test statistics.
         'pval': P-values for the test with shapes based on the method:
             - method=="Regression": (T, p)
             - method=="univariate": (T, p, q)
@@ -77,8 +78,10 @@ def test_across_subjects(D_data, R_data, method="regression", Nperm=0, confounds
         'test_type': the type of test, which is the name of the function
         'method': the method used for analysis Valid options are
                 "regression", "univariate", or "cca", "one_vs_rest" and "state_pairs" (default: "regression").
-        'FWER_correction': Specifies if FWER has been applied to the test, can either output True or False.
+        'max_correction': Specifies if FWER has been applied to the test, can either output True or False.
         'Nperm' :The number of permutations that has been performed.   
+        
+        
         
                   
     Note:
@@ -101,17 +104,17 @@ def test_across_subjects(D_data, R_data, method="regression", Nperm=0, confounds
     # Note for convension we wrote (T, p, q) => (n_T, n_p, n_q)
     
     # Perform t-statistics for binary columns
-    if identify_binary == True or isinstance(identify_binary, (list,np.ndarray)):
+    if identify_binary == True and method == "univariate" or isinstance(identify_binary, (list,np.ndarray)) and method == "univariate":
         if identify_binary==True:
             # Identify binary columns automatically in R_data
-            binary_columns = [col for col in range(R_data.shape[-1]) if np.unique(R_data[:, col]).size == 2]
+            binary_columns = [col for col in range(R_data.shape[-1]) if np.unique(R_data[0,:, col]).size == 2]
             print("Performing t-statistics on binary columns.")
         else:
             # Customize columns defined by the user
             binary_columns=identify_binary.copy()
     if binary_columns!=[]:
         if FWER_correction and len(binary_columns) is not R_data.shape[-1]:
-            print("Warning: Cannot perform FWER_correction with different test statisticss.\nConsider to set identify_binary=False")
+            print("Warning: FWER correction using the MaxT method cannot be performed when having different test statistics.\nConsider to set identify_binary=False")
             raise ValueError("Cannot perform FWER_correction")
     
     # Crate the family structure by looking at the dictionary 
@@ -129,10 +132,6 @@ def test_across_subjects(D_data, R_data, method="regression", Nperm=0, confounds
         # Removing rows that contain nan-values
         D_t, R_t= remove_nan_values(D_t, R_t, t, n_T, method) ### can be optmized
         
-        if method == "univariate" and binary_columns == []:
-            # Calculate correlation coefficient
-            base_statistics[t, :] = get_correlation_coefficients(D_t, R_t)
-            test_statistics= None
         # Create test_statistics based on method
         test_statistics, proj = initialize_permutation_matrices(method, Nperm, n_p, n_q, D_t)
 
@@ -151,30 +150,24 @@ def test_across_subjects(D_data, R_data, method="regression", Nperm=0, confounds
             # Perform permutation on R_t
             Rin = R_t[permutation_matrix[:, perm]]
             # Calculate the permutation distribution
-            test_statistics = test_statistics_calculations(D_t, Rin, perm, test_statistics, proj, method, binary_columns)
+            test_statistics, bstat = test_statistics_calculations(D_t, Rin, perm, test_statistics, proj, method, binary_columns)
+            base_statistics[t, :] = bstat if perm == 0 and bstat is not None else base_statistics[t, :]
 
-        # Fill base statistics
-        if method == "univariate" and binary_columns is not []:
-            # Fill numbers in base statistics
-            base_statistics[t, :] =test_statistics[0,:]
         # Calculate p-values
         pval = get_pval(test_statistics, Nperm, method, t, pval, FWER_correction) if Nperm>1 else 0
         
         # Output test statistics if it is set to True can be hard for memory otherwise
         if test_statistics_option==True:
             test_statistics_list[t,:] = test_statistics
-
-        elif method !="univariate":
-            test_statistics_list[t,:] = test_statistics[0,:]
             
     pval =np.squeeze(pval) if np.abs(np.nansum(pval))>0 else np.nan 
     base_statistics =np.squeeze(base_statistics) if base_statistics is not None else [] 
     test_statistics_list =np.squeeze(test_statistics_list) if test_statistics_list is not None else []
     Nperm = 0 if Nperm==1 else Nperm
     
-    if np.sum(np.isnan(pval))>0:
-        print("Warning: Permutation testing resulted in p-values equal to NaN.")
-        print("This may indicate an issue with the input data. Please review your data.")
+    # if np.sum(np.isnan(pval))>0:
+    #     print("Warning: Permutation testing resulted in p-values equal to NaN.")
+    #     print("This may indicate an issue with the input data. Please review your data.")
     
     # Return results
     result = {
@@ -183,7 +176,7 @@ def test_across_subjects(D_data, R_data, method="regression", Nperm=0, confounds
         'test_statistics': test_statistics_list,
         'test_type': 'test_across_subjects',
         'method': method,
-        'FWER_correction':FWER_correction,
+        'max_correction':FWER_correction,
         'Nperm': Nperm}
     return result
 
@@ -231,12 +224,12 @@ def test_across_trials_within_session(D_data, R_data, idx_data, method="regressi
                                 If True, the function will return the test statistics for each permutation.
                                 (default: False) 
         FWER_correction (bool, optional): 
-                                Specify whether to perform family-wise error rate (FWER) correction for multiple comparisons using the MaxT method(default: False).                        
+                                Specify whether to perform family-wise error rate (FWER) correction using the MaxT method (default: False).                         
                                                       
     Returns:
     ----------  
     result (dict): A dictionary containing the following keys. Depending on the `test_statistics_option` and `method`, it can return the p-values, 
-        correlation coefficients, test statisticss.
+        correlation coefficients, test statistics.
         'pval': P-values for the test with shapes based on the method:
             - method=="Regression": (T, p)
             - method=="univariate": (T, p, q)
@@ -249,7 +242,7 @@ def test_across_trials_within_session(D_data, R_data, idx_data, method="regressi
         'test_type': the type of test, which is the name of the function
         'method': the method used for analysis Valid options are
                 "regression", "univariate", or "cca", "one_vs_rest" and "state_pairs" (default: "regression").
-        'FWER_correction': Specifies if FWER has been applied to the test, can either output True or False.
+        'max_correction': Specifies if FWER has been applied to the test, can either output True or False.
         'Nperm' :The number of permutations that has been performed.   
 
     Note:
@@ -272,17 +265,17 @@ def test_across_trials_within_session(D_data, R_data, idx_data, method="regressi
     n_T, _, n_p, n_q, D_data, R_data = get_input_shape(D_data, R_data)
 
     # Perform t-statistics for binary columns
-    if identify_binary == True or isinstance(identify_binary, (list,np.ndarray)):
+    if identify_binary == True and method == "univariate" or isinstance(identify_binary, (list,np.ndarray)) and method == "univariate":
         if identify_binary==True:
             # Identify binary columns automatically in R_data
-            binary_columns = [col for col in range(R_data.shape[-1]) if np.unique(R_data[:, col]).size == 2]
+            binary_columns = [col for col in range(R_data.shape[-1]) if np.unique(R_data[0,:, col]).size == 2]
             print("Performing t-statistics on binary columns.")
         else:
             # Customize columns defined by the user
             binary_columns=identify_binary.copy()
     if binary_columns!=[]:
         if FWER_correction and len(binary_columns) is not R_data.shape[-1]:
-            print("Warning: Cannot perform FWER_correction with different test statisticss.\nConsider to set identify_binary=False")
+            print("Warning: FWER correction using the MaxT method cannot be performed when having different test statistics.\nConsider to set identify_binary=False")
             raise ValueError("Cannot perform FWER_correction")
     
     # Get indices for permutation
@@ -302,10 +295,6 @@ def test_across_trials_within_session(D_data, R_data, idx_data, method="regressi
         # Removing rows that contain nan-values
         D_t, R_t= remove_nan_values(D_t, R_t, t, n_T, method) ### can be optmized
         
-        if method == "univariate":
-            # Calculate correlation coefficient
-            base_statistics[t, :] = get_correlation_coefficients(D_t,R_t)
-        
         # Create test_statistics and pval_perms based on method
         test_statistics, proj = initialize_permutation_matrices(method, Nperm, n_p, n_q, D_t)
     
@@ -319,15 +308,8 @@ def test_across_trials_within_session(D_data, R_data, idx_data, method="regressi
             Rin = R_t[permutation_matrix[:, perm]]
 
             # Calculate the permutation distribution
-            test_statistics = test_statistics_calculations(D_t, Rin, perm, test_statistics, proj, method, binary_columns)
-                # Fill numbers in base statistics
-            if  np.sum(base_statistics[t, :])==0:
-                base_statistics[t, :] =test_statistics[0,:]
-        
-        # Fill base statistics
-        if method == "univariate" and binary_columns is not []:
-            # Fill numbers in base statistics
-            base_statistics[t, :] =test_statistics[0,:]
+            test_statistics, bstat = test_statistics_calculations(D_t, Rin, perm, test_statistics, proj, method, binary_columns)
+            base_statistics[t, :] = bstat if perm == 0 and bstat is not None else base_statistics[t, :]
 
         # Calculate p-values
         pval = get_pval(test_statistics, Nperm, method, t, pval, FWER_correction) if Nperm>1 else 0
@@ -338,9 +320,9 @@ def test_across_trials_within_session(D_data, R_data, idx_data, method="regressi
     test_statistics_list =np.squeeze(test_statistics_list) if test_statistics_list is not None else []
     Nperm = 0 if Nperm==1 else Nperm
     
-    if np.sum(np.isnan(pval))>0:
-        print("Warning: Permutation testing resulted in p-values equal to NaN.")
-        print("This may indicate an issue with the input data. Please review your data.")
+    # if np.sum(np.isnan(pval))>0:
+    #     print("Warning: Permutation testing resulted in p-values equal to NaN.")
+    #     print("This may indicate an issue with the input data. Please review your data.")
         
     # Return results
     result = {
@@ -349,7 +331,7 @@ def test_across_trials_within_session(D_data, R_data, idx_data, method="regressi
         'test_statistics': test_statistics_list,
         'test_type': 'test_across_trials_within_session',
         'method': method,
-        'FWER_correction':FWER_correction,
+        'max_correction':FWER_correction,
         'Nperm': Nperm}
     
     return result
@@ -398,7 +380,7 @@ def test_across_sessions_within_subject(D_data, R_data, idx_data, method="regres
     Returns:
     ----------  
         result (dict): A dictionary containing the following keys. Depending on the `test_statistics_option` and `method`, it can return the p-values, 
-            correlation coefficients, test statisticss.
+            correlation coefficients, test statistics.
             'pval': P-values for the test with shapes based on the method:
                 - method=="Regression": (T, p)
                 - method=="univariate": (T, p, q)
@@ -411,7 +393,7 @@ def test_across_sessions_within_subject(D_data, R_data, idx_data, method="regres
             'test_type': the type of test, which is the name of the function
             'method': the method used for analysis Valid options are
                     "regression", "univariate", or "cca", "one_vs_rest" and "state_pairs" (default: "regression").
-            'FWER_correction': Specifies if FWER has been applied to the test, can either output True or False.
+            'max_correction': Specifies if FWER has been applied to the test, can either output True or False.
             'Nperm' :The number of permutations that has been performed.
                   
     Note:
@@ -441,17 +423,17 @@ def test_across_sessions_within_subject(D_data, R_data, idx_data, method="regres
     n_T, _, n_p, n_q, D_data, R_data = get_input_shape(D_data, R_data)
     
     # Perform t-statistics for binary columns
-    if identify_binary == True or isinstance(identify_binary, (list,np.ndarray)):
+    if identify_binary == True and method == "univariate" or isinstance(identify_binary, (list,np.ndarray)) and method == "univariate":
         if identify_binary==True:
             # Identify binary columns automatically in R_data
-            binary_columns = [col for col in range(R_data.shape[-1]) if np.unique(R_data[:, col]).size == 2]
+            binary_columns = [col for col in range(R_data.shape[-1]) if np.unique(R_data[0,:, col]).size == 2]
             print("Performing t-statistics on binary columns.")
         else:
             # Customize columns defined by the user
             binary_columns=identify_binary.copy()
     if binary_columns!=[]:
         if FWER_correction and len(binary_columns) is not R_data.shape[-1]:
-            print("Warning: Cannot perform FWER_correction with different test statisticss.\nConsider to set identify_binary=False")
+            print("Warning: FWER correction using the MaxT method cannot be performed when having different test statistics.\nConsider to set identify_binary=False")
             raise ValueError("Cannot perform FWER_correction")
 
 
@@ -463,10 +445,6 @@ def test_across_sessions_within_subject(D_data, R_data, idx_data, method="regres
         
         # Removing rows that contain nan-values
         D_t, R_t= remove_nan_values(D_t, R_t, t, n_T, method) ### can be optmized
-        
-        if method == "univariate":
-            # Calculate correlation coefficient
-            base_statistics[t, :] = get_correlation_coefficients(D_t, R_t)
 
         # Create test_statistics and pval_perms based on method
         test_statistics, proj = initialize_permutation_matrices(method, Nperm, n_p, n_q, D_t)
@@ -479,23 +457,21 @@ def test_across_sessions_within_subject(D_data, R_data, idx_data, method="regres
             # Perform permutation on R_t
             Rin = R_t[permutation_matrix[:, perm]]
             # Calculate the permutation distribution
-            test_statistics = test_statistics_calculations(D_t, Rin, perm, test_statistics, proj, method, binary_columns)
-        # Fill base statistics
-        if method == "univariate" and binary_columns is not []:
-            # Fill numbers in base statistics
-            base_statistics[t, :] =test_statistics[0,:]
-        # Calculate p-values
+            test_statistics, bstat = test_statistics_calculations(D_t, Rin, perm, test_statistics, proj, method, binary_columns)
+            base_statistics[t, :] = bstat if perm == 0 and bstat is not None else base_statistics[t, :]
+
         # Caluclate p-values
         pval = get_pval(test_statistics, Nperm, method, t, pval, FWER_correction) if Nperm>1 else 0
         if test_statistics_option==True:
             test_statistics_list[t,:] = test_statistics
+            
     pval =np.squeeze(pval) if np.abs(np.nansum(pval))>0 else np.nan 
     base_statistics =np.squeeze(base_statistics) if base_statistics is not None  else []
     test_statistics_list =np.squeeze(test_statistics_list) if test_statistics_list is not None  else []
     Nperm = 0 if Nperm==1 else Nperm    
-    if np.sum(np.isnan(pval))>0:
-        print("Warning: Permutation testing resulted in p-values equal to NaN.")
-        print("This may indicate an issue with the input data. Please review your data.")
+    # if np.sum(np.isnan(pval))>0:
+    #     print("Warning: Permutation testing resulted in p-values equal to NaN.")
+    #     print("This may indicate an issue with the input data. Please review your data.")
               
     # Return values
     result = {
@@ -504,7 +480,7 @@ def test_across_sessions_within_subject(D_data, R_data, idx_data, method="regres
         'test_statistics': [] if np.sum(test_statistics_list)==0 else test_statistics_list,
         'test_type': 'test_across_sessions_within_subject',
         'method': method,
-        'FWER_correction':FWER_correction,
+        'max_correction':FWER_correction,
         'Nperm': Nperm}
     return result
 
@@ -542,7 +518,7 @@ def test_across_visits(input_data, vpath_data, n_states, method="regression", Np
     Returns:
     ----------  
         result (dict): A dictionary containing the following keys. Depending on the `test_statistics_option` and `method`, it can return the p-values, 
-            correlation coefficients, test statisticss.
+            correlation coefficients, test statistics.
             'pval': P-values for the test with shapes based on the method:
                 - method=="Regression": (T, p)
                 - method=="univariate": (T, p, q)
@@ -555,7 +531,7 @@ def test_across_visits(input_data, vpath_data, n_states, method="regression", Np
             'test_type': the type of test, which is the name of the function
             'method': the method used for analysis Valid options are
                     "regression", "univariate", or "cca", "one_vs_rest" and "state_pairs" (default: "regression").
-            'FWER_correction': Specifies if FWER has been applied to the test, can either output True or False.
+            'max_correction': Specifies if FWER has been applied to the test, can either output True or False.
             'Nperm' :The number of permutations that has been performed.
                 
     Note:
@@ -595,12 +571,6 @@ def test_across_visits(input_data, vpath_data, n_states, method="regression", Np
         # Removing rows that contain nan-values
         data_t, vpath_array= remove_nan_values(data_t, vpath_array, t, n_T, method) ### can be optmized
         
-        if method == "univariate":
-            # Calculate correlation coefficient
-            base_statistics[t, :] = get_correlation_coefficients(data_t, vpath_data[t,:,:])
-
-        # Perform permutation test
-        # Create test_statistics and pval_perms based on method
         if method != "state_pairs":
             ###################### Permutation testing for other tests beside state pairs #################################
             # Create test_statistics and pval_perms based on method
@@ -624,11 +594,10 @@ def test_across_visits(input_data, vpath_data, n_states, method="regression", Np
                     # Apply 1 hot encoding
                     vpath_surrogate_onehot = viterbi_path_to_stc(vpath_surrogate,n_states)
                     # Apply t-statistic on the vpath_surrogate
-                    test_statistics = test_statistics_calculations(data_t,vpath_surrogate_onehot , perm,
-                                                                                test_statistics, proj, method)
-            # Fill numbers in base statistics
-            if  np.sum(base_statistics[t, :])==0:
-                base_statistics[t, :] =test_statistics[0,:]
+                    test_statistics, bstat = test_statistics_calculations(data_t, vpath_surrogate_onehot, perm, 
+                                                                          test_statistics, proj, method)
+                    base_statistics[t, :] = bstat if perm == 0 and bstat is not None else base_statistics[t, :]
+
             pval = get_pval(test_statistics, Nperm, method, t, pval, FWER_correction) if Nperm>1 else 0
         ###################### Permutation testing for state pairs #################################
         elif method =="state_pairs":
@@ -650,7 +619,8 @@ def test_across_visits(input_data, vpath_data, n_states, method="regression", Np
                         vpath_surrogate = surrogate_state_time(perm, vpath_array, n_states)
                         if len(np.unique(vpath_surrogate)) == n_states:
                             break  # Exit the loop if the condition is satisfied
-                    test_statistics[perm,idx] = calculate_statepair_difference(vpath_surrogate, data_t, state_1, state_2, pairwise_statistic)
+                    test_statistics[perm,idx] = calculate_statepair_difference(vpath_surrogate, data_t, state_1, 
+                                                                               state_2, pairwise_statistic)
                 
                 if Nperm>1:
                     p_val= np.sum(test_statistics[:,idx] >= test_statistics[0,idx], axis=0) / (Nperm + 1)
@@ -668,9 +638,9 @@ def test_across_visits(input_data, vpath_data, n_states, method="regression", Np
     test_statistics_list =np.squeeze(test_statistics_list) if test_statistics_list is not None else []
     Nperm = 0 if Nperm==1 else Nperm
     
-    if np.sum(np.isnan(pval))>0:
-        print("Warning: Permutation testing resulted in p-values equal to NaN.")
-        print("This may indicate an issue with the input data. Please review your data.")
+    # if np.sum(np.isnan(pval))>0:
+    #     print("Warning: Permutation testing resulted in p-values equal to NaN.")
+    #     print("This may indicate an issue with the input data. Please review your data.")
         
     # Return results
     result = {
@@ -680,7 +650,7 @@ def test_across_visits(input_data, vpath_data, n_states, method="regression", Np
         'test_statistics': test_statistics_list,
         'test_type': 'test_across_visits',
         'method': method,
-        'FWER_correction':FWER_correction,
+        'max_correction':FWER_correction,
         'Nperm': Nperm} 
     return result
 
@@ -891,41 +861,42 @@ def initialize_arrays(R_data, n_p, n_q, n_T, method, Nperm, test_statistics_opti
     # Initialize the arrays based on the selected method and data dimensions
     if  method == "regression":
         pval = np.zeros((n_T, n_q))
-        base_statistics = None
+   
         if test_statistics_option==True:
             test_statistics_list = np.zeros((n_T, Nperm, n_q))
         else:
-            test_statistics_list= np.zeros((n_T, 1, n_q))
+            test_statistics_list= None
+        base_statistics= np.zeros((n_T, 1, n_q))
+        
     elif  method == "cca":
         pval = np.zeros((n_T, 1))
-        base_statistics = None
         if test_statistics_option==True:
             test_statistics_list = np.zeros((n_T, Nperm, 1))
         else:
-            test_statistics_list= np.zeros((n_T, 1, 1))        
+            test_statistics_list= None
+        base_statistics= np.zeros((n_T, 1, 1))        
     elif method == "univariate" :
         pval = np.zeros((n_T, n_p, n_q))
         base_statistics = pval.copy()
-        
         if test_statistics_option==True:    
             test_statistics_list = np.zeros((n_T, Nperm, n_p, n_q))
         else:
             test_statistics_list= None
     elif method == "state_pairs":
         pval = np.zeros((n_T, R_data.shape[-1], R_data.shape[-1]))
-        base_statistics = []
         pairwise_comparisons = list(combinations(range(1, R_data.shape[-1] + 1), 2))
         if test_statistics_option==True:    
             test_statistics_list = np.zeros((n_T, Nperm, len(pairwise_comparisons)))
         else:
-            test_statistics_list= np.zeros((n_T, 1, len(pairwise_comparisons)))
+            test_statistics_list= None
+        base_statistics= np.zeros((n_T, 1, len(pairwise_comparisons)))
     elif method == "one_vs_rest":
         pval = np.zeros((n_T, n_p, n_q))
-        base_statistics = []
         if test_statistics_option==True:
             test_statistics_list = np.zeros((n_T, Nperm, n_q))
         else:
-            test_statistics_list= np.zeros((n_T, 1, n_q))
+            test_statistics_list= None
+        base_statistics= np.zeros((n_T, 1, n_q))
 
     return pval, base_statistics, test_statistics_list
 
@@ -1458,7 +1429,7 @@ def test_statistics_calculations(Din, Rin, perm, test_statistics, proj, method, 
         test_statistics (numpy.ndarray): Updated test_statistics array.
         pval_perms (numpy.ndarray): Updated pval_perms array.
     """
-    
+    base_statistics = None
     if method == 'regression':
         # Replace NaN values with zero using np.nan_to_num
         # proj_no_nan = np.nan_to_num(proj, nan=0)
@@ -1473,36 +1444,39 @@ def test_statistics_calculations(Din, Rin, perm, test_statistics, proj, method, 
         # Calculate the residual sum of squares (SSR)
         ssr = np.sum((predicted_values - Rin)**2, axis=0)
         # Calculate R^2
-        r_squared = 1 - (ssr / sst)
+        base_statistics = 1 - (ssr / sst) #r_squared
         # Store the R^2 values in the test_statistics array
-        test_statistics[perm] = r_squared
+        test_statistics[perm] = base_statistics
         
     elif method == "univariate":
         if binary_columns==[]:
             # Calculate correlation coefficient matrix
-            base_statistics = np.corrcoef(Din, Rin, rowvar=False)
-            corr_matrix = base_statistics[:Din.shape[1], Din.shape[1]:]
+            corr_coef = np.corrcoef(Din, Rin, rowvar=False)
+            # get the correlation matrix
+            base_statistics = corr_coef[:Din.shape[1], Din.shape[1]:] 
             # Update test_statistics
-            test_statistics[perm, :, :] = np.abs(corr_matrix)
-        else:
+            test_statistics[perm, :, :] = np.abs(base_statistics)
+        else: 
+            # Calculate test_statistics
             for col in range(Rin.shape[1]):
                 if col in binary_columns:
                     # Get the t-statistic
                     t_test_group = np.unique(Rin)
                     #ttest_ind(Din[Rin == t_test_group[0]], Din[Rin == t_test_group[1]])
-                    t_statistic, pval = ttest_ind(Din[Rin[:, col] == t_test_group[0]], Din[Rin[:, col] == t_test_group[1]])
+                    # Get the t-statistic
+                    base_statistics, _ = ttest_ind(Din[Rin[:, col] == t_test_group[0]], Din[Rin[:, col] == t_test_group[1]])
                     # np.std(Din, axis=0)==0
                     # Update test_statistics
-                    test_statistics[perm, :, col] = np.abs(t_statistic)
-                    
+                    test_statistics[perm, :, col] = np.abs(base_statistics)
+                    base_statistics = np.expand_dims(base_statistics,axis=1)
                 else:
                     # Calculate correlation coefficient matrix
-                    base_statistics = np.corrcoef(Din, Rin[:, col], rowvar=False)
-                    corr_matrix = base_statistics[:Din.shape[1], Din.shape[1]:]
+                    corr_coef = np.corrcoef(Din, Rin[:, col], rowvar=False)
+                    # get the correlation matrix
+                    base_statistics = corr_coef[:Din.shape[1], Din.shape[1]:]
                     # Update test_statistics
-                    test_statistics[perm, :, col] = np.squeeze(np.abs(corr_matrix))
-
-            
+                    test_statistics[perm, :, col] = np.squeeze(np.abs(base_statistics))
+    
     elif method =="cca":
         # Create CCA object with 1 component
         cca = CCA(n_components=1)
@@ -1515,7 +1489,9 @@ def test_statistics_calculations(Din, Rin, perm, test_statistics, proj, method, 
         # Update test_statistics
         test_statistics[perm] = np.abs(base_statistics)
         
-    return test_statistics
+    # Check if perm is 0 before returning the result
+    return test_statistics, base_statistics
+
 
 def get_correlation_coefficients(Din,Rin):
     # If there are NaN values
@@ -1533,15 +1509,21 @@ def get_correlation_coefficients(Din,Rin):
     return corr_matrix
 
 
-def pval_correction(pval, method='fdr_bh', alpha = 0.05):
-    from statsmodels.stats import multitest as smt
+def pval_correction(pval, method='fdr_bh', alpha=0.05, include_nan=True):
     """
-    Adjusts p-values for multiple testing
+    Adjusts p-values for multiple testing.
+    This function is used to correct p-values for multiple testing using various correction methods.
+    If `include_nan` is True, NaN values in the input p-values are considered during the correction process.
+    NaN values are replaced with a placeholder (default: 1) before correction and restored in the final result.
+    If `include_nan` is False, NaN values are excluded from the correction process. The function performs the
+    correction on the non-NaN values, and the output arrays retain the original shape of the input array.
+    The function returns two arrays: `pval_corrected`, the corrected p-values, and `significant`, a boolean array
+    indicating significant p-values after correction.
 
     Parameters:
     --------------
-        pval: 2D numpy array of p-values.
-        method: method used for FDR correction. Default is 'fdr_bh'.
+        pval (numpy.ndarray): numpy array of p-values.
+        method (str, optional): method used for FDR correction (default: 'fdr_bh).
             bonferroni : one-step correction
             sidak : one-step correction
             holm-sidak : step down method using Sidak adjustments
@@ -1552,33 +1534,58 @@ def pval_correction(pval, method='fdr_bh', alpha = 0.05):
             fdr_by : Benjamini/Yekutieli (negative)
             fdr_tsbh : two stage fdr correction (non-negative)
             fdr_tsbky : two stage fdr correction (non-negative)
-        
-        alpha: significance level. Default is 0.05.
+        alpha (float, optional): Significance level (default: 0.05).
+        include_nan: Include NaN values during the correction of p-values if True. Exclude NaN values if False (default: True).
 
     Returns:
     ---------- 
-        p_values_corrected: 2D numpy array of corrected p-values.
-        rejected_corrected: 2D numpy array of boolean values indicating rejected null hypotheses.
-    """
-    # Identify and replace NaN values in the pval array
-    nan_mask = np.isnan(pval)
-    non_nan_values = pval[~nan_mask]
-
-    # Perform the FDR correction using statsmodels multitest module
-    rejected, p_values_corrected, _, _ = smt.multipletests(non_nan_values.flatten(), alpha=0.05, method=method, returnsorted=False)
-
-    # Create arrays with NaN values for rejected and p_values_corrected
-    rejected_corrected = np.empty_like(pval, dtype=bool)
-    p_values_corrected_full = np.empty_like(pval)
     
-    # Fill in non-NaN values with corrected values
-    rejected_corrected[~nan_mask] = rejected
-    p_values_corrected_full[~nan_mask] = p_values_corrected
+        pval_corrected (numpy.ndarray): numpy array of corrected p-values.
+        significant (numpy.ndarray): numpy array of boolean values indicating significant p-values.
+    """
+    
+    if include_nan:
+        # Flatten the matrix and keep track of NaN positions
+        flat_pval = pval.flatten()
+        nan_positions = np.isnan(flat_pval)
 
-    if np.sum(np.isnan(pval))>1:
-        np.fill_diagonal(p_values_corrected_full, np.nan)
-    # return the corrected p-values and boolean values indicating rejected null hypotheses
-    return p_values_corrected_full,rejected_corrected
+        # Replace NaN values with 1 (or any value representing non-significance) for correction
+        flat_pval[nan_positions] = 1
+
+        # Perform multiple testing correction
+        significant, pval_corrected, _, _ = smt.multipletests(flat_pval, alpha=alpha, method=method, returnsorted=False)
+
+        # Replace the NaN values back in the corrected p-values
+        pval_corrected[nan_positions] = np.nan
+        significant[nan_positions] = np.nan
+
+        # Reshape the corrected p-value and significant arrays back to the original shape
+        pval_corrected = pval_corrected.reshape(pval.shape)
+        significant = significant.reshape(pval.shape)
+
+    else:
+        # Flatten the matrix and remove NaN values for correction
+        flat_pval = pval.flatten()
+        non_nan_positions = ~np.isnan(flat_pval)
+        flat_pval_no_nan = flat_pval[non_nan_positions]
+
+        # Perform multiple testing correction on non-NaN values
+        significant_no_nan, pval_corrected_no_nan, _, _ = smt.multipletests(flat_pval_no_nan, alpha=alpha, method=method, returnsorted=False)
+
+        # Create an array filled with NaN values
+        pval_corrected = np.full_like(flat_pval, np.nan)
+        significant = np.full_like(flat_pval, np.nan)
+
+        # Assign the corrected values to their respective positions in the original shape
+        pval_corrected[non_nan_positions] = pval_corrected_no_nan
+        significant[non_nan_positions] = significant_no_nan
+
+        # Reshape the corrected p-value and significant arrays back to the original shape
+        pval_corrected = pval_corrected.reshape(pval.shape)
+        significant = significant.reshape(pval.shape)
+
+    # Return the corrected p-values and boolean values indicating significant p-values
+    return pval_corrected, significant
 
 
 def get_timestamp_indices(n_timestamps, n_subjects):
