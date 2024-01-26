@@ -124,7 +124,7 @@ def test_across_subjects(D_data, R_data, method="regression", Nperm=0, confounds
         # Removing rows that contain nan-values
         if method == "regression" or method == "cca":
             # Removing rows that contain nan-values
-            D_t, R_t = remove_nan_values(D_t, R_t, t, n_T)
+            D_t, R_t = remove_nan_values(D_t, R_t, t, n_T, method)
         
         # Create test_statistics based on method
         test_statistics, proj = initialize_permutation_matrices(method, Nperm, n_p, n_q, D_t)
@@ -283,7 +283,7 @@ def test_across_trials_within_session(D_data, R_data, idx_data, method="regressi
         
         # Removing rows that contain nan-values
         if method == "regression" or method == "cca":
-            D_t, R_t = remove_nan_values(D_t, R_t, t, n_T)
+            D_t, R_t = remove_nan_values(D_t, R_t, t, n_T, method)
         
         # Create test_statistics and pval_perms based on method
         test_statistics, proj = initialize_permutation_matrices(method, Nperm, n_p, n_q, D_t)
@@ -428,7 +428,7 @@ def test_across_sessions_within_subject(D_data, R_data, idx_data, method="regres
         
         # Removing rows that contain nan-values
         if method == "regression" or method == "cca":
-            D_t, R_t = remove_nan_values(D_t, R_t, t, n_T)
+            D_t, R_t = remove_nan_values(D_t, R_t, t, n_T, method)
 
         # Create test_statistics and pval_perms based on method
         test_statistics, proj = initialize_permutation_matrices(method, Nperm, n_p, n_q, D_t)
@@ -557,7 +557,7 @@ def test_across_visits(input_data, vpath_data, n_states, method="regression", Np
         
         # Removing rows that contain nan-values
         if method == "regression" or method == "cca":
-            D_t, R_t = remove_nan_values(D_t, R_t, t, n_T)
+            D_t, R_t = remove_nan_values(D_t, R_t, t, n_T, method)
         
         if method != "state_pairs":
             ###################### Permutation testing for other tests beside state pairs #################################
@@ -643,7 +643,7 @@ def test_across_visits(input_data, vpath_data, n_states, method="regression", Np
         'Nperm': Nperm} 
     return result
 
-def remove_nan_values(D_data, R_data, t, n_T):
+def remove_nan_values(D_data, R_data, t, n_T, method):
     """
     Remove rows with NaN values from input data arrays.
 
@@ -670,15 +670,26 @@ def remove_nan_values(D_data, R_data, t, n_T):
     if R_data.ndim == 1:
         FLAG = 1
         R_data = R_data.reshape(-1,1) 
-    # Can make a function where I set the method and mask the rows differently.
-    # Check for NaN values and remove corresponding rows
-    nan_mask = np.isnan(D_data).any(axis=1) | np.isnan(R_data).any(axis=1)
-    # nan_mask = np.isnan(D_data).any(axis=1)
-    # Get indices or rows that have been removed
-    removed_indices = np.where(nan_mask)[0]
+    if method == "regression":
+        # When applying "regression" we need to remove rows for our D_data, as we cannot use it as a predictor for
+        # Check for NaN values and remove corresponding rows
+        nan_mask = np.isnan(D_data).any(axis=1)
+        # nan_mask = np.isnan(D_data).any(axis=1)
+        # Get indices or rows that have been removed
+        removed_indices = np.where(nan_mask)[0]
 
-    D_data = D_data[~nan_mask]
-    R_data = R_data[~nan_mask]
+        D_data = D_data[~nan_mask]
+        R_data = R_data[~nan_mask]
+    else:
+        # When applying cca we need to remove rows at both D_data and R_data
+        # Check for NaN values and remove corresponding rows
+        nan_mask = np.isnan(D_data).any(axis=1) | np.isnan(R_data).any(axis=1)
+        # nan_mask = np.isnan(D_data).any(axis=1)
+        # Get indices or rows that have been removed
+        removed_indices = np.where(nan_mask)[0]
+
+        D_data = D_data[~nan_mask]
+        R_data = R_data[~nan_mask]
 
     # Only print this 1 time
     # Check if the array is empty
@@ -1418,26 +1429,29 @@ def test_statistics_calculations(Din, Rin, perm, test_statistics, proj, method, 
     """
     base_statistics = None
     if method == 'regression':
-        # Replace NaN values with zero using np.nan_to_num
-        # proj_no_nan = np.nan_to_num(proj, nan=0)
-        # Rin_no_nan = np.nan_to_num(Rin, nan=0)
-        # Din_no_nan = np.nan_to_num(Din, nan=0)
-        # Fit the original model 
-        beta = proj @ Rin  # Calculate regression_coefficients (beta)
-        # Calculate the predicted values
-        predicted_values = Din @ beta
-        # Calculate the total sum of squares (SST)
-        sst = np.sum((Rin - np.nanmean(Rin, axis=0))**2, axis=0)
-        # Calculate the residual sum of squares (SSR)
-        ssr = np.sum((predicted_values - Rin)**2, axis=0)
-        # Calculate R^2
-        base_statistics = 1 - (ssr / sst) #r_squared
-        # Store the R^2 values in the test_statistics array
-        test_statistics[perm] = base_statistics
-        
+        if np.sum(np.isnan(Rin))>0:
+            for col in range(Rin.shape[-1]):
+                base_statistics =calculate_nan_regression(Din, Rin, proj)
+                test_statistics[perm] =base_statistics
+                
+        else:
+            # Replace NaN values with zero using np.nan_to_num
+            # Fit the original model 
+            beta = proj @ Rin  # Calculate regression_coefficients (beta)
+            # Calculate the predicted values
+            predicted_values = Din @ beta
+            # Calculate the total sum of squares (SST)
+            sst = np.sum((Rin - np.nanmean(Rin, axis=0))**2, axis=0)
+            # Calculate the residual sum of squares (SSR)
+            ssr = np.sum((predicted_values - Rin)**2, axis=0)
+            # Calculate R^2
+            base_statistics = 1 - (ssr / sst) #r_squared
+            # Store the R^2 values in the test_statistics array
+            test_statistics[perm] = base_statistics
+            
     elif method == "univariate":
-        if category_columns==[]:
-            if np.sum(np.isnan(Din))>0 or np.sum(np.isnan(Din))>0:
+        if category_columns["t_test_cols"]==[] and category_columns["f_test_cols"]==[]:
+            if np.sum(np.isnan(Din))>0 or np.sum(np.isnan(Rin))>0:
                 # Calculate the correlation matrix while handling NaN values 
                 # column by column without removing entire rows.
                 base_statistics =calculate_nan_correlation_matrix(Din, Rin)
@@ -1475,7 +1489,7 @@ def test_statistics_calculations(Din, Rin, perm, test_statistics, proj, method, 
                         test_statistics[perm, :, col] = np.abs(t_test)
  
                 elif col in category_columns["f_test_cols"]:
-                    if np.sum(np.isnan(Din))>0 or np.sum(np.isnan(Din))>0:
+                    if np.sum(np.isnan(Din))>0 or np.sum(np.isnan(Rin))>0:
                         f_test =calculate_nan_f_test(Din, Rin[:, col])
                         if perm==0:
                             base_statistics[:,col]=f_test  
@@ -1489,7 +1503,7 @@ def test_statistics_calculations(Din, Rin, perm, test_statistics, proj, method, 
                                 
                 else:
                     # Perform corrrelation analysis
-                    if np.sum(np.isnan(Din))>0 or np.sum(np.isnan(Din))>0:
+                    if np.sum(np.isnan(Din))>0 or np.sum(np.isnan(Rin))>0:
                         # Calculate the correlation matrix while handling NaN values 
                         # column by column without removing entire rows.
                         corr_array =calculate_nan_correlation_matrix(Din, Rin[:, col])
@@ -1768,7 +1782,43 @@ def identify_coloumns_for_t_and_f_tests(R_data, identify_categories=True, method
            
     return category_columns
 
+def calculate_nan_regression(Din, Rin, proj):
+    """
+    Calculate the t-statistics between paired independent (D_data) and dependent (R_data) variables, while handling NaN values column by column without removing entire rows.
+        - The function handles NaN values for each feature in D_data without removing entire rows.
+        - NaN values are omitted on a feature-wise basis, and the t-statistic is calculated for each feature.
+        - The resulting array contains t-statistics corresponding to each feature in D_data.
 
+    Parameters:
+    --------------
+        D_data (numpy.ndarray): The input matrix of shape (n_samples, n_features).
+        R_data (numpy.ndarray): The binary labels corresponding to each sample in D_data.
+
+    Returns:
+    ----------  
+        t_test (numpy.ndarray): An array containing t-statistics for each feature in D_data against the binary categories in R_data.
+ 
+    """
+
+    q = Rin.shape[-1]
+    R2_test = np.zeros(q)
+    # Calculate t-statistic for each pair of columns (D_column, R_data)
+    for i in range(q):
+        valid_indices = np.all(~np.isnan(Rin), axis=1)
+        
+        beta = proj[:,valid_indices] @ Rin[valid_indices]  # Calculate regression_coefficients (beta)
+        # Calculate the predicted values
+        predicted_values = Din[valid_indices] @ beta
+        # Calculate the total sum of squares (SST)
+        sst = np.sum((Rin[valid_indices] - np.nanmean(Rin[valid_indices], axis=0))**2, axis=0)
+        # Calculate the residual sum of squares (SSR)
+        ssr = np.sum((predicted_values - Rin[valid_indices])**2, axis=0)
+        # Calculate R^2
+        base_statistics = 1 - (ssr / sst) #r_squared
+        # Store the R2 in an array
+        R2_test[i] = base_statistics
+
+    return R2_test
 
 def calculate_nan_correlation_matrix(D_data, R_data):
     """
@@ -1796,6 +1846,8 @@ def calculate_nan_correlation_matrix(D_data, R_data):
         for j in range(R_data.shape[1]):
             R_column = R_data[:, j]
             # Find non-NaN indices for both D_column and R_column
+            # Find rows where both D_column and R_data are non-NaN
+            valid_indices = np.all(~np.isnan(D_column) & ~np.isnan(R_data), axis=1)
             valid_indices = ~np.isnan(D_column) & ~np.isnan(R_column)
             # Calculate correlation coefficient matrix
             corr_coef = np.corrcoef(D_column[valid_indices], R_column[valid_indices], rowvar=False)
@@ -1869,7 +1921,7 @@ def calculate_nan_f_test(D_data, R_data):
     Parameters:
     --------------
         D_data (numpy.ndarray): The input matrix of shape (n_samples, n_features).
-        R_data (numpy.ndarray): The binary labels corresponding to each sample in D_data.
+        R_data (numpy.ndarray): The categorical labels corresponding to each sample in D_data.
 
     Returns:
     ----------  
