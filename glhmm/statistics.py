@@ -1430,12 +1430,11 @@ def test_statistics_calculations(Din, Rin, perm, test_statistics, proj, method, 
     base_statistics = None
     if method == 'regression':
         if np.sum(np.isnan(Rin))>0:
-            for col in range(Rin.shape[-1]):
-                base_statistics =calculate_nan_regression(Din, Rin, proj)
-                test_statistics[perm] =base_statistics
+            # Calculate the explained variance if R got NaN values.
+            base_statistics =calculate_nan_regression(Din, Rin, proj)
+            test_statistics[perm] =base_statistics
                 
         else:
-            # Replace NaN values with zero using np.nan_to_num
             # Fit the original model 
             beta = proj @ Rin  # Calculate regression_coefficients (beta)
             # Calculate the predicted values
@@ -1451,6 +1450,7 @@ def test_statistics_calculations(Din, Rin, perm, test_statistics, proj, method, 
             
     elif method == "univariate":
         if category_columns["t_test_cols"]==[] and category_columns["f_test_cols"]==[]:
+            # Only calcuating the correlation matrix, since there is no need for t- or f-test
             if np.sum(np.isnan(Din))>0 or np.sum(np.isnan(Rin))>0:
                 # Calculate the correlation matrix while handling NaN values 
                 # column by column without removing entire rows.
@@ -1471,54 +1471,45 @@ def test_statistics_calculations(Din, Rin, perm, test_statistics, proj, method, 
                     # t-test for each column
                     if np.sum(np.isnan(Din))>0 or np.sum(np.isnan(Din))>0:
                         t_test =calculate_nan_t_test(Din, Rin[:, col])
-                        if perm==0:
-                            base_statistics[:,col]=t_test
+                        # save values in test_statistics
                         test_statistics[perm, :, col] = np.abs(t_test)
-
                     else:
                         # Get the t-statistic
                         t_test_group = np.unique(Rin[:, col])
-                        #ttest_ind(Din[Rin == t_test_group[0]], Din[Rin == t_test_group[1]])
                         # Get the t-statistic
                         t_test, _ = ttest_ind(Din[Rin[:, col] == t_test_group[0]], Din[Rin[:, col] == t_test_group[1]])
-                        # save t-tet to base_statistics
-                        if perm==0:
-                            base_statistics[:,col]=t_test
-                        # np.std(Din, axis=0)==0
                         # Update test_statistics
                         test_statistics[perm, :, col] = np.abs(t_test)
- 
+                        # save t-test to base_statistics
+                        if perm==0:
+                            base_statistics[:,col]=t_test
                 elif col in category_columns["f_test_cols"]:
                     if np.sum(np.isnan(Din))>0 or np.sum(np.isnan(Rin))>0:
+                        # Perform f-test while accounting for NaNs
                         f_test =calculate_nan_f_test(Din, Rin[:, col])
-                        if perm==0:
-                            base_statistics[:,col]=f_test  
                         test_statistics[perm, :, col] = np.abs(f_test)
                     else:    
-                        # Perform f-statistics for the columns inside of category_columns["f_test_cols"]
+                        # Perform f-statistics
                         f_test, _ = f_oneway(*[Din[Rin[:,col] == category] for category in np.unique(Rin[:,col])])
-                        if perm==0:
-                            base_statistics[:,col]=f_test
                         test_statistics[perm, :, col] = np.abs(f_test)
-                                
+                    if perm==0:
+                        base_statistics[:,col]=f_test             
                 else:
                     # Perform corrrelation analysis
                     if np.sum(np.isnan(Din))>0 or np.sum(np.isnan(Rin))>0:
                         # Calculate the correlation matrix while handling NaN values 
                         # column by column without removing entire rows.
                         corr_array =calculate_nan_correlation_matrix(Din, Rin[:, col])
-                        if perm==0:
-                            base_statistics[:,col]=np.squeeze(corr_array)
                         test_statistics[perm, :, col] = np.abs(corr_array)
                     else:
                         # Calculate correlation coefficient matrix
                         corr_coef = np.corrcoef(Din, Rin[:, col], rowvar=False)
                         # get the correlation matrix
                         corr_array = corr_coef[:Din.shape[1], Din.shape[1]:]
-                        if perm==0:
-                            base_statistics[:,col]=np.squeeze(corr_array)
                         # Update test_statistics
                         test_statistics[perm, :, col] = np.squeeze(np.abs(corr_array))
+                    if perm==0:
+                        base_statistics[:,col]=np.squeeze(corr_array)
     
     elif method =="cca":
         # Create CCA object with 1 component
@@ -1534,22 +1525,6 @@ def test_statistics_calculations(Din, Rin, perm, test_statistics, proj, method, 
         
     # Check if perm is 0 before returning the result
     return test_statistics, base_statistics
-
-
-def get_correlation_coefficients(Din,Rin):
-    # If there are NaN values
-    if np.sum(np.isnan(Din))>0 or np.sum(np.isnan(Rin))>0:
-        # Create masked arrays to handle NaN values
-        masked_Din = np.ma.masked_invalid(Din)
-        masked_Rin = np.ma.masked_invalid(Rin)
-
-        # Calculate correlation coefficient ignoring NaN values
-        corr_matrix = np.ma.corrcoef(masked_Din, masked_Rin)
-    else:
-        # Calculate correlation coefficient matrix
-        base_statistics = np.corrcoef(Din, Rin, rowvar=False)
-        corr_matrix = base_statistics[:Din.shape[1], Din.shape[1]:]
-    return corr_matrix
 
 
 def pval_correction(pval, method='fdr_bh', alpha=0.05, include_nan=True, nan_diagonal=False):
@@ -1784,35 +1759,34 @@ def identify_coloumns_for_t_and_f_tests(R_data, identify_categories=True, method
 
 def calculate_nan_regression(Din, Rin, proj):
     """
-    Calculate the t-statistics between paired independent (D_data) and dependent (R_data) variables, while handling NaN values column by column without removing entire rows.
-        - The function handles NaN values for each feature in D_data without removing entire rows.
-        - NaN values are omitted on a feature-wise basis, and the t-statistic is calculated for each feature.
-        - The resulting array contains t-statistics corresponding to each feature in D_data.
+    Calculate the R-squared values for the regression of each dependent variable 
+    in Rin on the independent variables in Din, while handling NaN values column-wise.
 
     Parameters:
     --------------
-        D_data (numpy.ndarray): The input matrix of shape (n_samples, n_features).
-        R_data (numpy.ndarray): The binary labels corresponding to each sample in D_data.
+        Din (numpy.ndarray): Input data matrix for the independent variables.
+        Rin (numpy.ndarray): Input data matrix for the dependent variables.
+        proj (numpy.ndarray): Projection matrix.
 
     Returns:
     ----------  
-        t_test (numpy.ndarray): An array containing t-statistics for each feature in D_data against the binary categories in R_data.
- 
+        R2_test (numpy.ndarray): Array of R-squared values for each regression.
     """
 
     q = Rin.shape[-1]
     R2_test = np.zeros(q)
     # Calculate t-statistic for each pair of columns (D_column, R_data)
     for i in range(q):
-        valid_indices = np.all(~np.isnan(Rin), axis=1)
+        R_column = np.expand_dims(Rin[:, i],axis=1)
+        valid_indices = np.all(~np.isnan(R_column), axis=1)
         
-        beta = proj[:,valid_indices] @ Rin[valid_indices]  # Calculate regression_coefficients (beta)
+        beta = proj[:,valid_indices] @ R_column[valid_indices]  # Calculate regression_coefficients (beta)
         # Calculate the predicted values
         predicted_values = Din[valid_indices] @ beta
         # Calculate the total sum of squares (SST)
-        sst = np.sum((Rin[valid_indices] - np.nanmean(Rin[valid_indices], axis=0))**2, axis=0)
+        sst = np.sum((R_column[valid_indices] - np.nanmean(R_column[valid_indices], axis=0))**2, axis=0)
         # Calculate the residual sum of squares (SSR)
-        ssr = np.sum((predicted_values - Rin[valid_indices])**2, axis=0)
+        ssr = np.sum((predicted_values - R_column[valid_indices])**2, axis=0)
         # Calculate R^2
         base_statistics = 1 - (ssr / sst) #r_squared
         # Store the R2 in an array
@@ -1853,25 +1827,6 @@ def calculate_nan_correlation_matrix(D_data, R_data):
             corr_coef = np.corrcoef(D_column[valid_indices], R_column[valid_indices], rowvar=False)
             # get the correlation matrix
             correlation_matrix[i, j] = corr_coef[0, 1] 
-           
-            #     # Use only non-NaN values for mean calculation
-            #     mean_D_column = np.mean(D_column[valid_indices])
-            #     mean_R_column = np.mean(R_column[valid_indices])
-
-            #     # Ensure the subtraction results in a 2D array
-            #     D_minus_mean_D_column = D_column[valid_indices] - mean_D_column
-            #     R_minus_mean_R_column = R_column[valid_indices] - mean_R_column
-
-            #     # Calculate numerator and denominator of the correlation coefficient formula
-            #     numerator = np.sum(D_minus_mean_D_column * R_minus_mean_R_column)
-            #     denominator_D = np.sqrt(np.sum(D_minus_mean_D_column**2))
-            #     denominator_R = np.sqrt(np.sum(R_minus_mean_R_column**2))
-
-            #     # Calculate correlation coefficient
-            #     correlation_coefficient = numerator / (denominator_D * denominator_R)
-
-            #     # Store the correlation coefficient in the matrix
-            #     correlation_matrix[i, j] = correlation_coefficient
     return correlation_matrix
 
 def calculate_nan_t_test(D_data, R_data):
