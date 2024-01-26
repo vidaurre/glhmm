@@ -10,10 +10,10 @@ from tqdm import tqdm
 from glhmm.palm_functions import *
 from statsmodels.stats import multitest as smt
 from sklearn.cross_decomposition import CCA
-from scipy.stats import ttest_ind
+from scipy.stats import ttest_ind, f_oneway
 
 
-def test_across_subjects(D_data, R_data, method="regression", Nperm=0, confounds = None, dict_family = None, test_statistics_option=False, FWER_correction=False, identify_binary=False):
+def test_across_subjects(D_data, R_data, method="regression", Nperm=0, confounds = None, dict_family = None, test_statistics_option=False, FWER_correction=False, identify_categories=False, cat_lim=None):
     """
     This function performs statistical tests between a independent variable (`D_data`) and the dependent-variable (`R_data`) using permutation testing.
     The permutation testing is performed across across different subjects and it is possible to take family structure into account.
@@ -61,7 +61,7 @@ def test_across_subjects(D_data, R_data, method="regression", Nperm=0, confounds
                             If True, the function will return the test statistics for each permutation.
                             (default: False) 
     FWER_correction (bool, optional): 
-                            Specify whether to perform family-wise error rate (FWER) correction for multiple comparisons using the MaxT method(default: False).                     
+                            Specify whether to perform family-wise error rate (FWER) correction using the MaxT method (default: False)                   
                                 
     Returns:
     ----------  
@@ -79,7 +79,8 @@ def test_across_subjects(D_data, R_data, method="regression", Nperm=0, confounds
         'test_type': the type of test, which is the name of the function
         'method': the method used for analysis Valid options are
                 "regression", "univariate", or "cca", "one_vs_rest" and "state_pairs" (default: "regression").
-        'FWER_correction': Specifies if FWER has been applied to the test, can either output True or False.
+        'max_correction': Specifies if FWER has been applied using MaxT, can either output True or False.
+        'performed_tests': 
         'Nperm' :The number of permutations that has been performed.   
         
                   
@@ -88,8 +89,6 @@ def test_across_subjects(D_data, R_data, method="regression", Nperm=0, confounds
     for the whole data based on the dimensionality of `D_data`.
     The function assumes that the number of rows in `D_data` and `R_data` are equal
     """
-    # Initialize variable
-    binary_columns = []    
     # Have to run the permutation test function 1 time at least once
     if Nperm==0:
         Nperm+=1
@@ -102,18 +101,12 @@ def test_across_subjects(D_data, R_data, method="regression", Nperm=0, confounds
     n_T, _, n_p, n_q, D_data, R_data = get_input_shape(D_data, R_data)
     # Note for convension we wrote (T, p, q) => (n_T, n_p, n_q)
     
-    # Perform t-statistics for binary columns
-    if identify_binary == True and method == "univariate" or isinstance(identify_binary, (list,np.ndarray)) and method == "univariate":
-        if identify_binary==True:
-            # Identify binary columns automatically in R_data
-            binary_columns = [col for col in range(R_data.shape[-1]) if np.unique(R_data[0,:, col]).size == 2]
-            #print("Performing t-statistics on binary columns.")
-        else:
-            # Customize columns defined by the user
-            binary_columns=identify_binary.copy()
-    if binary_columns!=[]:
-        if FWER_correction and len(binary_columns) is not R_data.shape[-1]:
-            print("Warning: Cannot perform FWER_correction with different test statisticss.\nConsider to set identify_binary=False")
+    # Identify categorical columns in R_data
+    category_columns = identify_coloumns_for_t_and_f_tests(R_data, identify_categories, method, cat_lim) if method=="univariate" else []
+    
+    if category_columns!=[]:
+        if FWER_correction and (len(category_columns.get('t_test_cols')) != R_data.shape[-1] or len(category_columns.get('f_test_cols')) != R_data.shape[-1]):
+            print("Warning: Cannot perform FWER_correction with different test statisticss.\nConsider to set identify_categories=False")
             raise ValueError("Cannot perform FWER_correction")
     
     # Crate the family structure by looking at the dictionary 
@@ -130,6 +123,7 @@ def test_across_subjects(D_data, R_data, method="regression", Nperm=0, confounds
         
         # Removing rows that contain nan-values
         if method == "regression" or method == "cca":
+            # Removing rows that contain nan-values
             D_t, R_t = remove_nan_values(D_t, R_t, t, n_T)
         
         # Create test_statistics based on method
@@ -150,7 +144,7 @@ def test_across_subjects(D_data, R_data, method="regression", Nperm=0, confounds
             # Perform permutation on R_t
             Rin = R_t[permutation_matrix[:, perm]]
             # Calculate the permutation distribution
-            test_statistics, bstat = test_statistics_calculations(D_t, Rin, perm, test_statistics, proj, method, binary_columns)
+            test_statistics, bstat = test_statistics_calculations(D_t, Rin, perm, test_statistics, proj, method, category_columns)
             base_statistics[t, :] = bstat if perm == 0 and bstat is not None else base_statistics[t, :]
 
         # Calculate p-values
@@ -176,13 +170,14 @@ def test_across_subjects(D_data, R_data, method="regression", Nperm=0, confounds
         'test_statistics': test_statistics_list,
         'test_type': 'test_across_subjects',
         'method': method,
-        'FWER_correction':FWER_correction,
+        'max_correction':FWER_correction,
+        'performed_tests': category_columns,
         'Nperm': Nperm}
     return result
 
 
 
-def test_across_trials_within_session(D_data, R_data, idx_data, method="regression", Nperm=0, confounds=None, trial_timepoints=None,test_statistics_option=False, FWER_correction=False, identify_binary=False):
+def test_across_trials_within_session(D_data, R_data, idx_data, method="regression", Nperm=0, confounds=None, trial_timepoints=None,test_statistics_option=False, FWER_correction=False, identify_categories=False, cat_lim=None):
     """
     This function performs statistical tests between a independent variable (`D_data`) and the dependent-variable (`R_data`) using permutation testing.
     The permutation testing is performed across different trials within a session using permutation testing
@@ -242,7 +237,7 @@ def test_across_trials_within_session(D_data, R_data, idx_data, method="regressi
         'test_type': the type of test, which is the name of the function
         'method': the method used for analysis Valid options are
                 "regression", "univariate", or "cca", "one_vs_rest" and "state_pairs" (default: "regression").
-        'FWER_correction': Specifies if FWER has been applied to the test, can either output True or False.
+        'max_correction': Specifies if FWER has been applied using MaxT, can either output True or False.
         'Nperm' :The number of permutations that has been performed.   
 
     Note:
@@ -251,7 +246,7 @@ def test_across_trials_within_session(D_data, R_data, idx_data, method="regressi
         The function assumes that the number of rows in `D_data` and `R_data` are equal
     """
     # Initialize variable
-    binary_columns = []    
+    category_columns = []    
     # Have to run the permutation test function 1 time at least once
     if Nperm==0:
         Nperm+=1 
@@ -264,18 +259,12 @@ def test_across_trials_within_session(D_data, R_data, idx_data, method="regressi
     # Get input shape information
     n_T, _, n_p, n_q, D_data, R_data = get_input_shape(D_data, R_data)
 
-    # Perform t-statistics for binary columns
-    if identify_binary == True and method == "univariate" or isinstance(identify_binary, (list,np.ndarray)) and method == "univariate":
-        if identify_binary==True:
-            # Identify binary columns automatically in R_data
-            binary_columns = [col for col in range(R_data.shape[-1]) if np.unique(R_data[0,:, col]).size == 2]
-            print("Performing t-statistics on binary columns.")
-        else:
-            # Customize columns defined by the user
-            binary_columns=identify_binary.copy()
-    if binary_columns!=[]:
-        if FWER_correction and len(binary_columns) is not R_data.shape[-1]:
-            print("Warning: Cannot perform FWER_correction with different test statisticss.\nConsider to set identify_binary=False")
+    # Identify categorical columns in R_data
+    category_columns = identify_coloumns_for_t_and_f_tests(R_data, identify_categories, method, cat_lim) if method=="univariate" else []
+    
+    if category_columns!=[]:
+        if FWER_correction and (len(category_columns.get('t_test_cols')) != R_data.shape[-1] or len(category_columns.get('f_test_cols')) != R_data.shape[-1]):
+            print("Warning: Cannot perform FWER_correction with different test statisticss.\nConsider to set identify_categories=False")
             raise ValueError("Cannot perform FWER_correction")
     
     # Get indices for permutation
@@ -309,7 +298,7 @@ def test_across_trials_within_session(D_data, R_data, idx_data, method="regressi
             Rin = R_t[permutation_matrix[:, perm]]
 
             # Calculate the permutation distribution
-            test_statistics, bstat = test_statistics_calculations(D_t, Rin, perm, test_statistics, proj, method, binary_columns)
+            test_statistics, bstat = test_statistics_calculations(D_t, Rin, perm, test_statistics, proj, method, category_columns)
             base_statistics[t, :] = bstat if perm == 0 and bstat is not None else base_statistics[t, :]
 
         # Calculate p-values
@@ -330,14 +319,15 @@ def test_across_trials_within_session(D_data, R_data, idx_data, method="regressi
         'pval': pval,
         'base_statistics': base_statistics,
         'test_statistics': test_statistics_list,
-        'test_type': 'test_across_trials_within_session',
+        'test_type': 'test_across_subjects',
         'method': method,
-        'FWER_correction':FWER_correction,
+        'max_correction':FWER_correction,
+        'performed_tests': category_columns,
         'Nperm': Nperm}
     
     return result
 
-def test_across_sessions_within_subject(D_data, R_data, idx_data, method="regression", Nperm=0, confounds=None,test_statistics_option=False,FWER_correction=False, identify_binary=False):
+def test_across_sessions_within_subject(D_data, R_data, idx_data, method="regression", Nperm=0, confounds=None,test_statistics_option=False,FWER_correction=False, identify_categories=False, cat_lim=None):
     """
     This function performs statistical tests between a independent variable (`D_data`) and the dependent-variable (`R_data`) using permutation testing. 
     The permutation testing is performed across sessions within the same subject, while keeping the trial order the same.
@@ -394,7 +384,7 @@ def test_across_sessions_within_subject(D_data, R_data, idx_data, method="regres
             'test_type': the type of test, which is the name of the function
             'method': the method used for analysis Valid options are
                     "regression", "univariate", or "cca", "one_vs_rest" and "state_pairs" (default: "regression").
-            'FWER_correction': Specifies if FWER has been applied to the test, can either output True or False.
+            'max_correction': Specifies if FWER has been applied using MaxT, can either output True or False.
             'Nperm' :The number of permutations that has been performed.
                   
     Note:
@@ -404,12 +394,11 @@ def test_across_sessions_within_subject(D_data, R_data, idx_data, method="regres
 
     """ 
     # Initialize variable
-    binary_columns = []    
+    category_columns = []    
     # Have to run the permutation test function 1 time at least once
     if Nperm==0:
         Nperm+=1
-    
-            
+     
     # Check validity of method
     valid_methods = ["regression", "univariate", "cca"]
     validate_condition(method in valid_methods, "Invalid option specified for 'method'. Must be one of: " + ', '.join(valid_methods))
@@ -423,20 +412,13 @@ def test_across_sessions_within_subject(D_data, R_data, idx_data, method="regres
     # Get input shape information
     n_T, _, n_p, n_q, D_data, R_data = get_input_shape(D_data, R_data)
     
-    # Perform t-statistics for binary columns
-    if identify_binary == True and method == "univariate" or isinstance(identify_binary, (list,np.ndarray)) and method == "univariate":
-        if identify_binary==True:
-            # Identify binary columns automatically in R_data
-            binary_columns = [col for col in range(R_data.shape[-1]) if np.unique(R_data[0,:, col]).size == 2]
-            print("Performing t-statistics on binary columns.")
-        else:
-            # Customize columns defined by the user
-            binary_columns=identify_binary.copy()
-    if binary_columns!=[]:
-        if FWER_correction and len(binary_columns) is not R_data.shape[-1]:
-            print("Warning: Cannot perform FWER_correction with different test statisticss.\nConsider to set identify_binary=False")
+    # Identify categorical columns in R_data
+    category_columns = identify_coloumns_for_t_and_f_tests(R_data, identify_categories, method, cat_lim) if method=="univariate" else []
+    
+    if category_columns!=[]:
+        if FWER_correction and (len(category_columns.get('t_test_cols')) != R_data.shape[-1] or len(category_columns.get('f_test_cols')) != R_data.shape[-1]):
+            print("Warning: Cannot perform FWER_correction with different test statisticss.\nConsider to set identify_categories=False")
             raise ValueError("Cannot perform FWER_correction")
-
 
 # Initialize arrays based on shape of data shape and defined options
     pval, base_statistics, test_statistics_list = initialize_arrays(R_data, n_p, n_q, n_T, method, Nperm, test_statistics_option)
@@ -459,7 +441,7 @@ def test_across_sessions_within_subject(D_data, R_data, idx_data, method="regres
             # Perform permutation on R_t
             Rin = R_t[permutation_matrix[:, perm]]
             # Calculate the permutation distribution
-            test_statistics, bstat = test_statistics_calculations(D_t, Rin, perm, test_statistics, proj, method, binary_columns)
+            test_statistics, bstat = test_statistics_calculations(D_t, Rin, perm, test_statistics, proj, method, category_columns)
             base_statistics[t, :] = bstat if perm == 0 and bstat is not None else base_statistics[t, :]
 
         # Caluclate p-values
@@ -478,15 +460,16 @@ def test_across_sessions_within_subject(D_data, R_data, idx_data, method="regres
     # Return values
     result = {
         'pval': pval,
-        'base_statistics': [] if np.sum(base_statistics)==0 else base_statistics,
-        'test_statistics': [] if np.sum(test_statistics_list)==0 else test_statistics_list,
-        'test_type': 'test_across_sessions_within_subject',
+        'base_statistics': base_statistics,
+        'test_statistics': test_statistics_list,
+        'test_type': 'test_across_subjects',
         'method': method,
-        'FWER_correction':FWER_correction,
+        'max_correction':FWER_correction,
+        'performed_tests': category_columns,
         'Nperm': Nperm}
     return result
 
-def test_across_visits(input_data, vpath_data, n_states, method="regression", Nperm=0, confounds=None, test_statistics_option=False, pairwise_statistic ="mean",FWER_correction=False):
+def test_across_visits(input_data, vpath_data, n_states, method="regression", Nperm=0, confounds=None, test_statistics_option=False, pairwise_statistic ="mean",FWER_correction=False, cat_lim=None):
     from itertools import combinations
     """
     Perform permutation testing within a session for continuous data.
@@ -533,7 +516,7 @@ def test_across_visits(input_data, vpath_data, n_states, method="regression", Np
             'test_type': the type of test, which is the name of the function
             'method': the method used for analysis Valid options are
                     "regression", "univariate", or "cca", "one_vs_rest" and "state_pairs" (default: "regression").
-            'FWER_correction': Specifies if FWER has been applied to the test, can either output True or False.
+            'max_correction': Specifies if FWER has been applied using MaxT, can either output True or False.
             'Nperm' :The number of permutations that has been performed.
                 
     Note:
@@ -560,6 +543,7 @@ def test_across_visits(input_data, vpath_data, n_states, method="regression", Np
         # Get input shape information
         n_T, _, n_p, n_q, input_data, vpath_data= get_input_shape(input_data, vpath_data)  
 
+        
     # Initialize arrays based on shape of data shape and defined options
     pval, base_statistics, test_statistics_list = initialize_arrays(vpath_data, n_p, n_q,
                                                                             n_T, method, Nperm,
@@ -655,7 +639,7 @@ def test_across_visits(input_data, vpath_data, n_states, method="regression", Np
         'test_statistics': test_statistics_list,
         'test_type': 'test_across_visits',
         'method': method,
-        'FWER_correction':FWER_correction,
+        'max_correction':FWER_correction,
         'Nperm': Nperm} 
     return result
 
@@ -1413,7 +1397,7 @@ def calculate_statepair_difference(vpath_array, R_data, state_1, state_2, stat):
     difference = state_1_R_data - state_2_R_data
     return difference
 
-def test_statistics_calculations(Din, Rin, perm, test_statistics, proj, method, binary_columns=[]):
+def test_statistics_calculations(Din, Rin, perm, test_statistics, proj, method, category_columns=[]):
     """
     Calculates the test_statistics array and pval_perms array based on the given data and method.
 
@@ -1452,13 +1436,12 @@ def test_statistics_calculations(Din, Rin, perm, test_statistics, proj, method, 
         test_statistics[perm] = base_statistics
         
     elif method == "univariate":
-        if binary_columns==[]:
+        if category_columns==[]:
             if np.sum(np.isnan(Din))>0 or np.sum(np.isnan(Din))>0:
                 # Calculate the correlation matrix while handling NaN values 
                 # column by column without removing entire rows.
                 base_statistics =calculate_nan_correlation_matrix(Din, Rin)
                 test_statistics[perm, :, :] = np.abs(base_statistics)
-              
             else:
                 # Calculate correlation coefficient matrix
                 corr_coef = np.corrcoef(Din, Rin, rowvar=False)
@@ -1468,38 +1451,60 @@ def test_statistics_calculations(Din, Rin, perm, test_statistics, proj, method, 
                 test_statistics[perm, :, :] = np.abs(base_statistics)
         else: 
             # Calculate test_statistics
+            base_statistics =np.zeros_like(test_statistics[0,:]) if perm ==0 else None
             for col in range(Rin.shape[1]):
-                if col in binary_columns:
-                    # Perform corrrelation analysis
+                if col in category_columns["t_test_cols"]:
+                    # t-test for each column
                     if np.sum(np.isnan(Din))>0 or np.sum(np.isnan(Din))>0:
-                        base_statistics =calculate_nan_t_statistics(Din, Rin[:, col])
-                        test_statistics[perm, :, col] = np.abs(base_statistics)
-                        base_statistics = np.expand_dims(base_statistics,axis=1)
+                        t_test =calculate_nan_t_test(Din, Rin[:, col])
+                        if perm==0:
+                            base_statistics[:,col]=t_test
+                        test_statistics[perm, :, col] = np.abs(t_test)
+
                     else:
                         # Get the t-statistic
-                        t_test_group = np.unique(Rin)
+                        t_test_group = np.unique(Rin[:, col])
                         #ttest_ind(Din[Rin == t_test_group[0]], Din[Rin == t_test_group[1]])
                         # Get the t-statistic
-                        base_statistics, _ = ttest_ind(Din[Rin[:, col] == t_test_group[0]], Din[Rin[:, col] == t_test_group[1]])
+                        t_test, _ = ttest_ind(Din[Rin[:, col] == t_test_group[0]], Din[Rin[:, col] == t_test_group[1]])
+                        # save t-tet to base_statistics
+                        if perm==0:
+                            base_statistics[:,col]=t_test
                         # np.std(Din, axis=0)==0
                         # Update test_statistics
-                        test_statistics[perm, :, col] = np.abs(base_statistics)
-                        base_statistics = np.expand_dims(base_statistics,axis=1)
+                        test_statistics[perm, :, col] = np.abs(t_test)
+ 
+                elif col in category_columns["f_test_cols"]:
+                    if np.sum(np.isnan(Din))>0 or np.sum(np.isnan(Din))>0:
+                        f_test =calculate_nan_f_test(Din, Rin[:, col])
+                        if perm==0:
+                            base_statistics[:,col]=f_test  
+                        test_statistics[perm, :, col] = np.abs(f_test)
+                    else:    
+                        # Perform f-statistics for the columns inside of category_columns["f_test_cols"]
+                        f_test, _ = f_oneway(*[Din[Rin[:,col] == category] for category in np.unique(Rin[:,col])])
+                        if perm==0:
+                            base_statistics[:,col]=f_test
+                        test_statistics[perm, :, col] = np.abs(f_test)
+                                
                 else:
                     # Perform corrrelation analysis
                     if np.sum(np.isnan(Din))>0 or np.sum(np.isnan(Din))>0:
                         # Calculate the correlation matrix while handling NaN values 
                         # column by column without removing entire rows.
-                        base_statistics =calculate_nan_correlation_matrix(Din, Rin[:, col])
-                        test_statistics[perm, :, col] = np.abs(base_statistics)
-                  
+                        corr_array =calculate_nan_correlation_matrix(Din, Rin[:, col])
+                        if perm==0:
+                            base_statistics[:,col]=np.squeeze(corr_array)
+                        test_statistics[perm, :, col] = np.abs(corr_array)
                     else:
                         # Calculate correlation coefficient matrix
                         corr_coef = np.corrcoef(Din, Rin[:, col], rowvar=False)
                         # get the correlation matrix
-                        base_statistics = corr_coef[:Din.shape[1], Din.shape[1]:]
+                        corr_array = corr_coef[:Din.shape[1], Din.shape[1]:]
+                        if perm==0:
+                            base_statistics[:,col]=np.squeeze(corr_array)
                         # Update test_statistics
-                        test_statistics[perm, :, col] = np.squeeze(np.abs(base_statistics))
+                        test_statistics[perm, :, col] = np.squeeze(np.abs(corr_array))
     
     elif method =="cca":
         # Create CCA object with 1 component
@@ -1714,6 +1719,57 @@ def reconstruct_concatenated_design(D_con,D_sessions=None, n_timepoints=None, n_
         D_reconstruct[:, i, :] = D_con[start_idx:end_idx, :]
     return D_reconstruct
 
+
+def identify_coloumns_for_t_and_f_tests(R_data, identify_categories=True, method="univariate", cat_lim=None):
+    """
+    Detect columns in R_data that are categorical. Used to detect which columns to perm t-statistics and F-statistics for later analysis.
+
+    Parameters:
+    -----------
+    R_data : numpy.ndarray
+        The 3D array containing categorical values.
+    identify_categories : bool or list or numpy.ndarray, optional, default=True
+        If True, automatically identify binary columns. If list or ndarray, use the provided list of column indices.
+    method : str, optional, default="univariate"
+        The method to perform the tests. Only "univariate" is currently supported.
+    cat_lim : int or None, optional, default=None
+        The maximum allowed number of categories for F-test.
+
+    Returns:
+    -----------
+    dict
+        A dictionary containing the columns for t-test ("t_test_cols") and F-test ("f_test_cols").
+
+    Note: The function modifies the input dictionary `category_columns` in place.
+    """
+    
+        # Initialize variable
+    category_columns = {'t_test_cols': [], 'f_test_cols': []}
+      
+    # Perform t-statistics for binary columns
+    if identify_categories == True and method == "univariate" or isinstance(identify_categories, (list,np.ndarray)) and method == "univariate":
+        if identify_categories==True:
+            # Identify binary columns automatically in R_data
+            category_columns["t_test_cols"] = [col for col in range(R_data.shape[-1]) if np.unique(R_data[0,:, col]).size == 2]
+            if cat_lim != None:
+                category_columns["f_test_cols"] = [col for col in range(R_data.shape[-1]) if np.unique(R_data[0,:, col]).size > 2 and np.unique(R_data[0,:, col]).size < cat_lim]
+            else:
+                category_columns["f_test_cols"] = [col for col in range(R_data.shape[-1]) if np.unique(R_data[0,:, col]).size > 2]
+                
+        else:
+            # Customize columns defined by the user
+            category_columns["t_test_cols"] = [col for col in identify_categories if np.unique(R_data[0,:, col]).size == 2]
+            #  Filter out the values from list identify_categories that are present in list category_columns["t_test_cols"]
+            identify_categories_filtered = [value for value in identify_categories if value not in category_columns["t_test_cols"]]
+            if cat_lim != None:
+                category_columns["f_test_cols"] = [col for col in identify_categories_filtered if np.unique(R_data[0,:, col]).size > 2 and np.unique(R_data[0,:, col]).size < cat_lim]
+            else:
+                category_columns["f_test_cols"] = [col for col in identify_categories_filtered if np.unique(R_data[0,:, col]).size > 2]
+           
+    return category_columns
+
+
+
 def calculate_nan_correlation_matrix(D_data, R_data):
     """
     Calculate the correlation matrix between independent variables (D_data) and dependent variables (R_data),
@@ -1766,39 +1822,77 @@ def calculate_nan_correlation_matrix(D_data, R_data):
             #     correlation_matrix[i, j] = correlation_coefficient
     return correlation_matrix
 
-def calculate_nan_t_statistics(D_data, R_data):
+def calculate_nan_t_test(D_data, R_data):
     """
-    Calculate the t-statistics between paired independent (D_data) and dependent (R_data) variables,
-    while handling NaN values column by column of dimension p without  without removing entire rows.
-    
+    Calculate the t-statistics between paired independent (D_data) and dependent (R_data) variables, while handling NaN values column by column without removing entire rows.
+        - The function handles NaN values for each feature in D_data without removing entire rows.
+        - NaN values are omitted on a feature-wise basis, and the t-statistic is calculated for each feature.
+        - The resulting array contains t-statistics corresponding to each feature in D_data.
+
     Parameters:
     --------------
-        D_data (numpy.ndarray): Input data matrix for the independent variables.
-        R_data (numpy.ndarray): Input data matrix for the dependent variables.
+        D_data (numpy.ndarray): The input matrix of shape (n_samples, n_features).
+        R_data (numpy.ndarray): The binary labels corresponding to each sample in D_data.
 
     Returns:
     ----------  
-        t_statistics_matrix (numpy.ndarray): t-statistics matrix between paired columns in D_data and R_data.
+        t_test (numpy.ndarray): An array containing t-statistics for each feature in D_data against the binary categories in R_data.
+ 
     """
 
     # Initialize a matrix to store t-statistics
     p = D_data.shape[1]
-    t_statistics_matrix = np.zeros(p)
+    t_test = np.zeros(p)
      # Extract non-NaN values for each group
     groups = np.unique(R_data)
     # Calculate t-statistic for each pair of columns (D_column, R_data)
     for i in range(p):
         D_column = np.expand_dims(D_data[:, i],axis=1)
-        # Find non-NaN indices for both D_column and R_column
-        # valid_indices = ~np.isnan(D_column) & ~np.isnan(R_data)
+        # Find rows where both D_column and R_data are non-NaN
+        # valid_indices = np.all(~np.isnan(D_column) & ~np.isnan(R_data), axis=1)
         # Omit NaN rows in single columns - nan_policy='omit'    
-        t_statistic, _ = ttest_ind(D_column[R_data == groups[0]], D_column[R_data == groups[1]], nan_policy='omit')
+        base_statistics, _ = ttest_ind(D_column[R_data == groups[0]], D_column[R_data == groups[1]], nan_policy='omit')
 
         # Store the t-statistic in the matrix
-        t_statistics_matrix[i] = t_statistic
+        t_test[i] = base_statistics
 
-    return t_statistics_matrix
+    return t_test
 
+
+def calculate_nan_f_test(D_data, R_data):
+    """
+    Calculate F-statistics for each feature of D_data against categories in R_data, while handling NaN values column by column without removing entire rows.
+        - The function handles NaN values for each feature in D_data without removing entire rows.
+        - NaN values are omitted on a feature-wise basis, and the F-statistic is calculated for each feature.
+        - The resulting array contains F-statistics corresponding to each feature in D_data.
+
+    Parameters:
+    --------------
+        D_data (numpy.ndarray): The input matrix of shape (n_samples, n_features).
+        R_data (numpy.ndarray): The binary labels corresponding to each sample in D_data.
+
+    Returns:
+    ----------  
+        f_test (numpy.ndarray): An array containing F-statistics for each feature in D_data against the categories in R_data.
+ 
+    """
+
+    p = D_data.shape[1]
+    f_test = np.zeros(p)
+
+    col = 2
+    for i in range(p):
+        D_column = np.expand_dims(D_data[:, i],axis=1)
+        # Find rows where both D_column and R_data are non-NaN
+        valid_indices = np.all(~np.isnan(D_column) & ~np.isnan(R_data), axis=1)
+        categories =np.unique(R_data[:,col])
+        # Omit NaN rows in single columns - nan_policy='omit'    
+        base_statistics, _ = f_oneway(*[D_column[R_data[:,col]*valid_indices == category] for category in categories])
+
+        # Store the t-statistic in the matrix
+        f_test[i] = base_statistics
+
+    return f_test
 
 def __palm_quickperms(EB, M=None, nP=1000, CMC=False, EE=True):
     # Call palm_quickperms from palm_functions
