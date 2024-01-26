@@ -1876,18 +1876,16 @@ def calculate_nan_f_test(D_data, R_data):
         f_test (numpy.ndarray): An array containing F-statistics for each feature in D_data against the categories in R_data.
  
     """
-
     p = D_data.shape[1]
     f_test = np.zeros(p)
-
-    col = 2
+    
     for i in range(p):
         D_column = np.expand_dims(D_data[:, i],axis=1)
         # Find rows where both D_column and R_data are non-NaN
         valid_indices = np.all(~np.isnan(D_column) & ~np.isnan(R_data), axis=1)
-        categories =np.unique(R_data[:,col])
+        categories =np.unique(R_data)
         # Omit NaN rows in single columns - nan_policy='omit'    
-        base_statistics, _ = f_oneway(*[D_column[R_data[:,col]*valid_indices == category] for category in categories])
+        base_statistics, _ = f_oneway(*[D_column[R_data*valid_indices == category] for category in categories])
 
         # Store the t-statistic in the matrix
         f_test[i] = base_statistics
