@@ -1821,7 +1821,7 @@ def calculate_nan_correlation_matrix(D_data, R_data):
             R_column = R_data[:, j]
             # Find non-NaN indices for both D_column and R_column
             # Find rows where both D_column and R_data are non-NaN
-            valid_indices = np.all(~np.isnan(D_column) & ~np.isnan(R_data), axis=1)
+            # valid_indices = np.all(~np.isnan(D_column) & ~np.isnan(R_data), axis=1)
             valid_indices = ~np.isnan(D_column) & ~np.isnan(R_column)
             # Calculate correlation coefficient matrix
             corr_coef = np.corrcoef(D_column[valid_indices], R_column[valid_indices], rowvar=False)
