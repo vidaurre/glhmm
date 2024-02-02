@@ -10,6 +10,11 @@ import matplotlib.pyplot as plt
 import matplotlib.ticker as mtick
 import pandas as pd
 
+import warnings
+from matplotlib import cm, colors
+from matplotlib.colors import LogNorm, LinearSegmentedColormap, to_rgba_array
+from mpl_toolkits.axes_grid1 import make_axes_locatable
+
 from . import utils
 # import utils
 
@@ -324,8 +329,169 @@ def show_beta(hmm,only_active_states=True,recompute_states=False,
 
     #             r2[j,:] = 1 - (d / d0)
 
-import warnings
-def plot_heatmap(pval, plot_method="pval", alpha = 0.05, normalize_vals=False, figsize=(12, 7), steps=11, title_text="Heatmap (p-values)", annot=True, cmap_type='default', cmap_reverse=True, xlabel="", ylabel="", xticklabels=None, none_diagonal = False):
+
+def custom_colormap():
+    coolwarm_cmap = plt.get_cmap('coolwarm').reversed()
+    coolwarm_cmap2 = plt.get_cmap('autumn')
+    copper_cmap = plt.get_cmap('copper').reversed()
+    # Define the colors for the colormap
+    copper_color1 = to_rgba_array(copper_cmap(1))[0][:3]
+    # Define the colors for the colormap
+    red = (1,0,0)
+    red2 = (66/255, 13/255, 9/255)
+    orange =(1, 0.5, 0)
+    red_color1 = to_rgba_array(coolwarm_cmap(0))[0][:3]
+    # red_color2 = to_rgba_array(coolwarm_cmap(0.1))[0][:3]
+    # red_color3 = to_rgba_array(coolwarm_cmap(0.20))[0][:3]
+    # red_color4 = to_rgba_array(coolwarm_cmap(0.25))[0][:3]
+    # warm_color1 = to_rgba_array(coolwarm_cmap2(0.4))[0][:3]
+    warm_color2 = to_rgba_array(coolwarm_cmap2(0.8))[0][:3]
+    blue_color1 = to_rgba_array(coolwarm_cmap(0.6))[0][:3]
+    blue_color2 = to_rgba_array(coolwarm_cmap(1.0))[0][:3] # Extract the blue color from coolwarm
+
+    # Define the color map with three segments: red to white, white, and white to blue
+    cmap_segments = [
+        (0.0, red2),
+        #(0.002, orange),
+        (0.005, red),   # Intermediate color
+        (0.02, orange),   # Intermediate color
+        #(0.045, warm_color1),
+        (0.040, warm_color2),  # Intermediate color
+        (0.05, copper_color1),
+        (0.09,blue_color1),
+        (1, blue_color2)
+    ]
+
+    # Create the custom colormap
+    custom_cmap = LinearSegmentedColormap.from_list('custom_colormap', cmap_segments)
+
+    return custom_cmap
+
+def red_colormap():
+    # Get the reversed 'coolwarm' colormap
+    coolwarm_cmap = plt.get_cmap('coolwarm').reversed()
+    # Get the 'autumn' colormap
+    autumn_cmap = plt.get_cmap('autumn')
+
+    # Define the colors for the colormap
+    red0 = (float(120/255), 0, 0)
+    red = (1, 0, 0)
+    red2 = (66/255, 13/255, 9/255)
+    orange = (1, 0.5, 0)
+    red_color1 = to_rgba_array(coolwarm_cmap(0))[0][:3]
+    warm_color1 = to_rgba_array(autumn_cmap(0.4))[0][:3]
+    warm_color2 = to_rgba_array(autumn_cmap(0.7))[0][:3]
+    # Define the color map with three segments: red to white, white, and white to blue
+    cmap_segments = [
+        (0.0, red2),
+        (0.3, red0),
+        (0.5, red),
+        (0.7, warm_color1),  # Intermediate color
+        (1, warm_color2),    # Intermediate color
+    ]
+    # Create the custom colormap
+    custom_cmap = LinearSegmentedColormap.from_list('custom_colormap', cmap_segments)
+    return custom_cmap
+
+def blue_colormap():
+    coolwarm_cmap = plt.get_cmap('coolwarm').reversed()
+    copper_cmap = plt.get_cmap('copper').reversed()
+    # cool_cmap = plt.get_cmap('cool')
+    # Define the colors for the colormap
+    # white = (1, 1, 1)  # White color
+    copper_color1 = to_rgba_array(copper_cmap(1))[0][:3]
+    # cool_color1 = to_rgba_array(cool_cmap(0.3))[0][:3]
+    # blue_color1 = to_rgba_array(coolwarm_cmap(0.5))[0][:3]
+    blue_color2 = to_rgba_array(coolwarm_cmap(0.7))[0][:3]
+    blue_color3 = to_rgba_array(coolwarm_cmap(1.0))[0][:3] # Extract the blue color from coolwarm
+
+    # Define the color map with three segments: red to white, white, and white to blue
+    cmap_segments = [
+        (0, copper_color1),
+        #(0.15, cool_color1),
+        (0.2,blue_color2),
+        #(0.7, cool_color1),
+        (1, blue_color3)
+    ]
+    # Create the custom colormap
+    blue_cmap = LinearSegmentedColormap.from_list('custom_colormap', cmap_segments)
+
+    return blue_cmap
+
+def create_cmap_alpha(cmap_list,color_array, alpha):
+    cmap_list_alpha =cmap_list.copy()
+
+    _,idx_alpha =np.where(color_array <= alpha)
+    coolwarm_cmap = plt.get_cmap('coolwarm').reversed()
+    #coolwarm_cmap2 = plt.get_cmap('autumn')
+    red = (1,0,0)
+    orange =(1, 0.5, 0)
+    red_color1 = to_rgba_array(coolwarm_cmap(0))[0][:3]
+
+        
+    list_red =  [red,red_color1,orange]
+    idx_interval =int(idx_alpha[-1]/(len(list_red)-1))
+
+    # Recolor the first to -idx_interval
+    cmap_list_alpha[:idx_alpha[-1],:3]=list_red[0]
+    for i in range(len(list_red)-1):
+        cmap_list_alpha[idx_interval*(i+1):idx_alpha[-1]+1,:3]=list_red[i+1]
+        
+    return cmap_list_alpha
+
+def interpolate_colormap(cmap_list):     
+    """
+    Create a new colormap with the modified color_array.
+
+    Parameters:
+    --------------
+       cmap_list (numpy.ndarray): Original color array for the colormap.
+
+    Returns:
+    ----------  
+        modified_cmap (numpy.ndarray): Modified colormap array.
+    """
+    # Create a new colormap with the modified color_array
+    modified_cmap  = np.ones_like(cmap_list)
+
+    for channel_idx in range(3):
+        # Extract the channel values from the colormap
+        channel_values = cmap_list[:, channel_idx]
+
+        # Get unique values, their indices, and counts
+        unique_values, unique_indices, counts = np.unique(channel_values, return_index=True, return_counts=True)
+
+        # Create a copy unique_indices that is will get reduced for every interation
+        remaining_indices = unique_indices.copy()
+        remaining_counts = counts.copy()
+        # Create a list to store the interpolated values
+        new_map_list = []
+
+        for _ in range(len(unique_values)-1):
+            # Find the minimum value
+            min_value = np.min(remaining_indices)
+            # Locate the index
+            min_idx =np.where(unique_indices==min_value)
+            # Remove the minimum value from the array
+            remaining_counts = remaining_counts[remaining_indices != min_value]
+            remaining_indices = remaining_indices[remaining_indices != min_value]
+            
+            # Find the location of the next minimum value from remaining_indices
+            next_min_value_idx =np.where(unique_indices==np.min(remaining_indices))
+            # Calculate interpolation space difference
+            space_diff = (unique_values[next_min_value_idx]-unique_values[min_idx])/int(counts[min_idx])
+            # Append interpolated values to the list
+            new_map_list.append(np.linspace(unique_values[min_idx], unique_values[next_min_value_idx]-space_diff, int(counts[min_idx])))
+        last_val =np.where(unique_indices==np.min(remaining_indices))
+        for _ in range(int(remaining_counts)):
+            # Append the last value to the new_map_list
+            new_map_list.append([unique_values[last_val]])
+        con_values= np.squeeze(np.concatenate(new_map_list))
+        # Insert values into the new color map
+        modified_cmap [:,channel_idx]=con_values
+    return modified_cmap
+
+def plot_p_value_matrix(pval, alpha = 0.05, normalize_vals=True, figsize=(9, 5), steps=11, title_text="Heatmap (p-values)", annot=True, cmap_type='default', cmap_reverse=True, xlabel="", ylabel="", xticklabels=None, none_diagonal = False, num_colors = 259):
     from matplotlib import cm, colors
     import seaborn as sb
     from mpl_toolkits.axes_grid1 import make_axes_locatable
@@ -336,9 +502,6 @@ def plot_heatmap(pval, plot_method="pval", alpha = 0.05, normalize_vals=False, f
     ----------
     pval : numpy.ndarray
         The p-values data to be plotted.
-    plot_method : str, optional
-        This variable is used to define what kind of plot we are making.
-        Valid options are "pval", "corr_coef" (Default="pval").
     normalize_vals : bool, optional
         If True, the data range will be normalized from 0 to 1 (Default=False).
     figsize : tuple, optional
@@ -366,86 +529,72 @@ def plot_heatmap(pval, plot_method="pval", alpha = 0.05, normalize_vals=False, f
     None
         Displays the heatmap plot.
     """
-    allowed_methods = ["pval", "corr_coef"]
-
-    if plot_method not in allowed_methods:
-        message = f"Warning: Unexpected method '{plot_method}'. Please use 'pval' or 'corr_coeff'."
-        warnings.warn(message, UserWarning)
-        
     if pval.ndim==0:
         pval = np.reshape(pval, (1, 1))
         
     fig, ax = plt.subplots(figsize=figsize)
     if len(pval.shape)==1:
         pval =np.expand_dims(pval,axis=0)
-    if plot_method =="pval":
-        if cmap_type=='default':
-            # Reverse colormap
-            coolwarm_cmap = cm.coolwarm.reversed()
-            # Generate an array of values representing the colormap
-            num_colors = 256  # You can adjust the number of colors as needed
-            color_array = np.linspace(0, 1, num_colors).reshape(1, -1)
-            # Make a jump in color after alpha
-            color_array[color_array > alpha] += 0.3
-            # Create a new colormap with 
-            new_cmap_list = coolwarm_cmap(color_array)[0]
-            # if zero_white:
-            #     # white at the lowest value
-            #     new_cmap_list[0] = [1, 1, 1, 1]  # Set the first color to white
+    if cmap_type=='default':
+        if normalize_vals:
+            color_array = np.logspace(-3, 0, num_colors).reshape(1, -1)
 
+        if alpha == None and normalize_vals==False:
+            cmap = cm.coolwarm.reversed()
+        elif alpha == None and normalize_vals==True:
+            # Create custom colormap
+            coolwarm_cmap = custom_colormap()
             # Create a new colormap with the modified color_array
-            cmap = colors.ListedColormap(new_cmap_list)
-            # Set the value of 0 to white in the colormap
-        if none_diagonal:
-            # Create a copy of the pval matrix
-            pval_with_nan_diagonal = np.copy(pval)
-
-            # Set the diagonal elements to NaN in the copied matrix
-            np.fill_diagonal(pval_with_nan_diagonal, np.nan)
-            pval = pval_with_nan_diagonal.copy()
-
-        if normalize_vals:
-            # Normalize the data range from 0 to 1
-            norm = plt.Normalize(vmin=0, vmax=1)
-
-            heatmap = sb.heatmap(pval, ax=ax, cmap=cmap, annot=annot, fmt=".3f", cbar=False, norm=norm)
+            cmap_list = coolwarm_cmap(color_array)[0]
+            modified_cmap=interpolate_colormap(cmap_list)
+            # Create a LinearSegmentedColormap
+            cmap = LinearSegmentedColormap.from_list('custom_colormap', modified_cmap)
         else:
-            heatmap = sb.heatmap(pval, ax=ax, cmap=cmap, annot=annot, fmt=".3f", cbar=False)
-
-    elif plot_method =="corr_coef":
-        if cmap_type=='default':
-            # seismic_cmap = cm.seismic.reversed()
-            coolwarm_cmap = cm.coolwarm.reversed()
-            
-            #seismic_cmap = cm.RdBu.reversed()
-            # Generate an array of values representing the colormap
-            num_colors = 256  # You can adjust the number of colors as needed
-            color_array = np.linspace(0, 1, num_colors).reshape(1, -1)
-            # # Make a jump in color after alpha
-            # color_array[color_array<0.5]+=0.1
-            # color_array[color_array>0.5]-=0.1
-            # # Set values in the specified index intervals to 0.5
-            # indices=np.where(color_array == 0.5)[1]
-
-            # # Set values in the specified index range to 5
-            # color_array[0,np.min(indices):np.max(indices) + 1] = 0.49
+            color_array = np.logspace(-3, 0, num_colors).reshape(1, -1)
+            # Make a jump in color after alpha
+            # Get blue colormap
+            cmap_blue = blue_colormap()
             # Create a new colormap with 
-            new_cmap_list = coolwarm_cmap(color_array)[0]
-            cmap = colors.ListedColormap(new_cmap_list)
-        else:
-            # Get the colormap dynamically based on the input string
-            cmap = getattr(cm, cmap_type, None)
-            if cmap_reverse:
-                cmap =cmap.reversed()
+            cmap_list = cmap_blue(color_array)[0]
+            red_cmap = red_colormap()
+            blue_cmap = blue_colormap()
+            # Specify the number of elements you want (e.g., 50)
+            num_elements_red = np.sum(color_array <= alpha)
+            num_elements_blue = np.sum(color_array > alpha)
 
-        if normalize_vals:
-            # Normalize the data range from 0 to 1
-            norm = plt.Normalize(vmin=-1, vmax=1)
+            # Generate equally spaced values between 0 and 1
+            colormap_val_red = np.linspace(0, 1, num_elements_red)
+            colormap_val_blue = np.linspace(0, 1, num_elements_blue)
 
-            heatmap = sb.heatmap(pval, ax=ax, cmap=cmap, annot=annot, fmt=".3f", cbar=False, norm=norm)
-        else:
+            # Apply the colormap to the generated values
+            cmap_red = red_cmap(colormap_val_red)
+            cmap_blue = blue_cmap(colormap_val_blue)
+            # overwrite the values below alpha
+            cmap_list[:num_elements_red,:]=cmap_red
+            cmap_list[num_elements_red:,:]=cmap_blue
+            cmap = LinearSegmentedColormap.from_list('custom_colormap', cmap_list)
 
-            heatmap = sb.heatmap(pval, ax=ax, cmap=cmap, annot=annot, fmt=".3f", cbar=False)
+    else:
+        # Get the colormap dynamically based on the input string
+        cmap = getattr(cm, cmap_type, None)
+        if cmap_reverse:
+            cmap =cmap.reversed()
+
+        # Set the value of 0 to white in the colormap
+    if none_diagonal:
+        # Create a copy of the pval matrix
+        pval_with_nan_diagonal = np.copy(pval)
+
+        # Set the diagonal elements to NaN in the copied matrix
+        np.fill_diagonal(pval_with_nan_diagonal, np.nan)
+        pval = pval_with_nan_diagonal.copy()
+
+    if normalize_vals:
+        norm = LogNorm(vmin=1e-3, vmax=1)
+
+        heatmap = sb.heatmap(pval, ax=ax, cmap=cmap, annot=annot, fmt=".3f", cbar=False, norm=norm)
+    else:
+        heatmap = sb.heatmap(pval, ax=ax, cmap=cmap, annot=annot, fmt=".3f", cbar=False)
 
     # Add labels and title
     ax.set_xlabel(xlabel, fontsize=12)
@@ -468,14 +617,165 @@ def plot_heatmap(pval, plot_method="pval", alpha = 0.05, normalize_vals=False, f
         ax.set_yticklabels([])
     # Create an axes on the right side of ax. The width of cax will be 5%
     # of ax and the padding between cax and ax will be fixed at 0.05 inch.
+    
+    if normalize_vals:   
+        divider = make_axes_locatable(ax)
+        cax = divider.append_axes("right", size="5%", pad=0.05)
+        colorbar = plt.colorbar(heatmap.get_children()[0], cax=cax, ticks=np.logspace(-3, 0, num_colors))
+        colorbar.update_ticks()
+        
+         # Round the tick values to three decimal places
+        rounded_ticks = [round(tick, 3) for tick in colorbar.get_ticks()]
+        
+        if figsize[-1] ==1:
+            # Set colorbar ticks based on the same log scale
+            tick_positions = [0, 0.001, 0.01, 0.05, 0.3, 1]
+        else:
+            # Set colorbar ticks based on the same log scale
+            tick_positions = [0, 0.001, 0.01, 0.05, 0.1, 0.3, 1]
+        tick_labels = [f'{tick:.3f}' if tick in tick_positions else '' for tick in rounded_ticks]
+        unique_values_set = set()
+        unique_values_array = ['' if value == '' or value in unique_values_set else (unique_values_set.add(value), value)[1] for value in tick_labels]
+
+        indices_not_empty = [index for index, value in enumerate(unique_values_array) if value != '']
+
+        colorbar.set_ticklabels(unique_values_array)
+        colorbar.ax.tick_params(axis='y')
+
+        for idx, tick_line in enumerate(colorbar.ax.yaxis.get_ticklines()):
+            if idx not in indices_not_empty:
+                tick_line.set_visible(False)
+            
+    else:
+        divider = make_axes_locatable(ax)
+        cax = divider.append_axes("right", size="5%", pad=0.05)
+        # Create a custom colorbar
+        colorbar = plt.colorbar(heatmap.get_children()[0], cax=cax)
+        # Set the ticks to range from the bottom to the top of the colorbar
+        # Get the minimum and maximum values from your data
+        min_value = np.nanmin(pval)
+        max_value = np.nanmax(pval)
+
+        # Set ticks with at least 5 values evenly spaced between min and max
+        colorbar.set_ticks(np.linspace(min_value, max_value, 5).round(2))
+        #colorbar.set_ticks([0, 0.25, 0.5, 1])  # Adjust ticks as needed
+        
+
+    # Show the plot
+    plt.show()
+    
+def plot_correlation_matrix(corr_vals, performed_tests, normalize_vals=False, figsize=(9, 5), steps=11, title_text="Heatmap (p-values)", annot=True, cmap_type='default', cmap_reverse=True, xlabel="", ylabel="", xticklabels=None, none_diagonal = False, num_colors = 256):
+    from matplotlib import cm, colors
+    import seaborn as sb
+    from mpl_toolkits.axes_grid1 import make_axes_locatable
+    """
+    Plot a heatmap of p-values.
+
+    Parameters
+    ----------
+    corr_vals : numpy.ndarray
+        base statistics of corelation coefficients.
+    performed_tests : dict
+        Holds information about the different test statistics that has been applied
+    normalize_vals : bool, optional
+        If True, the data range will be normalized from 0 to 1 (Default=False).
+    figsize : tuple, optional
+        Figure size in inches (width, height) (Default=(12, 7)).
+    steps : int, optional
+        Number of steps for x and y-axis ticks (Default= 11).
+    title_text : str, optional
+        Title text for the heatmap (Default= Heatmap (p-values)).
+    annot : bool, optional
+        If True, annotate each cell with the numeric value (Default= True).
+    cmap : str, optional
+        Colormap to use. Default is a custom colormap based on 'coolwarm'.
+    xlabel : str, optional
+        X-axis label. If not provided, default labels based on the method will be used.
+    ylabel : str, optional
+        Y-axis label. If not provided, default labels based on the method will be used.
+    xticklabels : List[str], optional
+        If not provided, labels will be numbers equal to shape of corr_vals.shape[1].
+        Else you can define your own labels, e.g., xticklabels=['sex', 'age'].
+    none_diagonal : bool, optional
+        If you want to turn the diagonal into NaN numbers (Default=False).
+
+    Returns
+    -------
+    None
+        Displays the heatmap plot.
+    """
+    if performed_tests["t_test_cols"]!=[] or performed_tests["f_test_cols"]!=[]:
+        raise ValueError("Cannot plot the base statistics for the correlation coefficients because different test statistics have been used.")
+    
+    if corr_vals.ndim==0:
+        corr_vals = np.reshape(corr_vals, (1, 1))
+        
+    fig, ax = plt.subplots(figsize=figsize)
+    if len(corr_vals.shape)==1:
+        corr_vals =np.expand_dims(corr_vals,axis=0)
+
+    if cmap_type=='default':
+        # seismic_cmap = cm.seismic.reversed()
+        coolwarm_cmap = cm.coolwarm.reversed()
+        
+        #seismic_cmap = cm.RdBu.reversed()
+        # Generate an array of values representing the colormap
+        color_array = np.linspace(0, 1, num_colors).reshape(1, -1)
+        cmap_list = coolwarm_cmap(color_array)[0]
+        cmap = colors.ListedColormap(cmap_list)
+    else:
+        # Get the colormap dynamically based on the input string
+        cmap = getattr(cm, cmap_type, None)
+        if cmap_reverse:
+            cmap =cmap.reversed()
+
+    if normalize_vals:
+        # Normalize the data range from -1 to 1
+        norm = plt.Normalize(vmin=-1, vmax=1)
+        heatmap = sb.heatmap(corr_vals, ax=ax, cmap=cmap, annot=annot, fmt=".3f", cbar=False, norm=norm)
+    else:
+        heatmap = sb.heatmap(corr_vals, ax=ax, cmap=cmap, annot=annot, fmt=".3f", cbar=False)
+    # Add labels and title
+    ax.set_xlabel(xlabel, fontsize=12)
+    ax.set_ylabel(ylabel, fontsize=12)
+    ax.set_title(title_text, fontsize=14)
+    # Set the x-axis ticks
+    if xticklabels is not None:
+        ax.set_xticks(np.arange(len(xticklabels)) + 0.5)
+        ax.set_xticklabels(xticklabels, rotation="horizontal", fontsize=10)
+    elif corr_vals.shape[1]>1:
+        ax.set_xticks(np.linspace(0, corr_vals.shape[1]-1, steps).astype(int)+0.5)
+        ax.set_xticklabels(np.linspace(1, corr_vals.shape[1], steps).astype(int), rotation="horizontal", fontsize=10)
+    else:
+        ax.set_xticklabels([])
+    # Set the y-axis ticks
+    if corr_vals.shape[0]>1:
+        ax.set_yticks(np.linspace(0, corr_vals.shape[0]-1, steps).astype(int)+0.5)
+        ax.set_yticklabels(np.linspace(1, corr_vals.shape[0], steps).astype(int), rotation="horizontal", fontsize=10)
+    else:
+        ax.set_yticklabels([])
+    # Create an axes on the right side of ax. The width of cax will be 5%
+    # of ax and the padding between cax and ax will be fixed at 0.05 inch.
+    
     divider = make_axes_locatable(ax)
     cax = divider.append_axes("right", size="5%", pad=0.05)
     # Create a custom colorbar
     colorbar = plt.colorbar(heatmap.get_children()[0], cax=cax)
-    # colorbar.set_ticks([0, 0.25, 0.5, 1])  # Adjust ticks as needed
+    # Set the ticks to range from the bottom to the top of the colorbar
+    # Get the minimum and maximum values from your data
+    min_value = np.nanmin(corr_vals)
+    max_value = np.nanmax(corr_vals)
 
+    if normalize_vals:
+        colorbar.set_ticks(np.linspace(-1, 1, 9).round(2))
+    else:
+        # Set ticks with at least 5 values evenly spaced between min and max
+        colorbar.set_ticks(np.linspace(min_value, max_value, 7).round(2))
+
+        
     # Show the plot
     plt.show()
+
   
 def plot_permutation_distribution(test_statistic, title_text="Permutation Distribution",xlabel="Test Statistic Values",ylabel="Density"):
     """
@@ -585,9 +885,9 @@ def plot_scatter_with_labels(p_values, alpha=0.05, title_text="", xlabel=None, y
     ax.set_xlim(xlim_start, len(p_values) + 1)
     ax.set_ylim(ylim_start, np.max(-np.log(p_values)) * 1.2)
 
-    # Customize plot background and grid style
-    sb.set_style("white")
-    ax.grid(color='lightgray', linestyle='--')
+    # # Customize plot background and grid style
+    # sb.set_style("white")
+    # ax.grid(color='lightgray', linestyle='--')
 
     # Show the plot
     plt.tight_layout()
@@ -790,4 +1090,273 @@ def plot_condition_difference(Gamma_reconstruct, R_trials, title='Average Probab
 
     # Show the plot
     plt.tight_layout(rect=[0, 0, 1, 0.96])
+    plt.show()
+    
+    
+def plot_p_values_over_time(pval, figsize=(8, 4), total_time_seconds=None, xlabel="Time points", 
+                            ylabel="P-values (Log Scale)",title_text="P-values over time", xlim_start=0, 
+                            tick_positions=[0, 0.001, 0.01, 0.05, 0.1, 0.3, 1], num_colors=259, 
+                            alpha=0.05,plot_style = "line", linewidth=2.5):
+    """
+    Plot a scatter plot of p-values over time with a log-scale y-axis and a colorbar.
+
+    Parameters:
+    -----------
+    pval : numpy.ndarray
+        The p-values data to be plotted.
+    total_time_seconds (float, optional): 
+        Total time duration in seconds. If provided, time points will be scaled accordingly.
+    xlabel (str, optional): 
+        Label for the x-axis. Default is 'Time points'.
+    ylabel (str, optional): 
+        Label for the y-axis. Default is 'Y-axis (log scale)'.
+    title_text (str, optional): 
+        Title for the plot. Default is 'P-values over time'.
+    tick_positions (list, optional): 
+        Specific values to mark on the y-axis. Default is [0, 0.001, 0.01, 0.05, 0.1, 0.3, 1].
+    num_colors (int, optional): 
+        Resolution for the color bar. Default is 259.
+    alpha (float, optional): 
+        Alpha value is the threshold we set for the p-values when doing visualization. Default is 0.05.
+    plot_style (str, optional): 
+        Style of plot. Default is 'line'.    
+    Returns:
+    -----------
+    None (displays the plot).
+    """
+    if pval.ndim != 1:
+        # Raise an exception and stop function execution
+        raise ValueError("To use the function 'plot_p_values_over_time', the variable for p-values must be one-dimensional.")
+
+    # Generate time points based on total_time_seconds
+    if total_time_seconds:
+        time_points = np.linspace(0, total_time_seconds, len(pval))
+    else:
+        time_points = np.arange(len(pval))
+
+    # Convert to log scale
+    color_array = np.logspace(-3, 0, num_colors).reshape(1, -1)
+
+    if alpha is None:
+        # Create custom colormap
+        coolwarm_cmap = custom_colormap()
+        # Create a new colormap with the modified color_array
+        cmap_list = coolwarm_cmap(color_array)[0]
+        modified_cmap = interpolate_colormap(cmap_list)
+        # Create a LinearSegmentedColormap
+        cmap = LinearSegmentedColormap.from_list('custom_colormap', modified_cmap)
+    else:
+        # Make a jump in color after alpha
+        # Get blue colormap
+        cmap_blue = blue_colormap()
+        # Create a new colormap with 
+        cmap_list = cmap_blue(color_array)[0]
+        red_cmap = red_colormap()
+        blue_cmap = blue_colormap()
+        # Specify the number of elements you want (e.g., 50)
+        num_elements_red = np.sum(color_array <= alpha)
+        num_elements_blue = np.sum(color_array > alpha)
+
+        # Generate equally spaced values between 0 and 1
+        colormap_val_red = np.linspace(0, 1, num_elements_red)
+        colormap_val_blue = np.linspace(0, 1, num_elements_blue)
+
+        # Apply the colormap to the generated values
+        cmap_red = red_cmap(colormap_val_red)
+        cmap_blue = blue_cmap(colormap_val_blue)
+
+        # shift values a bit
+        # cmap_red[:,:3] -= 0.15
+        # # Set values above 1 to 1
+        # # overwrite the values below alpha
+        # cmap_red[cmap_red < 0] = 0
+
+        # overwrite the values below alpha
+        cmap_list[:num_elements_red,:]=cmap_red
+        cmap_list[num_elements_red:,:]=cmap_blue
+        cmap = LinearSegmentedColormap.from_list('custom_colormap', cmap_list)
+            
+    # Create the line plot with varying color based on p-values
+    _, ax = plt.subplots(figsize=figsize)
+
+    # Normalize the data to [0, 1] for the colormap with logarithmic scale
+    norm = LogNorm(vmin=1e-3, vmax=1)
+
+    if plot_style == "line":
+        if alpha !=None:
+            # Plot the line segments with varying colors
+            for i in range(len(time_points)-1):
+                if pval[i+1]>alpha:
+                    color = cmap(norm(pval[i+1]))
+                else:
+                    color = cmap(norm(pval[i]))
+                ax.plot([time_points[i], time_points[i+1]], [pval[i], pval[i+1]], color=color, linewidth=linewidth)
+        else:
+            for i in range(len(time_points)-1):
+                if pval[i+1]>0.05:
+                    color = cmap(norm(pval[i+1]))
+                else:
+                    color = cmap(norm(pval[i]))
+                ax.plot([time_points[i], time_points[i+1]], [pval[i], pval[i+1]], color=color, linewidth=linewidth)
+    elif plot_style=="scatter":
+        ax.scatter(time_points, pval, c=pval, cmap=cmap, norm=LogNorm(vmin=1e-3, vmax=1))
+    elif plot_style=="scatter_line":
+        ax.scatter(time_points, pval, c=pval, cmap=cmap, norm=LogNorm(vmin=1e-3, vmax=1))    
+            # Draw lines between points
+        ax.plot(time_points, pval, color='black', linestyle='-', linewidth=1)
+    # Add labels and title
+    ax.set_xlabel(xlabel, fontsize=12)
+    ax.set_ylabel(ylabel, fontsize=12)
+    ax.set_title(title_text, fontsize=14)
+    
+    # Set axis limits to focus on the relevant data range
+    ax.set_xlim(xlim_start, len(pval) + 1)
+    
+    # Set y-axis to log scale
+    ax.set_yscale('log')
+    # Mark specific values on the y-axis
+    plt.yticks([0.001, 0.01, 0.05, 0.1, 0.2, 0.3, 1], ['0.001', '0.01', '0.05', '0.1', '0.2', '0.3', '1'])
+    # Add a colorbar to show the correspondence between colors and p-values
+    divider = make_axes_locatable(ax)
+    cax = divider.append_axes("right", size="5%", pad=0.05)
+    colorbar = plt.colorbar(plt.cm.ScalarMappable(norm=norm, cmap=cmap), cax=cax, ticks=np.logspace(-3, 0, num_colors), format="%1.0e")
+    colorbar.update_ticks()
+
+    # Round the tick values to three decimal places
+    rounded_ticks = [round(tick, 3) for tick in colorbar.get_ticks()]
+    tick_labels = [f'{tick:.3f}' if tick in tick_positions else '' for tick in rounded_ticks]
+    unique_values_set = set()
+    unique_values_array = ['' if value == '' or value in unique_values_set else (unique_values_set.add(value), value)[1] for value in tick_labels]
+
+    indices_not_empty = [index for index, value in enumerate(unique_values_array) if value != '']
+
+    colorbar.set_ticklabels(unique_values_array)
+    colorbar.ax.tick_params(axis='y')
+
+    for idx, tick_line in enumerate(colorbar.ax.yaxis.get_ticklines()):
+        if idx not in indices_not_empty:
+            tick_line.set_visible(False)
+
+    plt.show()
+    
+    
+def plot_p_values_bar(pval,variables=[],  figsize=(9, 4), num_colors=256, xlabel="",
+                        ylabel="P-values (Log Scale)", title_text="Bar Plot",
+                        tick_positions=[0, 0.001, 0.01, 0.05, 0.1, 0.3, 1], top_adjustment=0.9, alpha = 0.05):
+    """
+    Visualize a bar plot with LogNorm and a colorbar.
+
+    Parameters:
+    - variables (list): List of categories or variables.
+    - pval (array-like): Array of p-values.
+    - figsize (tuple, optional): Figure size, default is (9, 4).
+    - num_colors (int, optional): Number of colors in the colormap, default is 256.
+    - xlabel (str, optional): X-axis label, default is "Categories".
+    - ylabel (str, optional): Y-axis label, default is "Values (log scale)".
+    - title_text (str, optional): Plot title, default is "Bar Plot with LogNorm".
+    - tick_positions (list, optional): Positions of ticks on the colorbar, default is [0, 0.001, 0.01, 0.05, 0.1, 0.3, 1].
+    top_adjustment (float, optional): Adjustment for extra space between title and plot, default is 0.9.
+
+    Returns:
+    None
+    """
+    # Choose a colormap
+    coolwarm_cmap = custom_colormap()
+
+    # Convert to log scale
+    color_array = np.logspace(-3, 0, num_colors).reshape(1, -1)
+
+    if alpha == None:
+        # Create custom colormap
+        coolwarm_cmap = custom_colormap()
+        # Create a new colormap with the modified color_array
+        cmap_list = coolwarm_cmap(color_array)[0]
+        cmap_list = interpolate_colormap(cmap_list)
+    else:    
+        # Make a jump in color after alpha
+        # Get blue colormap
+        cmap_blue = blue_colormap()
+        # Create a new colormap with 
+        cmap_list = cmap_blue(color_array)[0]
+        red_cmap = red_colormap()
+        blue_cmap = blue_colormap()
+        # Specify the number of elements you want (e.g., 50)
+        num_elements_red = np.sum(color_array <= alpha)
+        num_elements_blue = np.sum(color_array > alpha)
+
+        # Generate equally spaced values between 0 and 1
+        colormap_val_red = np.linspace(0, 1, num_elements_red)
+        colormap_val_blue = np.linspace(0, 1, num_elements_blue)
+
+        # Apply the colormap to the generated values
+        cmap_red = red_cmap(colormap_val_red)
+        cmap_blue = blue_cmap(colormap_val_blue)
+
+        # shift values a bit
+        # cmap_red[:,:3] -= 0.15
+        # # Set values above 1 to 1
+        # # overwrite the values below alpha
+        # cmap_red[cmap_red < 0] = 0
+
+        # overwrite the values below alpha
+        cmap_list[:num_elements_red,:]=cmap_red
+        cmap_list[num_elements_red:,:]=cmap_blue
+
+    
+    # Create a LinearSegmentedColormap
+    colormap = LinearSegmentedColormap.from_list('custom_colormap', cmap_list)
+
+    # Plot the bars with LogNorm
+    fig, ax = plt.subplots(figsize=figsize)
+    variables =[f"Var {i+1}" for i in np.arange(len(pval))] if variables==[] else variables
+    bars = plt.bar(variables, pval, color=colormap(LogNorm(vmin=1e-3, vmax=1)(pval)))
+    # Remove the legend
+    #plt.legend().set_visible(False)
+
+    # Add data labels on top of the bars
+    for bar in bars:
+        yval = bar.get_height()
+        plt.text(bar.get_x() + bar.get_width()/2, yval + 0.5, round(yval, 3), ha='center', va='bottom', color='black', fontweight='bold')
+
+
+    # Set y-axis to log scale
+    ax.set_yscale('log')
+
+    # Customize plot
+    plt.yscale('log')
+    ax.set_xlabel(xlabel, fontsize=12)
+    ax.set_ylabel(ylabel, fontsize=12)
+    ax.set_title(title_text, fontsize=14, pad=20)
+
+    # Mark specific values on the y-axis
+    plt.yticks([0.001, 0.01, 0.05, 0.1, 0.2, 0.3, 1], ['0.001', '0.01', '0.05', '0.1', '0.2', '0.3', '1'])
+
+    # Add a colorbar to show the correspondence between colors and p-values
+    divider = make_axes_locatable(ax)
+    cax = divider.append_axes("right", size="5%", pad=0.05)
+    colorbar = plt.colorbar(plt.cm.ScalarMappable(cmap=colormap, norm=LogNorm(vmin=1e-3, vmax=1)), cax=cax, ticks=np.logspace(-3, 0, num_colors), format="%1.0e")
+    colorbar.update_ticks()
+
+    # Round the tick values to three decimal places
+    rounded_ticks = [round(tick, 3) for tick in colorbar.get_ticks()]
+    tick_labels = [f'{tick:.3f}' if tick in tick_positions else '' for tick in rounded_ticks]
+    unique_values_set = set()
+    unique_values_array = ['' if value == '' or value in unique_values_set else (unique_values_set.add(value), value)[1] for value in tick_labels]
+
+    indices_not_empty = [index for index, value in enumerate(unique_values_array) if value != '']
+
+    colorbar.set_ticklabels(unique_values_array)
+    colorbar.ax.tick_params(axis='y')
+
+    for idx, tick_line in enumerate(colorbar.ax.yaxis.get_ticklines()):
+        if idx not in indices_not_empty:
+            tick_line.set_visible(False)
+
+    # Add extra space between title and plot
+    plt.subplots_adjust(top=top_adjustment)
+    plt.xticks(rotation=45, ha='right')  # Rotate x-axis labels for better readability
+    ax.spines['right'].set_visible(False)
+    ax.spines['top'].set_visible(False)
+    plt.tight_layout()
+
     plt.show()
