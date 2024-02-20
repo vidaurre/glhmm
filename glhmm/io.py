@@ -9,6 +9,7 @@ import numpy as np
 import scipy.special
 import scipy.io
 import pickle
+import os
 
 from . import glhmm
 from . import auxiliary
@@ -230,5 +231,98 @@ def load_hmm(filename):
         hmm = pickle.load(inp)
     return hmm
 
+
+
+
+def save_statistics(data_dict, file_name='statistics', save_directory=None, format='npy'):
+    """
+    Save statistics data to a file in the specified directory with optional format (npy or npz).
+
+    Parameters
+    ----------
+    data_dict : dict
+        The dictionary containing statistics data to be saved.
+    file_name : str, optional
+        The name of the file (default is 'statistics').
+    save_directory : str, optional
+        The directory path where the file will be saved (default is the current working directory).
+    format : str
+        The serialization format ('npy' or 'npz', default is 'npy').
+
+    Returns
+    -------
+    None
+    """
+    # Set default directory to current working directory if not provided
+    save_directory = save_directory or os.getcwd()
+
+    # Ensure the directory exists, create it if not
+    if not os.path.exists(save_directory):
+        os.makedirs(save_directory)
+
+    # Construct the full file path
+    file_path = os.path.join(save_directory, f'{file_name}.{format}')
+
+    # Save the dictionary to the file using the specified format
+    if format == 'npy':
+        np.save(file_path, data_dict)
+    elif format == 'npz':
+        np.savez(file_path, **data_dict)
+    else:
+        raise ValueError("Invalid format. Use 'npy' or 'npz'.")
+
+    print(f"Statistics data saved to: {file_path}")
+
+def load_statistics(file_name, load_directory=None):
+    """
+    Load statistics data from a file.
+
+    Parameters
+    ----------
+    file_name : str
+        The name of the file containing the saved statistics data, with or without extension.
+    load_directory : str, optional
+        The directory path where the file is located (default is the current working directory).
+
+    Returns
+    -------
+    data_dict : dict
+        The dictionary containing the loaded statistics data.
+
+    Raises
+    ------
+    FileNotFoundError
+        If the specified file does not exist.
+    ValueError
+        If an unsupported file format is encountered.
+    """
+    # Set default directory to current working directory if not provided
+    load_directory = load_directory or os.getcwd()
+
+    # Construct the full file path
+    file_path = os.path.join(load_directory, file_name)
+
+    if not os.path.exists(file_path):
+        # If the file with the given name does not exist, try adding '.npy' and '.npz' extensions
+        file_path_npy = file_path + '.npy'
+        file_path_npz = file_path + '.npz'
+
+        if not (os.path.exists(file_path_npy) or os.path.exists(file_path_npz)):
+            raise FileNotFoundError(f"File not found: {file_name} or {file_name}.npy or {file_name}.npz")
+
+    try:
+        if os.path.exists(file_path):
+            # If the file exists with the given name, use it
+            # The .item() method extracts the single item from the loaded data.
+            data_dict = np.load(file_path, allow_pickle=True).item()
+        elif os.path.exists(file_path_npy):
+            data_dict = np.load(file_path_npy, allow_pickle=True).item()
+        elif os.path.exists(file_path_npz):
+            loaded_data = np.load(file_path_npz, allow_pickle=True)
+            data_dict = {key: loaded_data[key] for key in loaded_data.files}
+    except Exception as e:
+        raise ValueError(f"Error loading data from {file_name}: {e}")
+
+    return data_dict
 
 
