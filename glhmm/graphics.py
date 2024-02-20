@@ -937,9 +937,8 @@ def plot_vpath(vpath, signal =[], xlabel = "Time Steps", figsize=(7, 4), ylabel 
     # Show the plot
     plt.show()
     
-def plot_average_probability(Gamma_reconstruct, title='Average probability for each state', fontsize=16, figsize=(8, 6), vertical_lines=None, line_colors=None, highlight_boxes=False):
-    import matplotlib.patches as patches
-    import random
+def plot_average_probability(Gamma_reconstruct, title='Average probability for each state', fontsize=16, figsize=(7, 5), vertical_lines=None, line_colors=None, highlight_boxes=False):
+
     """
     Plots the average probability for each state over time.
 
@@ -976,40 +975,39 @@ def plot_average_probability(Gamma_reconstruct, title='Average probability for e
         Gamma_avg[i, :] = np.mean(filtered_values, axis=0).round(3)
 
     # Set figure size
-    plt.figure(figsize=figsize)
+    fig, axes = plt.subplots(1, figsize=figsize)
 
     # Plot each line with a label
     for state in range(Gamma_reconstruct.shape[-1]):
         plt.plot(Gamma_avg[:, state], label=f'State {state + 1}')
-
-    # Add vertical lines and highlight boxes
+        
+    # Add vertical lines, line colors, and highlight boxes
     if vertical_lines:
         for idx, pair in enumerate(vertical_lines):
-            if line_colors is True:
-                if isinstance(line_colors, list) and len(line_colors) == len(vertical_lines):
-                    color = line_colors[idx]
-                else:
-                    color = "#{:06x}".format(random.randint(0, 0xFFFFFF))
-            else:
-                color = line_colors[idx] if line_colors and len(line_colors) > idx else 'gray'
-            
-            plt.axvline(x=pair[0], color=color, linestyle='--', linewidth=1)
-            plt.axvline(x=pair[1], color=color, linestyle='--', linewidth=1)
+            color = line_colors[idx] if line_colors and len(line_colors) > idx else 'gray'
+            axes.axvline(x=pair[0], color=color, linestyle='--', linewidth=1)
+            axes.axvline(x=pair[1], color=color, linestyle='--', linewidth=1)
 
             if highlight_boxes:
-                rect = patches.Rectangle((pair[0], plt.ylim()[0]), pair[1] - pair[0], plt.ylim()[1] - plt.ylim()[0], linewidth=0, edgecolor='none', facecolor=color, alpha=0.2)
-                plt.gca().add_patch(rect)
+                rect = plt.Rectangle((pair[0], axes.get_ylim()[0]), pair[1] - pair[0], axes.get_ylim()[1] - axes.get_ylim()[0], linewidth=0, edgecolor='none', facecolor=color, alpha=0.2)
+                axes.add_patch(rect)
 
     # Add labels and legend
     plt.xlabel('Timepoints', fontsize=fontsize)
     plt.ylabel('Average probability', fontsize=fontsize)
     plt.title(title, fontsize=fontsize)
 
-    # Place legend to the right of the figure
+    # Add legend for the highlighted boxes
+    if highlight_boxes:
+        legend_rect = plt.Rectangle((0, 0), 1, 1, linewidth=0, edgecolor='none', facecolor='gray', alpha=0.2, label='Interval with significant difference')
+        plt.legend(handles=[legend_rect], loc='upper right')
+
+    # Place legend for the lines to the right of the figure
     plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
 
     # Show the plot
     plt.show()
+    
 
 def plot_condition_difference(Gamma_reconstruct, R_trials, title='Average Probability and Difference', fontsize=16, figsize=(9, 2), vertical_lines=None, line_colors=None, highlight_boxes=False):
     """
@@ -1211,11 +1209,11 @@ def plot_p_values_over_time(pval, figsize=(8, 4), total_time_seconds=None, xlabe
     
     # Set axis limits to focus on the relevant data range
     ax.set_xlim(xlim_start, len(pval) + 1)
-    
+    ax.set_ylim([0.0008, 1.5])
     # Set y-axis to log scale
     ax.set_yscale('log')
     # Mark specific values on the y-axis
-    plt.yticks([0.001, 0.01, 0.05, 0.1, 0.2, 0.3, 1], ['0.001', '0.01', '0.05', '0.1', '0.2', '0.3', '1'])
+    plt.yticks([0.001, 0.01, 0.05, 0.1, 0.3, 1], ['0.001', '0.01', '0.05', '0.1', '0.3', '1'])
     # Add a colorbar to show the correspondence between colors and p-values
     divider = make_axes_locatable(ax)
     cax = divider.append_axes("right", size="5%", pad=0.05)
@@ -1242,7 +1240,7 @@ def plot_p_values_over_time(pval, figsize=(8, 4), total_time_seconds=None, xlabe
     
 def plot_p_values_bar(pval,variables=[],  figsize=(9, 4), num_colors=256, xlabel="",
                         ylabel="P-values (Log Scale)", title_text="Bar Plot",
-                        tick_positions=[0, 0.001, 0.01, 0.05, 0.1, 0.3, 1], top_adjustment=0.9, alpha = 0.05):
+                        tick_positions=[0, 0.001, 0.01, 0.05, 0.1, 0.3, 1], top_adjustment=0.9, alpha = 0.05, pad_title=20):
     """
     Visualize a bar plot with LogNorm and a colorbar.
 
@@ -1308,7 +1306,14 @@ def plot_p_values_bar(pval,variables=[],  figsize=(9, 4), num_colors=256, xlabel
 
     # Plot the bars with LogNorm
     fig, ax = plt.subplots(figsize=figsize)
-    variables =[f"Var {i+1}" for i in np.arange(len(pval))] if variables==[] else variables
+    if isinstance(pval, (float, np.ndarray)) and np.size(pval) == 1:
+    # It's a scalar, create a list with a single element
+        variables = [f"Var 1"] if variables==[] else variables
+    else:
+        # It's an iterable, use len()
+        variables =[f"Var {i+1}" for i in np.arange(len(pval))] if variables==[] else variables
+
+
     bars = plt.bar(variables, pval, color=colormap(LogNorm(vmin=1e-3, vmax=1)(pval)))
     # Remove the legend
     #plt.legend().set_visible(False)
@@ -1326,10 +1331,10 @@ def plot_p_values_bar(pval,variables=[],  figsize=(9, 4), num_colors=256, xlabel
     plt.yscale('log')
     ax.set_xlabel(xlabel, fontsize=12)
     ax.set_ylabel(ylabel, fontsize=12)
-    ax.set_title(title_text, fontsize=14, pad=20)
+    ax.set_title(title_text, fontsize=14, pad=pad_title)
 
     # Mark specific values on the y-axis
-    plt.yticks([0.001, 0.01, 0.05, 0.1, 0.2, 0.3, 1], ['0.001', '0.01', '0.05', '0.1', '0.2', '0.3', '1'])
+    plt.yticks([0.001, 0.01, 0.05, 0.1, 0.3, 1], ['0.001', '0.01', '0.05', '0.1', '0.3', '1'])
 
     # Add a colorbar to show the correspondence between colors and p-values
     divider = make_axes_locatable(ax)
