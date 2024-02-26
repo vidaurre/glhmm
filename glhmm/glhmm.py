@@ -1740,7 +1740,7 @@ class glhmm():
             raise Exception("The model has no mean")
 
         if self.hyperparameters["model_beta"] != 'no':
-            q = self.beta[0]["Mu"].shape
+            q = self.beta[0]["Mu"].shape[1]
         else:
             q = self.Sigma[0]["rate"].shape[0]
 
