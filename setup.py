@@ -8,7 +8,7 @@ setuptools.setup(
     author='Diego Vidaurre',
     author_email = "dvidaurre@cfin.au.dk",
     readme = "README.md",
-    install_requires=['scipy','numpy','scikit-learn','matplotlib','numba','seaborn', 'pandas','igraph'],
+    install_requires=['scipy','numpy','scikit-learn','matplotlib','numba','seaborn', 'pandas','igraph', 'tqdm', 'scikit-image'],
     packages=["glhmm"],
     zip_safe=False,
     classifiers=[
