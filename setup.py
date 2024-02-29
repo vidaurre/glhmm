@@ -2,7 +2,7 @@ import setuptools
 
 setuptools.setup(
     name='glhmm',
-    version='0.1.13',
+    version='0.2.1',
     description='Gaussian Linear Hidden Markov Model',
     url='https://github.com/vidaurre/glhmm',
     author='Diego Vidaurre',
@@ -15,4 +15,3 @@ setuptools.setup(
         "Intended Audience :: Science/Research",
         "Programming Language :: Python :: 3"]
     )
-
