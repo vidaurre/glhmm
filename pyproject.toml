@@ -14,3 +14,17 @@ doc = [
     "furo",
     "nbsphinx",
 ]
+
+[tool.poetry.dependencies]
+python = "^3.9"
+nbconvert = "^6.1.0"
+ipykernel = "^6.0.3"
+sphinx = "^5.0"
+myst_parser = "^0.15.2"
+furo = "^2022.3.3"
+nbsphinx = "^0.8.6"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
+
