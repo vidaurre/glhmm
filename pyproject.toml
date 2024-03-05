@@ -9,7 +9,7 @@ dynamic = ["version", "description","classifiers","dependencies"]
 
 [project.optional-dependencies]
 doc = [
-    "sphinx~=4.2.0",
+    "sphinx>=5.0",
     "myst_parser",
     "furo",
     "nbsphinx",
