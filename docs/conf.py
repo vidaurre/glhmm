@@ -66,3 +66,4 @@ needs_sphinx = '5.0'
 
 # Add nbsphinx_kernel_name option
 nbsphinx_kernel_name = 'python3.9'
+
