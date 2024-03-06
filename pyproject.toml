@@ -14,3 +14,6 @@ doc = [
     "furo",
     "nbsphinx",
 ]
+
+[tool.nbsphinx]
+nbsphinx_kernel_name = "python3.9"
