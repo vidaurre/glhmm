@@ -13,7 +13,10 @@
 import os
 import sys
 sys.path.insert(0, os.path.abspath('..'))
-os.system('sudo apt-get install pandoc')
+
+import subprocess
+subprocess.call(['apt-get', 'install', 'pandoc'])
+
 
 # -- Project information -----------------------------------------------------
 
