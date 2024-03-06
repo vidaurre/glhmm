@@ -18,4 +18,10 @@ python:
       path: .
       extra_requirements:
         - doc
+
+dependencies:
+  pre:
+    - apt:
+        packages:
+          - pandoc
         
