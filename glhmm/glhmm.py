@@ -428,8 +428,9 @@ class glhmm():
                     for j in range(q):
                         if self.hyperparameters["connectivity"] is not None:
                             jj = np.where(self.hyperparameters["connectivity"][:,j]==1)[0]
-                        self.alpha_beta[k]["rate"][jj,j] += \
-                                0.5 * np.diag(np.squeeze(self.beta[k]["Sigma"][jj,jj[:,np.newaxis],j]))
+                        sjj = self.beta[k]["Sigma"][jj,jj[:,np.newaxis],j]
+                        if (np.squeeze(sjj).shape != ()): sjj = np.squeeze(sjj)
+                        self.alpha_beta[k]["rate"][jj,j] += 0.5 * np.diag(sjj)
                 else:
                     self.alpha_beta[k]["rate"] += 0.5 * np.reshape(np.diag(self.beta[k]["Sigma"]),(p,q))
                 self.alpha_beta[k]["shape"] = self.priors["alpha_beta"]["shape"] + 0.5
