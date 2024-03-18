@@ -11,11 +11,11 @@ sphinx:
 formats:
   - pdf
   - epub
-  
+
 python:
   install:
-  - requirements: docs/requirements.txt
-    - method: pip
+    - requirements: docs/requirements.txt
+      method: pip
       path: .
       extra_requirements:
         - doc
