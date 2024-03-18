@@ -13,8 +13,7 @@ doc = [
     "myst_parser",
     "furo",
     "nbsphinx",
-    "pandoc",
-    "pypandoc"
+    "pandoc"
 ]
 
 #[tool.nbsphinx]
