@@ -13,9 +13,8 @@ doc = [
     "myst_parser",
     "furo",
     "nbsphinx",
-    "pypandoc",
     "pandoc==2.14.2"
 ]
 
-[tool.nbsphinx]
-nbsphinx_kernel_name = "python3.10"
+#[tool.nbsphinx]
+#nbsphinx_kernel_name = "python3.10"
