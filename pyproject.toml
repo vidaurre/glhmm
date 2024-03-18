@@ -12,9 +12,7 @@ doc = [
     "sphinx>=5.0",
     "myst_parser",
     "furo",
-    "nbsphinx",
-    "pandoc>=2.14.2, <4"
-]
+    "nbsphinx"]
 
 #[tool.nbsphinx]
 #nbsphinx_kernel_name = "python3.10"
