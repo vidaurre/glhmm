@@ -13,7 +13,7 @@ doc = [
     "myst_parser",
     "furo",
     "nbsphinx",
-    "pypandoc"
+    "pypandoc",
     "pandoc==2.14.2"
 ]
 
