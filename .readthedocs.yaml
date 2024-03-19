@@ -20,6 +20,7 @@ formats:
 # Optional, declares the Python requirements required to build docs
 python:
   install:
+    - requirements: docs/requirements.txt
     - method: pip
       path: .
       extra_requirements:
