@@ -1,17 +1,23 @@
 version: 2
 
+# Sets the version of Python and other tools needed
 build:
   os: "ubuntu-22.04"
+  apt_packages:
+    - "pandoc"
   tools:
     python: "3.10"
 
+# Builds documentation in the docs/ directory with Sphinx
 sphinx:
   configuration: docs/conf.py
 
+# Optional, builds docs in additional formats such as PDF
 formats:
   - pdf
   - epub
 
+# Optional, declares the Python requirements required to build docs
 python:
   install:
     - method: pip
