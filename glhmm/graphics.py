@@ -445,11 +445,11 @@ def interpolate_colormap(cmap_list):
 
     Parameters:
     --------------
-       cmap_list (numpy.ndarray): Original color array for the colormap.
+    cmap_list (numpy.ndarray): Original color array for the colormap.
 
     Returns:
     ----------  
-        modified_cmap (numpy.ndarray): Modified colormap array.
+    modified_cmap (numpy.ndarray): Modified colormap array.
     """
     # Create a new colormap with the modified color_array
     modified_cmap  = np.ones_like(cmap_list)
@@ -498,8 +498,8 @@ def plot_p_value_matrix(pval, alpha = 0.05, normalize_vals=True, figsize=(9, 5),
     """
     Plot a heatmap of p-values.
 
-    Parameters
-    ----------
+    Parameters:
+    -----------
     pval : numpy.ndarray
         The p-values data to be plotted.
     normalize_vals : bool, optional
@@ -524,8 +524,8 @@ def plot_p_value_matrix(pval, alpha = 0.05, normalize_vals=True, figsize=(9, 5),
     none_diagonal : bool, optional
         If you want to turn the diagonal into NaN numbers (Default=False).
 
-    Returns
-    -------
+    Returns:
+    --------
     None
         Displays the heatmap plot.
     """
@@ -671,8 +671,8 @@ def plot_correlation_matrix(corr_vals, performed_tests, normalize_vals=False, fi
     """
     Plot a heatmap of p-values.
 
-    Parameters
-    ----------
+    Parameters:
+    -----------
     corr_vals : numpy.ndarray
         base statistics of corelation coefficients.
     performed_tests : dict
@@ -699,8 +699,8 @@ def plot_correlation_matrix(corr_vals, performed_tests, normalize_vals=False, fi
     none_diagonal : bool, optional
         If you want to turn the diagonal into NaN numbers (Default=False).
 
-    Returns
-    -------
+    Returns:
+    --------
     None
         Displays the heatmap plot.
     """
@@ -781,8 +781,8 @@ def plot_permutation_distribution(test_statistic, title_text="Permutation Distri
     """
     Plot the histogram of the permutation with the observed statistic marked.
 
-    Parameters
-    ----------
+    Parameters:
+    -----------
     test_statistic : numpy.ndarray
         An array containing the permutation values.
     title_text : str, optional
@@ -792,8 +792,8 @@ def plot_permutation_distribution(test_statistic, title_text="Permutation Distri
     ylabel : str, optional
         Text of the ylabel (Default="Density").
 
-    Returns
-    -------
+    Returns:
+    --------
     None
         Displays the histogram plot.
     """
@@ -813,8 +813,8 @@ def plot_scatter_with_labels(p_values, alpha=0.05, title_text="", xlabel=None, y
     """
     Create a scatter plot to visualize p-values with labels indicating significant points.
 
-    Parameters
-    ----------
+    Parameters:
+    -----------
     p_values : numpy.ndarray
         An array of p-values. Can be a 1D array or a 2D array with shape (1, 5).
     alpha : float, optional
@@ -830,12 +830,12 @@ def plot_scatter_with_labels(p_values, alpha=0.05, title_text="", xlabel=None, y
     ylim_start : float, optional
         Start position of y-axis limits (Default=-0.1).
 
-    Returns
-    -------
+    Returns:
+    --------
     None
 
-    Note
-    ----
+    Notes:
+    ------
     Points with p-values less than alpha are considered significant and marked with red text.
     """
 
@@ -942,8 +942,8 @@ def plot_average_probability(Gamma_reconstruct, title='Average probability for e
     """
     Plots the average probability for each state over time.
 
-    Parameters
-    ----------
+    Parameters:
+    -----------
     Gamma_reconstruct : numpy.ndarray
         3D array representing reconstructed gamma values.
         Shape: (num_timepoints, num_trials, num_states)
@@ -961,8 +961,8 @@ def plot_average_probability(Gamma_reconstruct, title='Average probability for e
     highlight_boxes : bool, optional
         Whether to include highlighted boxes for each pair of vertical lines (Default=False).
     
-    Returns
-    -------
+    Returns:
+    --------
     None
     """
 
@@ -1117,7 +1117,8 @@ def plot_p_values_over_time(pval, figsize=(8, 4), total_time_seconds=None, xlabe
     alpha (float, optional): 
         Alpha value is the threshold we set for the p-values when doing visualization. Default is 0.05.
     plot_style (str, optional): 
-        Style of plot. Default is 'line'.    
+        Style of plot. Default is 'line'.  
+        
     Returns:
     -----------
     None (displays the plot).
@@ -1245,17 +1246,19 @@ def plot_p_values_bar(pval,variables=[],  figsize=(9, 4), num_colors=256, xlabel
     Visualize a bar plot with LogNorm and a colorbar.
 
     Parameters:
-    - variables (list): List of categories or variables.
-    - pval (array-like): Array of p-values.
-    - figsize (tuple, optional): Figure size, default is (9, 4).
-    - num_colors (int, optional): Number of colors in the colormap, default is 256.
-    - xlabel (str, optional): X-axis label, default is "Categories".
-    - ylabel (str, optional): Y-axis label, default is "Values (log scale)".
-    - title_text (str, optional): Plot title, default is "Bar Plot with LogNorm".
-    - tick_positions (list, optional): Positions of ticks on the colorbar, default is [0, 0.001, 0.01, 0.05, 0.1, 0.3, 1].
+    --------------
+    variables (list): List of categories or variables.
+    pval (array-like): Array of p-values.
+    figsize (tuple, optional): Figure size, default is (9, 4).
+    num_colors (int, optional): Number of colors in the colormap, default is 256.
+    xlabel (str, optional): X-axis label, default is "Categories".
+    ylabel (str, optional): Y-axis label, default is "Values (log scale)".
+    title_text (str, optional): Plot title, default is "Bar Plot with LogNorm".
+    tick_positions (list, optional): Positions of ticks on the colorbar, default is [0, 0.001, 0.01, 0.05, 0.1, 0.3, 1].
     top_adjustment (float, optional): Adjustment for extra space between title and plot, default is 0.9.
 
     Returns:
+    ---------
     None
     """
     # Choose a colormap

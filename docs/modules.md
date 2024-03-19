@@ -10,4 +10,6 @@ auxiliary
 utils
 graphics
 prediction
+statistics
+palm_functions
 ```

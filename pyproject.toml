@@ -9,8 +9,10 @@ dynamic = ["version", "description","classifiers","dependencies"]
 
 [project.optional-dependencies]
 doc = [
-    "sphinx~=4.2.0",
+    "sphinx>=5.0",
     "myst_parser",
     "furo",
-    "nbsphinx",
-]
+    "nbsphinx"]
+
+#[tool.nbsphinx]
+#nbsphinx_kernel_name = "python3.10"
