@@ -1282,7 +1282,7 @@ class glhmm():
         rng = np.random.default_rng()
 
         if (self.hyperparameters["model_beta"] != 'no') and (X is None):
-            p = self.beta[0]["Mu"].shape[1]
+            p = self.beta[0]["Mu"].shape[0]
             X = np.random.normal(size=(np.sum(T),p))
 
         # Y, mean
