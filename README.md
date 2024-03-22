@@ -27,4 +27,4 @@ The required dependencies to use glhmm are:
 - To install from the repo, use the following command:
 
 ```bash
-pip install --user git+https://github.com/vidaurre/glhmm
+pip install glhmm
