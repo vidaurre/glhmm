@@ -1,4 +1,4 @@
-![Overview Image](../logo2_full.png)
+![Overview Image](logo2_full.png)
 
 [![Documentation Status](https://readthedocs.org/projects/glhmm/badge/?version=latest)](https://glhmm.readthedocs.io/en/latest/?badge=latest)
 
