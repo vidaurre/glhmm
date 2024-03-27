@@ -8,6 +8,7 @@ Some public useful functions - Gaussian Linear Hidden Markov Model
 import numpy as np
 import statistics
 import math
+from scipy.optimize import linear_sum_assignment
 
 def get_FO(Gamma,indices,summation=False):
     """Calculates the fractional occupancy of each state.
@@ -315,5 +316,52 @@ def get_state_evoked_response_entropy(Gamma,indices):
             entropy[t] -= math.log(ser[t,k]) * ser[t,k]
     return entropy
 
+
+def get_gamma_similarity(gamma1, gamma2):
+    """Computes a measure of similarity between two sets of state time courses.
+
+    These can have different numbers of states, but they must have the same
+    number of time points.
+
+    Parameters:
+    -----------
+    gamma1 : numpy.ndarray
+        First set of state time courses with shape (T, K).
+    gamma2 : numpy.ndarray
+        Second set of state time courses with shape (T, K2), where K2 may be different from K.
+
+    Returns:
+    --------
+    S : float
+        Similarity, measured as the sum of joint probabilities under the optimal state alignment.
+    assig : numpy.ndarray
+        Optimal state alignment for gamma2 (uses Munkres' algorithm).
+    gamma2 : numpy.ndarray
+        The second set of state time courses reordered to match gamma1.
+    """
+    
+    T, K = gamma1.shape
+    gamma1_0 = gamma1.copy()   
+    g = gamma2
+    K2 = g.shape[1]
+    
+    if K < K2:
+        gamma1 = np.hstack((gamma1_0, np.zeros((T, K2 - K))))
+        K = K2
+    elif K > K2:
+        g = np.hstack((g, np.zeros((T, K - K2))))
+    
+    M = np.zeros((K, K))  # cost
+    
+    for k1 in range(K):
+        for k2 in range(K):
+            M[k1, k2] += (T - np.sum(np.minimum(gamma1[:, k1], g[:, k2]))) / T
+    
+    row_ind, col_ind = linear_sum_assignment(M)
+    S = K - M[row_ind, col_ind].sum()
+    
+    gamma2 = g[:, col_ind]
+    
+    return S, col_ind, gamma2
 
 
