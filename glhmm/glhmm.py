@@ -15,6 +15,12 @@ import warnings
 import copy
 import time
 
+### Import cupy for GPU acceleration if available, otherwise pass.
+#try:
+#    import cupy as cp
+#except:
+#    pass
+
 # import auxiliary
 # import io
 # import utils
@@ -74,7 +80,10 @@ class glhmm():
         dirichlet_diag=10,
         connectivity=None,
         Pstructure=None,
-        Pistructure=None
+        Pistructure=None,
+        serial=False,
+        MemSaver=False,
+        ParallelChunks=2
     ):
 
         if (connectivity is not None) and not ((covtype == 'shareddiag') or (covtype == 'diag')):
@@ -97,7 +106,30 @@ class glhmm():
         else:
             self.hyperparameters["Pistructure"] = Pistructure
 
+        self.serial = serial
+        self.MemSaver = MemSaver
+        self.ParallelChunks = int(ParallelChunks)
+        if self.serial and self.MemSaver:
+            print("Warning: Memory Saver setting is selected for serial computing. This will have no effect on Memory use. If serial computation exceeds Memory limits, use stochastic training. Disabling Memory Saver.")
+            self.MemSaver=False
+        elif self.MemSaver:
+            if self.ParallelChunks < 2:
+                print("Warning: Memory Saver selected with fewer than 2 chunks. Disabling Memory Saver.")
+                self.MemSaver=False
+            else:
+                print("Memory saver selected. Running parallel computations in ", self.ParallelChunks, "chunks.") 
 
+        """ ### GPU acceletation settings.
+        self.gpu_enabled = gpu_enabled
+        if self.gpu_enabled and cp:
+            print("GPU acceleration enabled.")
+        elif self.gpu_enabled and not cp:
+            ### Throw an error if GPU acceleration is selected but cupy could not be imported. 
+            raise ImportError("GPU acceleration selected but cupy not available. Install RAPIDS or disable GPU acceleration.")
+        elif (not self.gpu_enabled) and cp:
+            ### Notify users of GPU aceleration if it is readily available.
+            print("GPU acceleration not selected, but cupy detected. Consider enabling GPU acceleration by setting the \"gpu_enabled=True\" option.")
+        """
         self.beta = None
         self.mean = None
         self.alpha_beta = None
@@ -108,7 +140,7 @@ class glhmm():
         
     ## Private methods
 
-    def __forward_backward(self,L,indices):
+    def __forward_backward(self,L,indices,indices_individual):
         """
         Calculate state time courses for a collection of segments
         """        
@@ -117,42 +149,110 @@ class glhmm():
         if len(ind.shape) == 1:
             ind = np.expand_dims(indices,axis=0)
 
-        T,K = L.shape
-        N = ind.shape[0]
-        Gamma = np.zeros((T,K))
-        Xi = np.zeros((T-N,K,K))
-        scale = np.zeros(T)
-        indices_Xi = auxiliary.Gamma_indices_to_Xi_indices(ind)
+        if self.serial:
+            T,K = L.shape
+            N = ind.shape[0]
+            indices_Xi = auxiliary.Gamma_indices_to_Xi_indices(ind)
 
-        for j in range(N):
+            Gamma = np.zeros((T,K))
+            Xi = np.zeros((T-N,K,K))
+            scale = np.zeros((T))
 
-            tt = range(ind[j,0],ind[j,1])
-            tt_xi = range(indices_Xi[j,0],indices_Xi[j,1])
+            for j in range(N):
 
-            a,b,sc = auxiliary.compute_alpha_beta(L[tt,:],self.Pi,self.P)
+                tt = range(ind[j,0],ind[j,1])
+                tt_xi = range(indices_Xi[j,0],indices_Xi[j,1])
+                
+                a,b,sc = auxiliary.compute_alpha_beta_serial(L[tt,:],self.Pi,self.P)
 
-            scale[tt] = sc
-            Gamma[tt,:] = b * a
-            Xi[tt_xi,:,:] = np.matmul( np.expand_dims(a[0:-1,:],axis=2), \
-                np.expand_dims((b[1:,:] * L[tt[1:],:]),axis=1)) * self.P
-
-            # repeat if a Nan is produced, scaling the loglikelood
-            if np.any(np.isinf(Gamma)) or np.any(np.isinf(Xi)):
-                LL = np.log(L[tt,:])
-                t = np.all(LL<0,axis=1)
-                LL[t,:] = LL[t,:] -  np.expand_dims(np.max(LL[t,:],axis=1), axis=1)
-                a,b,_ = auxiliary.compute_alpha_beta(np.exp(LL),self.Pi,self.P)
+                scale[tt] = sc
                 Gamma[tt,:] = b * a
                 Xi[tt_xi,:,:] = np.matmul( np.expand_dims(a[0:-1,:],axis=2), \
                     np.expand_dims((b[1:,:] * L[tt[1:],:]),axis=1)) * self.P
 
-            Gamma[tt,:] = Gamma[tt,:] / np.expand_dims(np.sum(Gamma[tt,:],axis=1), axis=1)
-            Xi[tt_xi,:,:] = Xi[tt_xi,:,:] / np.expand_dims(np.sum(Xi[tt_xi,:,:],axis=(1,2)),axis=(1,2))
+                # repeat if a Nan is produced, scaling the loglikelood
+                if np.any(np.isinf(Gamma)) or np.any(np.isinf(Xi)):
+                    LL = np.log(L[tt,:])
+                    t = np.all(LL<0,axis=1)
+                    LL[t,:] = LL[t,:] -  np.expand_dims(np.max(LL[t,:],axis=1), axis=1)
+                    a,b,_ = auxiliary.compute_alpha_beta_serial(np.exp(LL),self.Pi,self.P)
+                    Gamma[tt,:] = b * a
+                    Xi[tt_xi,:,:] = np.matmul( np.expand_dims(a[0:-1,:],axis=2), \
+                        np.expand_dims((b[1:,:] * L[tt[1:],:]),axis=1)) * self.P
+
+                Gamma[tt,:] = Gamma[tt,:] / np.expand_dims(np.sum(Gamma[tt,:],axis=1), axis=1)
+                Xi[tt_xi,:,:] = Xi[tt_xi,:,:] / np.expand_dims(np.sum(Xi[tt_xi,:,:],axis=(1,2)),axis=(1,2))
+
+        else:
+
+            T,N,K = L.shape
+
+            Gamma_ = np.zeros((T,N,K))
+            Xi_ = np.zeros((T-1,N,K,K))
+            indices_Xi = auxiliary.Gamma_indices_to_Xi_indices(ind)
+            
+            a,b,sc = auxiliary.compute_alpha_beta_parallel(L,self.Pi,self.P,indices_individual)
+
+            ## convert scale to a vector for output.
+            scale = np.zeros(max(ind[:,1]))
+
+            for jj in range(N):
+                tt = range(ind[jj,0],ind[jj,1])
+                tt_ind = range(indices_individual[jj,0],indices_individual[jj,1])
+
+                scale[tt] = sc[tt_ind,jj]
+
+            Gamma_ = b * a
+
+            ## Estiamte Xi per-subject, and save index if inf is found for Gamma or Xi in time series.
+            has_inf=[]
+            for jj in range(N):
+                Xi_[:,jj,:,:] = np.matmul( np.expand_dims(a[0:-1,jj,:],axis=2), \
+                    np.expand_dims((b[1:,jj,:] * L[1:,jj,:]),axis=1)) * self.P
+
+                ind_indiv = range(indices_individual[jj,0],indices_individual[jj,1])
+                Xi_ind_indiv = range(indices_individual[jj,0],indices_individual[jj,1]-1)
+
+                if np.any(np.isinf(Gamma_[ind_indiv,jj,:])) or np.any(np.isinf(Xi_[Xi_ind_indiv,jj,:])):
+                    has_inf.append(jj)
+
+            # repeat if a Nan is produced, scaling the loglikelood
+            if len(has_inf)>0:     
+                Lsub = L[:,has_inf,:]
+
+                LL = np.log(Lsub)
+                for jj in range(len(has_inf)):
+                    t = np.all(LL[:,jj,:]<0,axis=1)
+                    LL[t,jj,:] = LL[t,jj,:] -  np.expand_dims(np.max(LL[t,jj,:],axis=1), axis=1)
+
+                a,b,_ = auxiliary.compute_alpha_beta_parallel(np.exp(LL),self.Pi,self.P,indices_individual[has_inf,:])
+                Gamma_[:,has_inf,:] = b * a
+                for jj in range(len(has_inf)):
+                    idx = has_inf[jj]
+                    Xi_[:,idx,:,:] = np.matmul( np.expand_dims(a[0:-1,jj,:],axis=2), \
+                        np.expand_dims((b[1:,jj,:] * Lsub[1:,jj,:]),axis=1)) * self.P
+
+            ## Restructure data to n_samples * n_states
+
+            Gamma = np.zeros((max(ind[:,1]),K))
+            Xi = np.zeros((max(ind[:,1])-N,K,K))
+
+            for jj in range(N):
+                tt = range(ind[jj,0],ind[jj,1])
+                tt_ind = range(indices_individual[jj,0],indices_individual[jj,1])
+                tt_xi = range(indices_Xi[jj,0],indices_Xi[jj,1])
+                tt_xi_ind = range(indices_individual[jj,0],indices_individual[jj,1]-1)
+
+                Gamma[tt,:] = Gamma_[tt_ind,jj,:] / np.expand_dims(np.sum(Gamma_[tt_ind,jj,:],axis=1), axis=1)
+                Xi[tt_xi,:,:] = Xi_[tt_xi_ind,jj,:,:] / np.expand_dims(np.sum(Xi_[tt_xi_ind,jj,:,:],axis=(1,2)),axis=(1,2))
+
+            del Gamma_, Xi_
+
 
         return Gamma,Xi,scale
 
 
-    def __forward_backward_vp(self,L,indices):
+    def __forward_backward_vp(self,L,indices,indices_individual):
         """
         Calculate viterbi path for a collection of segments
         """        
@@ -161,14 +261,32 @@ class glhmm():
         if len(ind.shape) == 1:
             ind = np.expand_dims(indices,axis=0)
 
-        T,K = L.shape
-        N = ind.shape[0]
-        vpath = np.zeros((T,K))
-        
-        for j in range(N):
-            tt = range(ind[j,0],ind[j,1])
-            qstar = auxiliary.compute_qstar(L[tt,:],self.Pi,self.P)
-            vpath[tt,:] = qstar
+        if self.serial:
+            
+            T,K = L.shape
+            N = ind.shape[0]
+
+            vpath = np.zeros((T,K))
+
+            for j in range(N):
+                tt = range(ind[j,0],ind[j,1])
+
+                qstar = auxiliary.compute_qstar_serial(L[tt,:],self.Pi,self.P)
+                vpath[tt,:] = qstar
+
+        else:
+            T,N,K = L.shape
+            vpath = np.zeros((max(ind[:,1]),K))
+
+            qstar = auxiliary.compute_qstar_parallel(L,self.Pi,self.P,indices_individual)
+
+            for j in range(N):
+                tt = range(ind[j,0],ind[j,1])
+                tt_ind = range(indices_individual[j,0],indices_individual[j,1])
+
+                vpath[tt,:] = qstar[tt_ind,j,:]
+
+
 
         return vpath   
     
@@ -1153,6 +1271,8 @@ class glhmm():
             indices = np.zeros((1,2)).astype(int)
             indices[0,0] = 0
             indices[0,1] = Y.shape[0]
+#        else:
+            #indices_individual = indices - np.expand_dims(indices[:,0],axis=1)
         if len(indices.shape) == 1: 
             indices = np.expand_dims(indices,axis=0)
 
@@ -1166,6 +1286,8 @@ class glhmm():
         else:
             indices_sliced = indices
 
+        indices_individual = indices_sliced - np.expand_dims(indices_sliced[:,0],axis=1)
+
         L = np.exp(self.loglikelihood(X_sliced,Y_sliced))
 
         minreal = sys.float_info.min
@@ -1175,12 +1297,63 @@ class glhmm():
 
         N = indices.shape[0]
 
+        maxt = np.max(indices_individual[:,1])
+
+        if self.serial:
+            L_ = L
+        else:
+            ## Convert L into a 3D matrix (time points * samples * states)
+            L_ = np.zeros((maxt, N, L.shape[1]))
+            for j in range(N):
+                tt = range(indices_sliced[j,0],indices_sliced[j,1])
+                tti = range(indices_individual[j,0],indices_individual[j,1])
+                L_[tti,j,:] = L[tt,:]
+        
+
         if viterbi: 
-            vpath = self.__forward_backward_vp(L,indices_sliced)
+            vpath = self.__forward_backward_vp(L_,indices_sliced,indices_individual)
             return vpath
         else:
-            Gamma,Xi,scale = self.__forward_backward(L,indices_sliced)
-            return Gamma,Xi,scale
+            if self.MemSaver:
+
+                n_chunks = self.ParallelChunks
+
+                chunk_size = ceil(N/n_chunks)
+                if N < (chunk_size*n_chunks):
+                    n_chunks -= 1
+                    chunk_rem = N-(chunk_size * n_chunks)
+                else:
+                    chunk_rem = 0
+
+                T,K = L.shape
+
+                Gamma = np.zeros((T,K))
+                Xi = np.zeros((T-N,K,K))
+                scale = np.zeros((T))
+
+                for nn in range(n_chunks):
+                    sub_n = range(nn*chunk_size,(nn+1)*chunk_size)
+                    Gamma_,Xi_,scale_ = self.__forward_backward(L_[:,sub_n,:],indices_sliced[sub_n,:],indices_individual[sub_n,:])
+                    
+                    tt = range(indices_sliced[nn*chunk_size,0],indices_sliced[(nn+1)*chunk_size,1])
+                    Gamma[tt,:] = Gamma_
+                    Xi[tt,:,:] = Xi_
+                    scale[tt] = scale_
+
+                if chunk_rem>0:
+                    sub_n = range((n_chunks * chunk_size), ((n_chunks * chunk_size) + chunk_rem))
+                    Gamma_,Xi_,scale_ = self.__forward_backward(L_[:,sub_n,:],indices_sliced[sub_n,:],indices_individual[sub_n,:])
+
+                    tt = range(indices_sliced[(n_chunks * chunk_size),0],indices_sliced[(n_chunks * chunk_size) + chunk_rem,1])
+                    Gamma[tt,:] = Gamma_
+                    Xi[tt,:,:] = Xi_
+                    scale[tt] = scale_
+
+                return Gamma,Xi,scale
+
+            else:        
+                Gamma,Xi,scale = self.__forward_backward(L_,indices_sliced,indices_individual)
+                return Gamma,Xi,scale
 
 
     def sample_Gamma(self,size):

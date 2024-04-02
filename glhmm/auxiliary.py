@@ -13,6 +13,11 @@ import math
 
 from numba import njit
 
+try:
+    import cupy as cp
+except:
+    pass
+
 
 def slice_matrix(M,indices):
     """Slices rows of input matrix M based on indices array along axis 0.
@@ -132,7 +137,7 @@ def approximate_Xi(Gamma,indices):
 
 
 @njit
-def compute_alpha_beta(L,Pi,P):
+def compute_alpha_beta_serial(L,Pi,P):
     """Computes alpha and beta values and scaling factors.
 
     Parameters:
@@ -182,8 +187,65 @@ def compute_alpha_beta(L,Pi,P):
     return a,b,sc
 
 
+def compute_alpha_beta_parallel(L,Pi,P,indices_individual):
+    """Computes alpha and beta values and scaling factors.
+
+    Parameters:
+    -----------
+    L : GPU array-like of shape (n_samples, n_states)
+        The L matrix.
+    Pi : GPU array-like with shape (n_states,)
+        The initial state probabilities.
+    P : GPU array-like of shape (n_states, n_states)
+        The transition probabilities across states.
+
+    Returns:
+    --------
+    a : GPU array-like of shape (n_samples, n_states)
+        The alpha values.
+    b : GPU array-like of shape (n_samples, n_states)
+        The beta values.
+    sc : GPU array-like of shape (n_samples,)
+        The scaling factors.
+
+    """
+    T,N,K = L.shape
+    #minreal = sys.float_info.min
+    #maxreal = sys.float_info.max
+
+    a = np.zeros((T,N,K))
+    b_ = np.zeros((T,N,K))
+    sc = np.zeros((T,N))
+
+    ## Compute alpha per time point for all subjects simultaneously.
+    a[0,:,:] = Pi * L[0,:,:]
+    sc[0,:] = np.sum(a[0,:,:],axis=1)
+    a[0,:,:] = a[0,:,:] / np.expand_dims(sc[0,:],axis=1)
+
+    for t in range(1,T):
+        a[t,:,:] = (a[t-1,:,:] @ P) * L[t,:,:]
+        sc[t,:] = np.sum(a[t,:,:],axis=1)
+        #if sc[t]<minreal: sc[t] = minreal
+        a[t,:,:] = a[t,:,:] / np.expand_dims(sc[t,:],axis=1)
+
+    ## bottom-align L and the scaling matrix to estiamte beta.
+    L_b = roll_by_vector(L,T-indices_individual[:,1],axis=0)
+    sc_b = roll_by_vector(sc,T-indices_individual[:,1],axis=0)
+
+    b_[T-1,:,:] = np.ones((1,N,K)) / np.expand_dims(sc_b[T-1,:],axis=1)
+    for t in range(T-2,-1,-1):
+        b_[t,:,:] = ( (b_[t+1,:,:] * L_b[t+1,:,:]) @ P.T ) / np.expand_dims(sc_b[t,:],axis=1)
+        #bad = b[t,:]>maxreal
+        #if bad.sum()>0: b[t,bad] = maxreal
+
+    ## top-align beta for output.
+    b = roll_by_vector(b_,indices_individual[:,1],axis=0)
+
+    return a,b,sc
+
+
 @njit
-def compute_qstar(L,Pi,P):
+def compute_qstar_serial(L,Pi,P):
     """Compute the most probable state sequence.
 
     Parameters:
@@ -211,12 +273,18 @@ def compute_qstar(L,Pi,P):
     delta[0,:] = delta[0,:] / np.sum(delta[0,:])
 
     for t in range(1,T):
+        v = delta[t-1,:] * P.T
+        psi[t,:] = np.argmax(v,axis=1)
+        delta[t,:] = v[range(K),psi[t,:]] * L[t,:]
+        delta[t,:] = delta[t,:] / np.sum(delta[t,:])
+
+    """for t in range(1,T):
         for k in range(K):
             v = delta[t-1,:] * P[:,k]
             mv = np.amax(v)
             delta[t,k] = mv * L[t,k]
             psi[t,k] = np.where(mv==v)[0][0]
-        delta[t,:] = delta[t,:] / np.sum(delta[t,:])
+        delta[t,:] = delta[t,:] / np.sum(delta[t,:]) """
 
     id = np.where(delta[-1,:]==np.amax(delta[-1,:]))[0][0]
     qstar[T-1,id] = 1
@@ -225,6 +293,52 @@ def compute_qstar(L,Pi,P):
         id0 = np.where(qstar[t+1,:]==1)[0][0]
         id = psi[t+1,id0]
         qstar[t,id] = 1
+
+    return qstar
+
+def compute_qstar_parallel(L,Pi,P,indices_individual):
+    """Compute the most probable state sequence.
+
+    Parameters:
+    -----------
+    L : GPU array-like of shape (n_samples, n_states)
+        The L matrix.
+    Pi : GPU array-like with shape (n_states,)
+        The initial state probabilities.
+    P : GPU array-like of shape (n_states, n_states)
+        The transition probabilities across states.
+
+    Returns:
+    --------
+    qstar : GPU array-like of shape (n_samples, n_states)
+        The most probable state sequence.
+
+    """
+    T,N,K = L.shape
+
+    delta = np.zeros((T,N,K))
+    psi = np.zeros((T,N,K)).astype(np.int64)
+    qstar = np.zeros((T,N,K))
+
+    delta[0,:,:] = Pi * L[0,:,:]
+    delta[0,:,:] = delta[0,:,:] / np.expand_dims(np.sum(delta[0,:,:],axis=1),axis=1)
+
+    for t in range(1,T):
+        v = np.expand_dims(delta[t-1,:,:],axis=1) * P.T
+        psi[t,:,:] = np.argmax(v,axis=2)
+        delta[t,:,:] = v[np.expand_dims(range(N),axis=1),np.expand_dims(range(K),axis=0),psi[t,:,:]] * L[t,:,:]
+        delta[t,:,:] = delta[t,:,:] / np.expand_dims(np.sum(delta[t,:,:],axis=1),axis=1)
+
+    delta_ = roll_by_vector(delta,T-indices_individual[:,1],axis=0)
+
+    id = np.argmax(delta_[-1,:,:],axis=1)
+
+    qstar[T-1,range(N),id] = 1
+
+    for t in range(T-2,-1,-1):
+        id0 = np.argmax(qstar[t+1,:,:]==1,axis=1)
+        id = psi[t+1,range(N),id0]
+        qstar[t,range(N),id] = 1
 
     return qstar
 
@@ -511,3 +625,26 @@ def padGamma(Gamma, T, options):
 
     return Gamma  # Return the adjusted Gamma
 
+def roll_by_vector(arr, shifts, axis=1):
+    """Apply an independent roll for each dimensions of a single axis.
+
+    Parameters
+    ----------
+    arr : np.ndarray
+        Array of any shape.
+
+    shifts : np.ndarray
+        How many shifting to use for each dimension. Shape: `(arr.shape[axis],)`.
+
+    axis : int
+        Axis along which elements are shifted. 
+    """
+    arr = np.swapaxes(arr,axis,-1)
+    all_idcs = np.ogrid[[slice(0,n) for n in arr.shape]]
+
+    # Convert to a positive shift
+    all_idcs[-1] = all_idcs[-1] - np.expand_dims(shifts,axis=1)
+
+    result = arr[tuple(all_idcs)]
+    arr = np.swapaxes(result,-1,axis)
+    return arr
