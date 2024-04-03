@@ -22,6 +22,8 @@
 import numpy as np
 import pandas as pd
 import copy
+import warnings
+
 ######################### PART 0 - hcp2block #########################################################
 def hcp2block(tmp, blocksfile=None, dz2sib=False, ids=None):
     """
@@ -1112,7 +1114,8 @@ def palm_quickperms(EB, M=None, nP=1000, CMC=False, EE=True):
     ----------  
     list: A list containing the generated permutations.
     """
-    
+    # Filter out the specific RuntimeWarning
+    warnings.filterwarnings("ignore", message="overflow encountered in exp")
     # Reindex the input matrix for palm methods with 'fixleaves'
     EB2 = palm_reindex(EB, 'fixleaves')
     

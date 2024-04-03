@@ -46,18 +46,18 @@ def show_trans_prob_mat(hmm,only_active_states=False,show_diag=True,show_colorba
             P[k,k] = 0
             P[k,:] = P[k,:] / np.sum(P[k,:])
 
-    _,ax = plt.subplots()
-    g = sb.heatmap(ax=ax,data=P,\
+    _,axes = plt.subplots()
+    g = sb.heatmap(ax=axes,data=P,\
         cmap='bwr',xticklabels=np.arange(K), yticklabels=np.arange(K),
         square=True,cbar=show_colorbar)
     for k in range(K):
         g.plot([0, K],[k, k], '-k')
         g.plot([k, k],[0, K], '-k')
 
-    ax.axhline(y=0, color='k',linewidth=4)
-    ax.axhline(y=K, color='k',linewidth=4)
-    ax.axvline(x=0, color='k',linewidth=4)
-    ax.axvline(x=K, color='k',linewidth=4)
+    axes.axhline(y=0, color='k',linewidth=4)
+    axes.axhline(y=K, color='k',linewidth=4)
+    axes.axvline(x=0, color='k',linewidth=4)
+    axes.axvline(x=K, color='k',linewidth=4)
 
 
 def show_Gamma(Gamma, line_overlay=None, tlim=None, Hz=1, palette='viridis'):
@@ -532,7 +532,7 @@ def plot_p_value_matrix(pval, alpha = 0.05, normalize_vals=True, figsize=(9, 5),
     if pval.ndim==0:
         pval = np.reshape(pval, (1, 1))
         
-    fig, ax = plt.subplots(figsize=figsize)
+    fig, axes = plt.subplots(figsize=figsize)
     if len(pval.shape)==1:
         pval =np.expand_dims(pval,axis=0)
     if cmap_type=='default':
@@ -592,34 +592,34 @@ def plot_p_value_matrix(pval, alpha = 0.05, normalize_vals=True, figsize=(9, 5),
     if normalize_vals:
         norm = LogNorm(vmin=1e-3, vmax=1)
 
-        heatmap = sb.heatmap(pval, ax=ax, cmap=cmap, annot=annot, fmt=".3f", cbar=False, norm=norm)
+        heatmap = sb.heatmap(pval, ax=axes, cmap=cmap, annot=annot, fmt=".3f", cbar=False, norm=norm)
     else:
-        heatmap = sb.heatmap(pval, ax=ax, cmap=cmap, annot=annot, fmt=".3f", cbar=False)
+        heatmap = sb.heatmap(pval, ax=axes, cmap=cmap, annot=annot, fmt=".3f", cbar=False)
 
     # Add labels and title
-    ax.set_xlabel(xlabel, fontsize=12)
-    ax.set_ylabel(ylabel, fontsize=12)
-    ax.set_title(title_text, fontsize=14)
+    axes.set_xlabel(xlabel, fontsize=12)
+    axes.set_ylabel(ylabel, fontsize=12)
+    axes.set_title(title_text, fontsize=14)
     # Set the x-axis ticks
     if xticklabels is not None:
-        ax.set_xticks(np.arange(len(xticklabels)) + 0.5)
-        ax.set_xticklabels(xticklabels, rotation="horizontal", fontsize=10)
+        axes.set_xticks(np.arange(len(xticklabels)) + 0.5)
+        axes.set_xticklabels(xticklabels, rotation="horizontal", fontsize=10)
     elif pval.shape[1]>1:
-        ax.set_xticks(np.linspace(0, pval.shape[1]-1, steps).astype(int)+0.5)
-        ax.set_xticklabels(np.linspace(1, pval.shape[1], steps).astype(int), rotation="horizontal", fontsize=10)
+        axes.set_xticks(np.linspace(0, pval.shape[1]-1, steps).astype(int)+0.5)
+        axes.set_xticklabels(np.linspace(1, pval.shape[1], steps).astype(int), rotation="horizontal", fontsize=10)
     else:
-        ax.set_xticklabels([])
+        axes.set_xticklabels([])
     # Set the y-axis ticks
     if pval.shape[0]>1:
-        ax.set_yticks(np.linspace(0, pval.shape[0]-1, steps).astype(int)+0.5)
-        ax.set_yticklabels(np.linspace(1, pval.shape[0], steps).astype(int), rotation="horizontal", fontsize=10)
+        axes.set_yticks(np.linspace(0, pval.shape[0]-1, steps).astype(int)+0.5)
+        axes.set_yticklabels(np.linspace(1, pval.shape[0], steps).astype(int), rotation="horizontal", fontsize=10)
     else:
-        ax.set_yticklabels([])
+        axes.set_yticklabels([])
     # Create an axes on the right side of ax. The width of cax will be 5%
     # of ax and the padding between cax and ax will be fixed at 0.05 inch.
     
     if normalize_vals:   
-        divider = make_axes_locatable(ax)
+        divider = make_axes_locatable(axes)
         cax = divider.append_axes("right", size="5%", pad=0.05)
         colorbar = plt.colorbar(heatmap.get_children()[0], cax=cax, ticks=np.logspace(-3, 0, num_colors))
         colorbar.update_ticks()
@@ -647,7 +647,7 @@ def plot_p_value_matrix(pval, alpha = 0.05, normalize_vals=True, figsize=(9, 5),
                 tick_line.set_visible(False)
             
     else:
-        divider = make_axes_locatable(ax)
+        divider = make_axes_locatable(axes)
         cax = divider.append_axes("right", size="5%", pad=0.05)
         # Create a custom colorbar
         colorbar = plt.colorbar(heatmap.get_children()[0], cax=cax)
@@ -664,9 +664,8 @@ def plot_p_value_matrix(pval, alpha = 0.05, normalize_vals=True, figsize=(9, 5),
     # Show the plot
     plt.show()
     
-def plot_correlation_matrix(corr_vals, performed_tests, normalize_vals=False, figsize=(9, 5), steps=11, title_text="Heatmap (p-values)", annot=True, cmap_type='default', cmap_reverse=True, xlabel="", ylabel="", xticklabels=None, none_diagonal = False, num_colors = 256):
+def plot_correlation_matrix(corr_vals, performed_tests, normalize_vals=False, figsize=(9, 5), steps=11, title_text="Correlation Coefficients Heatmap", annot=True, cmap_type='default', cmap_reverse=True, xlabel="", ylabel="", xticklabels=None, none_diagonal = False, num_colors = 256):
     from matplotlib import cm, colors
-    import seaborn as sb
     from mpl_toolkits.axes_grid1 import make_axes_locatable
     """
     Plot a heatmap of p-values.
@@ -710,7 +709,7 @@ def plot_correlation_matrix(corr_vals, performed_tests, normalize_vals=False, fi
     if corr_vals.ndim==0:
         corr_vals = np.reshape(corr_vals, (1, 1))
         
-    fig, ax = plt.subplots(figsize=figsize)
+    fig, axes = plt.subplots(figsize=figsize)
     if len(corr_vals.shape)==1:
         corr_vals =np.expand_dims(corr_vals,axis=0)
 
@@ -732,32 +731,32 @@ def plot_correlation_matrix(corr_vals, performed_tests, normalize_vals=False, fi
     if normalize_vals:
         # Normalize the data range from -1 to 1
         norm = plt.Normalize(vmin=-1, vmax=1)
-        heatmap = sb.heatmap(corr_vals, ax=ax, cmap=cmap, annot=annot, fmt=".3f", cbar=False, norm=norm)
+        heatmap = sb.heatmap(corr_vals, ax=axes, cmap=cmap, annot=annot, fmt=".3f", cbar=False, norm=norm)
     else:
-        heatmap = sb.heatmap(corr_vals, ax=ax, cmap=cmap, annot=annot, fmt=".3f", cbar=False)
+        heatmap = sb.heatmap(corr_vals, ax=axes, cmap=cmap, annot=annot, fmt=".3f", cbar=False)
     # Add labels and title
-    ax.set_xlabel(xlabel, fontsize=12)
-    ax.set_ylabel(ylabel, fontsize=12)
-    ax.set_title(title_text, fontsize=14)
+    axes.set_xlabel(xlabel, fontsize=12)
+    axes.set_ylabel(ylabel, fontsize=12)
+    axes.set_title(title_text, fontsize=14)
     # Set the x-axis ticks
     if xticklabels is not None:
-        ax.set_xticks(np.arange(len(xticklabels)) + 0.5)
-        ax.set_xticklabels(xticklabels, rotation="horizontal", fontsize=10)
+        axes.set_xticks(np.arange(len(xticklabels)) + 0.5)
+        axes.set_xticklabels(xticklabels, rotation="horizontal", fontsize=10)
     elif corr_vals.shape[1]>1:
-        ax.set_xticks(np.linspace(0, corr_vals.shape[1]-1, steps).astype(int)+0.5)
-        ax.set_xticklabels(np.linspace(1, corr_vals.shape[1], steps).astype(int), rotation="horizontal", fontsize=10)
+        axes.set_xticks(np.linspace(0, corr_vals.shape[1]-1, steps).astype(int)+0.5)
+        axes.set_xticklabels(np.linspace(1, corr_vals.shape[1], steps).astype(int), rotation="horizontal", fontsize=10)
     else:
-        ax.set_xticklabels([])
+        axes.set_xticklabels([])
     # Set the y-axis ticks
     if corr_vals.shape[0]>1:
-        ax.set_yticks(np.linspace(0, corr_vals.shape[0]-1, steps).astype(int)+0.5)
-        ax.set_yticklabels(np.linspace(1, corr_vals.shape[0], steps).astype(int), rotation="horizontal", fontsize=10)
+        axes.set_yticks(np.linspace(0, corr_vals.shape[0]-1, steps).astype(int)+0.5)
+        axes.set_yticklabels(np.linspace(1, corr_vals.shape[0], steps).astype(int), rotation="horizontal", fontsize=10)
     else:
-        ax.set_yticklabels([])
+        axes.set_yticklabels([])
     # Create an axes on the right side of ax. The width of cax will be 5%
     # of ax and the padding between cax and ax will be fixed at 0.05 inch.
     
-    divider = make_axes_locatable(ax)
+    divider = make_axes_locatable(axes)
     cax = divider.append_axes("right", size="5%", pad=0.05)
     # Create a custom colorbar
     colorbar = plt.colorbar(heatmap.get_children()[0], cax=cax)
@@ -894,21 +893,84 @@ def plot_scatter_with_labels(p_values, alpha=0.05, title_text="", xlabel=None, y
     plt.show()
     
     
-def plot_vpath(vpath, signal =[], xlabel = "Time Steps", figsize=(7, 4), ylabel = "", yticks=None,line_width=2, label_signal="Signal"):
-    # Assuming vpath is your data matrix
-    num_states = vpath.shape[1]
+import matplotlib.pyplot as plt
+import seaborn as sns
+import numpy as np
 
-    # Create a Seaborn color palette
-    colors = sb.color_palette("Set3", n_colors=num_states)
+def plot_vpath(viterbi_path, signal=None, idx_data=None, figsize=(7, 4), fontsize_labels=13, fontsize_title=16, yticks=None, time_conversion_rate=None, xlabel="Timepoints", ylabel="", title="Viterbi Path", signal_label="Signal", show_legend=True, vertical_linewidth=1.5):
+    """
+    Plot Viterbi path with optional signal overlay.
 
-    # Plot the stack plot using Seaborn
-    fig, axes = plt.subplots(figsize=figsize)  # Adjust the figure size for better readability
-    axes.stackplot(np.arange(vpath.shape[0]), vpath.T, colors=colors, labels=[f'State {i + 1}' for i in range(num_states)])
+    Parameters:
+    -----------
+    viterbi_path : array-like
+        The Viterbi path data matrix.
+    signal : array-like, optional
+        Signal data to overlay on the plot. Default is None.
+    idx_data : array-like, optional
+        Array representing time intervals. Default is None.
+    figsize : tuple, optional
+        Figure size. Default is (7, 4).
+    fontsize_labels : int, optional
+        Font size for axis labels. Default is 13.
+    fontsize_title : int, optional
+        Font size for plot title. Default is 16.
+    yticks : bool, optional
+        Whether to show y-axis ticks. Default is None.
+    time_conversion_rate : float, optional
+        Conversion rate from time steps to seconds. Default is None.
+    xlabel : str, optional
+        Label for the x-axis. Default is "Timepoints".
+    ylabel : str, optional
+        Label for the y-axis. Default is "".
+    title : str, optional
+        Title for the plot. Default is "Viterbi Path".
+    signal_label : str, optional
+        Label for the signal plot. Default is "Signal".
+    show_legend : bool, optional
+        Whether to show the legend. Default is True.
+    vertical_linewidth : float, optional
+        Line width for vertical gray lines. Default is 1.5.
+    """
+    num_states = viterbi_path.shape[1]
+    colors = sns.color_palette("Set3", n_colors=num_states)
+    if num_states > len(colors):
+        extra_colors = sns.color_palette("husl", n_colors=num_states - len(colors))
+        colors.extend(extra_colors)
 
-    # Set labels and legend to the right of the figure
-    axes.set_xlabel(xlabel, fontsize=14)
-    axes.set_ylabel(ylabel, fontsize=14)
-    axes.legend(title='States', loc='upper left', bbox_to_anchor=(1, 1))  # Adjusted legend position
+    fig, axes = plt.subplots(figsize=figsize)
+
+    # Plot Viterbi path
+    if time_conversion_rate is not None:
+        time_seconds = np.arange(viterbi_path.shape[0]) / time_conversion_rate
+        axes.stackplot(time_seconds, viterbi_path.T, colors=colors, labels=[f'State {i + 1}' for i in range(num_states)])
+        if xlabel == "Timepoints":
+            xlabel = "Time (seconds)"
+        axes.set_xlabel(xlabel, fontsize=fontsize_labels)
+    else:
+        axes.stackplot(np.arange(viterbi_path.shape[0]), viterbi_path.T, colors=colors, labels=[f'State {i + 1}' for i in range(num_states)])
+        axes.set_xlabel(xlabel, fontsize=fontsize_labels)
+
+    axes.set_ylabel(ylabel, fontsize=fontsize_labels)
+    axes.set_title(title, fontsize=fontsize_title)
+
+    # Plot signal overlay
+    if signal is not None:
+        if time_conversion_rate is not None:
+            time_seconds = np.arange(len(signal)) / time_conversion_rate
+            axes.plot(time_seconds, signal, color='black', label=signal_label)
+            axes.set_xlabel(xlabel, fontsize=fontsize_labels)
+        else:
+            axes.plot(signal, color='black', label=signal_label)
+
+    # Draw vertical gray lines for T_t intervals
+    if idx_data is not None:
+        for idx in idx_data[:-1, 1]:
+            axes.axvline(x=idx, color='gray', linestyle='--', linewidth=vertical_linewidth)
+
+    # Show legend
+    if show_legend:
+        axes.legend(title='States', loc='upper left', bbox_to_anchor=(1, 1))
 
     if yticks:
         scaled_values = [int(val * len(np.unique(signal))) for val in np.unique(signal)]
@@ -917,25 +979,19 @@ def plot_vpath(vpath, signal =[], xlabel = "Time Steps", figsize=(7, 4), ylabel 
     else:
         # Remove x-axis tick labels
         axes.set_yticks([])
-
+        
     # Remove the frame around the plot
     axes.spines['top'].set_visible(False)
     axes.spines['right'].set_visible(False)
     axes.spines['bottom'].set_visible(False)
     axes.spines['left'].set_visible(False)
 
-    # Add a plot of the signal (replace this with your actual signal data)
-    # com_signal = np.sin(np.linspace(0, 10, vpath.shape[0])) + 2
-    if signal is not None:
-        axes.plot(signal, color='black', label=label_signal, linewidth=line_width)
-    axes.legend(loc='upper left', bbox_to_anchor=(1, 0.8))  # Adjusted legend position
+    # Adjust tick label font size
+    axes.tick_params(axis='both', labelsize=fontsize_labels)
 
-
-    # Increase tick label font size
-    axes.tick_params(axis='both', labelsize=12)
     plt.tight_layout() 
-    # Show the plot
     plt.show()
+
     
 def plot_average_probability(Gamma_reconstruct, title='Average probability for each state', fontsize=16, figsize=(7, 5), vertical_lines=None, line_colors=None, highlight_boxes=False):
 
@@ -1007,8 +1063,272 @@ def plot_average_probability(Gamma_reconstruct, title='Average probability for e
 
     # Show the plot
     plt.show()
-    
 
+def plot_FO(FO, figsize=(8, 4), fontsize_labels=13, fontsize_title=16, width=0.8, show_legend=True, num_ticks=10):
+    """
+    Plot fractional occupancies for different states.
+
+    Parameters:
+    -----------
+    FO : array-like
+        Fractional occupancy data matrix.
+    figsize : tuple, optional
+        Figure size. Default is (8, 4).
+    fontsize_labels : int, optional
+        Font size for axes labels. Default is 13.
+    fontsize_title : int, optional
+        Font size for plot title. Default is 16.
+    width : float, optional
+        Width of the bars. Default is 0.5.
+    show_legend : bool, optional
+        Whether to show the legend. Default is True.
+    """
+    fig, axes = plt.subplots(figsize=figsize)
+    bottom = np.zeros(FO.shape[0])
+    sessions = np.arange(1, FO.shape[0] + 1)
+    num_states = FO.shape[1]
+    colors = sns.color_palette("Set3", n_colors=num_states)
+    if num_states > len(colors):
+        extra_colors = sns.color_palette("husl", n_colors=num_states - len(colors))
+        colors.extend(extra_colors)
+        
+    for k in range(num_states):
+        p = axes.bar(sessions, FO[:, k], bottom=bottom, color=colors[k], width=width)
+        bottom += FO[:, k]
+    
+    axes.set_xticks(sessions)
+    axes.set_xlabel('Subject', fontsize=fontsize_labels)
+    axes.set_ylabel('Fractional occupancy', fontsize=fontsize_labels)
+    axes.set_title('State Fractional Occupancies', fontsize=fontsize_title)
+    
+    ticks = np.linspace(1, FO.shape[0], FO.shape[0]).astype(int)
+    # If there are more than 10 states then make a steps of 5
+    if len(ticks)>10:
+        n_ticks = num_ticks
+    else:
+        n_ticks = len(ticks)
+    axes.set_xticks(np.linspace(1, FO.shape[0], n_ticks).astype(int))
+    axes.set_yticks(np.linspace(0, 1, 5))
+    
+    # Remove the frame around the plot
+    axes.spines['top'].set_visible(False)
+    axes.spines['right'].set_visible(False)
+    axes.spines['bottom'].set_visible(False)
+    axes.spines['left'].set_visible(False)
+
+    # Adjust tick label font size
+    axes.tick_params(axis='both', labelsize=fontsize_labels)
+
+    if show_legend:
+        legend = axes.legend(['State {}'.format(i+1) for i in range(FO.shape[1])], fontsize=fontsize_labels, loc='upper left', bbox_to_anchor=(1, 1))
+
+    plt.tight_layout() 
+    plt.show()
+
+
+def plot_switching_rates(SR, figsize=(8, 4), fontsize_labels=13, fontsize_title=16, width=0.18, show_legend=True, num_ticks=10):
+    """
+    Plot switching rates for different states.
+
+    Parameters:
+    -----------
+    SR : 
+        Switching rate data matrix.
+    figsize : tuple, optional
+        Figure size. Default is (6, 4).
+    fontsize_labels : int, optional
+        Font size for axes labels. Default is 13.
+    fontsize_title : int, optional
+        Font size for plot title. Default is 16.
+    width : float, optional
+        Width of the bars. Default is 0.18.
+    show_legend : bool, optional
+        Whether to show the legend. Default is True.
+    """
+    fig, axes = plt.subplots(figsize=figsize, constrained_layout=True)
+    multiplier = 0
+    sessions = np.arange(1, SR.shape[0] + 1)
+    num_states = SR.shape[1]
+    colors = sns.color_palette("Set3", n_colors=num_states)
+    if num_states > len(colors):
+        extra_colors = sns.color_palette("husl", n_colors=num_states - len(colors))
+        colors.extend(extra_colors)
+
+    for k in range(num_states):
+        offset = width * multiplier
+        rects = axes.bar(sessions + offset, SR[:, k], width, color=colors[k])
+        multiplier += 1
+    
+    axes.set_xticks(sessions + width, sessions)
+    axes.set_xlabel('Subject', fontsize=fontsize_labels)
+    axes.set_ylabel('Switching Rate', fontsize=fontsize_labels)
+    axes.set_title('State Switching Rates', fontsize=fontsize_title)
+    
+    ticks = np.linspace(1, SR.shape[0], SR.shape[0]).astype(int)
+    # If there are more than 10 states then make a steps of 5
+    if len(ticks)>10:
+        n_ticks = num_ticks
+    else:
+        n_ticks = len(ticks)
+    axes.set_xticks(np.linspace(1, SR.shape[0], n_ticks).astype(int))
+    
+    # Remove the frame around the plot
+    axes.spines['top'].set_visible(False)
+    axes.spines['right'].set_visible(False)
+    axes.spines['bottom'].set_visible(False)
+    axes.spines['left'].set_visible(False)
+
+    # Adjust tick label font size
+    axes.tick_params(axis='both', labelsize=fontsize_labels)
+
+    if show_legend:
+        axes.legend(['State {}'.format(i+1) for i in range(num_states)], fontsize=fontsize_labels, loc='upper left', bbox_to_anchor=(1, 1))
+
+    plt.show()
+
+def plot_state_lifetimes(LT, figsize=(8, 4), fontsize_labels=13, fontsize_title=16, width=0.18, xlabel='Subject', ylabel='Lifetime', title='State Lifetimes', show_legend=True, num_ticks=10):
+    """
+    Plot state lifetimes for different states.
+
+    Parameters:
+    -----------
+    LT : 
+        State lifetime (dwell time) data matrix.
+    figsize : tuple, optional
+        Figure size. Default is (8, 4).
+    fontsize_labels : int, optional
+        Font size for axeses labels. Default is 13.
+    fontsize_title : int, optional
+        Font size for plot title. Default is 16.
+    width : float, optional
+        Width of the bars. Default is 0.18.
+    xlabel : str, optional
+        Label for the x-axesis. Default is 'Subject'.
+    ylabel : str, optional
+        Label for the y-axesis. Default is 'Lifetime'.
+    title : str, optional
+        Title for the plot. Default is 'State Lifetimes'.
+    show_legend : bool, optional
+        Whether to show the legend. Default is True.
+    """
+    fig, axes = plt.subplots(figsize=figsize, constrained_layout=True)
+    multiplier = 0
+    sessions = np.arange(1, LT.shape[0] + 1)
+    num_states = LT.shape[1]
+    colors = sns.color_palette("Set3", n_colors=num_states)
+    if num_states > len(colors):
+        extra_colors = sns.color_palette("husl", n_colors=num_states - len(colors))
+        colors.extend(extra_colors)
+
+    for k in range(num_states):
+        offset = width * multiplier
+        rects = axes.bar(sessions + offset, LT[:, k], width, color=colors[k])
+        multiplier += 1
+    
+    axes.set_xticks(sessions + width, sessions)
+    axes.set_xlabel(xlabel, fontsize=fontsize_labels)
+    axes.set_ylabel(ylabel, fontsize=fontsize_labels)
+    axes.set_title(title, fontsize=fontsize_title)
+    
+    ticks = np.linspace(1, LT.shape[0], LT.shape[0]).astype(int)
+    # If there are more than 10 states then make a steps of 5
+    if len(ticks)>10:
+        n_ticks = num_ticks
+    else:
+        n_ticks = len(ticks)
+    axes.set_xticks(np.linspace(1, LT.shape[0], n_ticks).astype(int))
+    
+    # Remove the frame around the plot
+    axes.spines['top'].set_visible(False)
+    axes.spines['right'].set_visible(False)
+    axes.spines['bottom'].set_visible(False)
+    axes.spines['left'].set_visible(False)
+
+    # Adjust tick label font size
+    axes.tick_params(axis='both', labelsize=fontsize_labels)
+
+    if show_legend:
+        axes.legend(['State {}'.format(i+1) for i in range(num_states)], fontsize=fontsize_labels, loc='upper left', bbox_to_anchor=(1, 1))
+    plt.show()
+
+def plot_state_prob_and_covariance(init_stateP, TP, state_means, state_FC, cmap='viridis', figsize=(9, 7), num_ticks=5):
+    """
+    Plot HMM parameters.
+
+    Parameters:
+    -----------
+    init_stateP : array-like
+        Initial state probabilities.
+    TP : array-like
+        Transition probabilities.
+    state_means : array-like
+        State means.
+    state_FC : array-like
+        State covariances.
+    cmap : str or Colormap, optional
+        The colormap to be used for plotting. Default is 'viridis'.
+    figsize : tuple, optional
+        Figure size. Default is (9, 7).
+    num_ticks : int, optional
+        Number of ticks for the colorbars
+    """
+    fig, axes = plt.subplots(3, 3, figsize=figsize)
+
+    # Plot initial state probabilities
+    im0 = axes[0, 0].imshow(init_stateP.reshape(-1, 1), cmap=cmap)
+    axes[0, 0].set_title("Initial state probabilities")
+    axes[0, 0].set_xticks([])
+    cbar0 = fig.colorbar(im0, ax=axes[0, 0])
+    cbar0.set_ticks(np.linspace(init_stateP.min(), init_stateP.max(), num=num_ticks).round(2))
+    ticks = np.linspace(0, init_stateP.shape[0]-1, init_stateP.shape[0]).astype(int)
+    # If there are more than 10 states then make a steps of 5
+    if len(ticks)>10:
+        num_state = num_ticks
+    else:
+        num_state = len(ticks)
+    axes[0, 0].set_yticks(np.linspace(0, init_stateP.shape[0]-1, num_state).astype(int))
+    axes[0, 0].set_yticklabels(ticks + 1)  # Increment ticks by 1 for labels    
+        
+        
+    # Plot transition probabilities
+    im1 = axes[0, 1].imshow(TP, cmap=cmap)
+    axes[0, 1].set_title("Transition probabilities")
+    cbar1 = fig.colorbar(im1, ax=axes[0, 1])
+    cbar1.set_ticks(np.linspace(TP.min(), TP.max(), num=num_ticks).round(2))
+    ticks = np.linspace(0, TP.shape[0]-1, TP.shape[0]).astype(int)
+    # If there are more than 10 states then make a steps of 5
+    axes[0, 1].set_xticks(np.linspace(0, TP.shape[0]-1, num_state).astype(int))
+    axes[0, 1].set_xticklabels(ticks + 1)  # Increment ticks by 1 for labels
+    axes[0, 1].set_yticks(np.linspace(0, TP.shape[0]-1, num_state).astype(int))
+    axes[0, 1].set_yticklabels(ticks + 1)  # Increment ticks by 1 for labels
+    
+    # Plot state means
+    num_ticks = max(5, min(state_means.shape))
+    im2 = axes[0, 2].imshow(state_means, cmap=cmap, aspect='auto')
+    axes[0, 2].set_title("State means")
+    cbar2 = fig.colorbar(im2, ax=axes[0, 2])
+    cbar2.set_ticks(np.linspace(state_means.min(), state_means.max(), num=num_ticks).round(2))
+    # Set ticks and labels
+    ticks = np.linspace(0, state_means.shape[1]-1, num_ticks).astype(int)
+    axes[0, 2].set_xticks(ticks)
+    axes[0, 2].set_xticklabels(ticks + 1)  # Increment ticks by 1 for labels
+    axes[0, 2].set_yticks(np.linspace(1, state_means.shape[0], num_ticks).astype(int))
+
+
+    # Plot state covariances
+    min_value = np.min(state_FC)
+    max_value = np.max(state_FC)
+    for k in range(6):
+        im = axes[(k + 3) // 3, (k + 3) % 3].imshow(state_FC[:, :, k], cmap=cmap, vmin=min_value, vmax=max_value)
+        axes[(k + 3) // 3, (k + 3) % 3].set_title(f"State covariance\nstate #{k + 1}")
+        axes[(k + 3) // 3, (k + 3) % 3].set_xticks(np.linspace(1, state_FC.shape[0], num_ticks).astype(int))
+        axes[(k + 3) // 3, (k + 3) % 3].set_yticks(np.linspace(1, state_FC.shape[0], num_ticks).astype(int))
+        cbar = fig.colorbar(im, ax=axes[(k + 3) // 3, (k + 3) % 3])
+        cbar.set_ticks(np.linspace(min_value, max_value, num=num_ticks).round(2))
+
+    plt.subplots_adjust(hspace=0.5, wspace=0.5)
+    plt.show()
+    
 def plot_condition_difference(Gamma_reconstruct, R_trials, title='Average Probability and Difference', fontsize=16, figsize=(9, 2), vertical_lines=None, line_colors=None, highlight_boxes=False):
     """
     Plots the average probability for each state over time for two conditions and their difference.
@@ -1091,7 +1411,7 @@ def plot_condition_difference(Gamma_reconstruct, R_trials, title='Average Probab
     plt.show()
     
     
-def plot_p_values_over_time(pval, figsize=(8, 4), total_time_seconds=None, xlabel="Time points", 
+def plot_p_values_over_time(pval, figsize=(8, 4), total_time_seconds=None, xlabel="Timepoints", 
                             ylabel="P-values (Log Scale)",title_text="P-values over time", xlim_start=0, 
                             tick_positions=[0, 0.001, 0.01, 0.05, 0.1, 0.3, 1], num_colors=259, 
                             alpha=0.05,plot_style = "line", linewidth=2.5):
@@ -1105,7 +1425,7 @@ def plot_p_values_over_time(pval, figsize=(8, 4), total_time_seconds=None, xlabe
     total_time_seconds (float, optional): 
         Total time duration in seconds. If provided, time points will be scaled accordingly.
     xlabel (str, optional): 
-        Label for the x-axis. Default is 'Time points'.
+        Label for the x-axis. Default is 'Timepoints'.
     ylabel (str, optional): 
         Label for the y-axis. Default is 'Y-axis (log scale)'.
     title_text (str, optional): 
@@ -1127,7 +1447,7 @@ def plot_p_values_over_time(pval, figsize=(8, 4), total_time_seconds=None, xlabe
         # Raise an exception and stop function execution
         raise ValueError("To use the function 'plot_p_values_over_time', the variable for p-values must be one-dimensional.")
 
-    # Generate time points based on total_time_seconds
+    # Generate Timepoints based on total_time_seconds
     if total_time_seconds:
         time_points = np.linspace(0, total_time_seconds, len(pval))
     else:
@@ -1176,7 +1496,7 @@ def plot_p_values_over_time(pval, figsize=(8, 4), total_time_seconds=None, xlabe
         cmap = LinearSegmentedColormap.from_list('custom_colormap', cmap_list)
             
     # Create the line plot with varying color based on p-values
-    _, ax = plt.subplots(figsize=figsize)
+    _, axes = plt.subplots(figsize=figsize)
 
     # Normalize the data to [0, 1] for the colormap with logarithmic scale
     norm = LogNorm(vmin=1e-3, vmax=1)
@@ -1189,34 +1509,34 @@ def plot_p_values_over_time(pval, figsize=(8, 4), total_time_seconds=None, xlabe
                     color = cmap(norm(pval[i+1]))
                 else:
                     color = cmap(norm(pval[i]))
-                ax.plot([time_points[i], time_points[i+1]], [pval[i], pval[i+1]], color=color, linewidth=linewidth)
+                axes.plot([time_points[i], time_points[i+1]], [pval[i], pval[i+1]], color=color, linewidth=linewidth)
         else:
             for i in range(len(time_points)-1):
                 if pval[i+1]>0.05:
                     color = cmap(norm(pval[i+1]))
                 else:
                     color = cmap(norm(pval[i]))
-                ax.plot([time_points[i], time_points[i+1]], [pval[i], pval[i+1]], color=color, linewidth=linewidth)
+                axes.plot([time_points[i], time_points[i+1]], [pval[i], pval[i+1]], color=color, linewidth=linewidth)
     elif plot_style=="scatter":
-        ax.scatter(time_points, pval, c=pval, cmap=cmap, norm=LogNorm(vmin=1e-3, vmax=1))
+        axes.scatter(time_points, pval, c=pval, cmap=cmap, norm=LogNorm(vmin=1e-3, vmax=1))
     elif plot_style=="scatter_line":
-        ax.scatter(time_points, pval, c=pval, cmap=cmap, norm=LogNorm(vmin=1e-3, vmax=1))    
+        axes.scatter(time_points, pval, c=pval, cmap=cmap, norm=LogNorm(vmin=1e-3, vmax=1))    
             # Draw lines between points
-        ax.plot(time_points, pval, color='black', linestyle='-', linewidth=1)
+        axes.plot(time_points, pval, color='black', linestyle='-', linewidth=1)
     # Add labels and title
-    ax.set_xlabel(xlabel, fontsize=12)
-    ax.set_ylabel(ylabel, fontsize=12)
-    ax.set_title(title_text, fontsize=14)
+    axes.set_xlabel(xlabel, fontsize=12)
+    axes.set_ylabel(ylabel, fontsize=12)
+    axes.set_title(title_text, fontsize=14)
     
     # Set axis limits to focus on the relevant data range
-    ax.set_xlim(xlim_start, len(pval) + 1)
-    ax.set_ylim([0.0008, 1.5])
+    axes.set_xlim(xlim_start, len(pval) + 1)
+    axes.set_ylim([0.0008, 1.5])
     # Set y-axis to log scale
-    ax.set_yscale('log')
+    axes.set_yscale('log')
     # Mark specific values on the y-axis
     plt.yticks([0.001, 0.01, 0.05, 0.1, 0.3, 1], ['0.001', '0.01', '0.05', '0.1', '0.3', '1'])
     # Add a colorbar to show the correspondence between colors and p-values
-    divider = make_axes_locatable(ax)
+    divider = make_axes_locatable(axes)
     cax = divider.append_axes("right", size="5%", pad=0.05)
     colorbar = plt.colorbar(plt.cm.ScalarMappable(norm=norm, cmap=cmap), cax=cax, ticks=np.logspace(-3, 0, num_colors), format="%1.0e")
     colorbar.update_ticks()
@@ -1239,7 +1559,7 @@ def plot_p_values_over_time(pval, figsize=(8, 4), total_time_seconds=None, xlabe
     plt.show()
     
     
-def plot_p_values_bar(pval,variables=[],  figsize=(9, 4), num_colors=256, xlabel="",
+def plot_p_values_bar(pval,xticklabels=[],  figsize=(9, 4), num_colors=256, xlabel="",
                         ylabel="P-values (Log Scale)", title_text="Bar Plot",
                         tick_positions=[0, 0.001, 0.01, 0.05, 0.1, 0.3, 1], top_adjustment=0.9, alpha = 0.05, pad_title=20):
     """
@@ -1247,7 +1567,7 @@ def plot_p_values_bar(pval,variables=[],  figsize=(9, 4), num_colors=256, xlabel
 
     Parameters:
     --------------
-    variables (list): List of categories or variables.
+    xticklabels (list): List of categories or variables.
     pval (array-like): Array of p-values.
     figsize (tuple, optional): Figure size, default is (9, 4).
     num_colors (int, optional): Number of colors in the colormap, default is 256.
@@ -1308,16 +1628,16 @@ def plot_p_values_bar(pval,variables=[],  figsize=(9, 4), num_colors=256, xlabel
     colormap = LinearSegmentedColormap.from_list('custom_colormap', cmap_list)
 
     # Plot the bars with LogNorm
-    fig, ax = plt.subplots(figsize=figsize)
+    fig, axes = plt.subplots(figsize=figsize)
     if isinstance(pval, (float, np.ndarray)) and np.size(pval) == 1:
     # It's a scalar, create a list with a single element
-        variables = [f"Var 1"] if variables==[] else variables
+        xticklabels = [f"Var 1"] if xticklabels==[] else xticklabels
     else:
         # It's an iterable, use len()
-        variables =[f"Var {i+1}" for i in np.arange(len(pval))] if variables==[] else variables
+        xticklabels =[f"Var {i+1}" for i in np.arange(len(pval))] if xticklabels==[] else xticklabels
 
 
-    bars = plt.bar(variables, pval, color=colormap(LogNorm(vmin=1e-3, vmax=1)(pval)))
+    bars = plt.bar(xticklabels, pval, color=colormap(LogNorm(vmin=1e-3, vmax=1)(pval)))
     # Remove the legend
     #plt.legend().set_visible(False)
 
@@ -1328,19 +1648,19 @@ def plot_p_values_bar(pval,variables=[],  figsize=(9, 4), num_colors=256, xlabel
 
 
     # Set y-axis to log scale
-    ax.set_yscale('log')
+    axes.set_yscale('log')
 
     # Customize plot
     plt.yscale('log')
-    ax.set_xlabel(xlabel, fontsize=12)
-    ax.set_ylabel(ylabel, fontsize=12)
-    ax.set_title(title_text, fontsize=14, pad=pad_title)
+    axes.set_xlabel(xlabel, fontsize=12)
+    axes.set_ylabel(ylabel, fontsize=12)
+    axes.set_title(title_text, fontsize=14, pad=pad_title)
 
     # Mark specific values on the y-axis
     plt.yticks([0.001, 0.01, 0.05, 0.1, 0.3, 1], ['0.001', '0.01', '0.05', '0.1', '0.3', '1'])
 
     # Add a colorbar to show the correspondence between colors and p-values
-    divider = make_axes_locatable(ax)
+    divider = make_axes_locatable(axes)
     cax = divider.append_axes("right", size="5%", pad=0.05)
     colorbar = plt.colorbar(plt.cm.ScalarMappable(cmap=colormap, norm=LogNorm(vmin=1e-3, vmax=1)), cax=cax, ticks=np.logspace(-3, 0, num_colors), format="%1.0e")
     colorbar.update_ticks()
@@ -1363,8 +1683,8 @@ def plot_p_values_bar(pval,variables=[],  figsize=(9, 4), num_colors=256, xlabel
     # Add extra space between title and plot
     plt.subplots_adjust(top=top_adjustment)
     plt.xticks(rotation=45, ha='right')  # Rotate x-axis labels for better readability
-    ax.spines['right'].set_visible(False)
-    ax.spines['top'].set_visible(False)
+    axes.spines['right'].set_visible(False)
+    axes.spines['top'].set_visible(False)
     plt.tight_layout()
 
     plt.show()
