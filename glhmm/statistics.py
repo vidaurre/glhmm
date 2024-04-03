@@ -27,58 +27,62 @@ def test_across_subjects(D_data, R_data, method="regression", Nperm=0, confounds
         
     Parameters:
     --------------
-    D_data (numpy.ndarray): Input data array of shape that can be either a 2D array or a 3D array.
-                            For 2D, the data is represented as a (n, p) matrix, where n represents 
-                            the number of subjects, and p represents the number of predictors.
-                            For 3D array, it has a shape (T, n, q), where the first dimension 
-                            represents timepoints, the second dimension represents the number of subjects, 
-                            and the third dimension represents features. 
-                            For 3D, permutation testing is performed per timepoint for each subject.              
-    R_data (numpy.ndarray): The dependent variable can be either a 2D array or a 3D array. 
-                            For 2D array, it has a shape of (n, q), where n represents 
-                            the number of subjects, and q represents the outcome of the dependent variable.
-                            For 3D array, it has a shape (T, n, q), where the first dimension 
-                            represents timepoints, the second dimension represents the number of subjects, 
-                            and the third dimension represents a dependent variable.   
-                            For 3D, permutation testing is performed per timepoint for each subject.                 
-    method (str, optional): The statistical method to be used for the permutation test. Valid options are
-                            "regression", "univariate", or "cca". (default: "regression").      
-                            Note: "cca" stands for Canonical Correlation Analysis                                        
+    D_data (numpy.ndarray): 
+        Input data array of shape that can be either a 2D array or a 3D array.
+        For 2D, the data is represented as a (n, p) matrix, where n represents 
+        the number of subjects, and p represents the number of predictors.
+        For 3D array, it has a shape (T, n, q), where the first dimension 
+        represents timepoints, the second dimension represents the number of subjects, 
+        and the third dimension represents features. 
+        For 3D, permutation testing is performed per timepoint for each subject.              
+    R_data (numpy.ndarray): 
+        The dependent variable can be either a 2D array or a 3D array. 
+        For 2D array, it has a shape of (n, q), where n represents 
+        the number of subjects, and q represents the outcome of the dependent variable.
+        For 3D array, it has a shape (T, n, q), where the first dimension 
+        represents timepoints, the second dimension represents the number of subjects, 
+        and the third dimension represents a dependent variable.   
+        For 3D, permutation testing is performed per timepoint for each subject.                 
+    method (str, optional): 
+        The statistical method to be used for the permutation test. Valid options are
+        "regression", "univariate", or "cca". (default: "regression").      
+        Note: "cca" stands for Canonical Correlation Analysis                                        
     Nperm (int): Number of permutations to perform (default: 1000).                       
     confounds (numpy.ndarray or None, optional): 
-                            The confounding variables to be regressed out from the input data (D_data).
-                            If provided, the regression analysis is performed to remove the confounding effects. 
-                            (default: None)     
+        The confounding variables to be regressed out from the input data (D_data).
+        If provided, the regression analysis is performed to remove the confounding effects. 
+        (default: None)     
     dict_family (dict): 
-                            Dictionary containing family structure information.                          
-                                - file_location (str): The file location of the family structure data in CSV format.
-                                - M (numpy.ndarray, optional): The matrix of attributes, which is not typically required.
-                                                          Defaults to None.
-                                - CMC (bool, optional): A flag indicating whether to use the Conditional Monte Carlo method (CMC).
-                                              Defaults to False.
-                                - EE (bool, optional): A flag indicating whether to assume exchangeable errors, which allows permutation.
-                                              Defaults to True. Other options are not available.
+        Dictionary containing family structure information.                          
+            - file_location (str): The file location of the family structure data in CSV format.
+            - M (numpy.ndarray, optional): The matrix of attributes, which is not typically required.
+                                        Defaults to None.
+            - CMC (bool, optional): A flag indicating whether to use the Conditional Monte Carlo method (CMC).
+                            Defaults to False.
+            - EE (bool, optional): A flag indicating whether to assume exchangeable errors, which allows permutation.
+                            Defaults to True. Other options are not available.
     verbose (bool, optional): 
-                            If True, display progress messages. If False, suppress progress messages.                                                      
+        If True, display progress messages. If False, suppress progress messages.                                                      
     test_statistics_option (bool, optional): 
-                            If True, the function will return the test statistics for each permutation.
-                            (default: False) 
+        If True, the function will return the test statistics for each permutation.
+        (default: False) 
     FWER_correction (bool, optional): 
-                            Specify whether to perform family-wise error rate (FWER) correction using the MaxT method (default: False) 
-                            Note: FWER_correction is not necessary if pval_correction is applied later for multiple comparison p-value correction.                  
+        Specify whether to perform family-wise error rate (FWER) correction using the MaxT method (default: False) 
+        Note: FWER_correction is not necessary if pval_correction is applied later for multiple comparison p-value correction.                  
     identify_categories : bool or list or numpy.ndarray, optional, default=True
-                            If True, automatically identify categorical columns. If list or ndarray, use the provided list of column indices.    
+        If True, automatically identify categorical columns. If list or ndarray, use the provided list of column indices.    
     category_lim : int or None, optional, default=10
-                            Maximum allowed number of categories for F-test. Acts as a safety measure for columns 
-                            with integer values, like age, which may be mistakenly identified as multiple categories.        
-    test_combination:       Calculates geometric means of p-values using permutation testing (default: False).
-                            In the context of p-values from permutation testing, calculating geometric means
-                            can be useful for summarizing results across multiple tests to get insights into the overall
-                            statistical significance across experimental conditions.
-                            Valid options are:
-                                - True (bool): Return a single geometric mean value.
-                                - "across_rows" (str): Calculates geometric means aggregated across rows.
-                                - "across_columns" (str): Calculates geometric means aggregated across columns. 
+        Maximum allowed number of categories for F-test. Acts as a safety measure for columns 
+        with integer values, like age, which may be mistakenly identified as multiple categories.        
+    test_combination:       
+        Calculates geometric means of p-values using permutation testing (default: False).
+        In the context of p-values from permutation testing, calculating geometric means
+        can be useful for summarizing results across multiple tests to get insights into the overall
+        statistical significance across experimental conditions.
+        Valid options are:
+            - True (bool): Return a single geometric mean value.
+            - "across_rows" (str): Calculates geometric means aggregated across rows.
+            - "across_columns" (str): Calculates geometric means aggregated across columns. 
                                 
                                 
                             
@@ -1282,20 +1286,21 @@ def permute_subject_trial_idx(idx_array):
     
     Parameters:
     --------------
-        idx_array (numpy.ndarray): Input array to be permuted.
+    idx_array (numpy.ndarray): Input array to be permuted.
     
     Returns:
     ----------  
-        list: Permuted array based on unique values.
+    list: Permuted array based on unique values.
     """
+    # Get unique values and their counts
     unique_values, value_counts = np.unique(idx_array, return_counts=True)
-    
-    permuted_array = []
-    unique_values_perm = np.random.permutation(unique_values)
-    
-    for value in unique_values_perm:
-        permuted_array.extend([value] * value_counts[np.where(unique_values == value)][0])
-    
+
+    # Permute the unique values
+    permuted_unique_values = np.random.permutation(unique_values)
+
+    # Repeat each unique value according to its original count
+    permuted_array = np.repeat(permuted_unique_values, value_counts)
+
     return permuted_array
 
 
@@ -1305,14 +1310,14 @@ def permutation_matrix_within_subject_across_sessions(Nperm, D_t, idx_array):
 
     Parameters:
     --------------
-        Nperm (int): The number of permutations.
-        D_t (numpy.ndarray): The preprocessed data array.
-        idx_array (numpy.ndarray): The indices array.
+    Nperm (int): The number of permutations.
+    D_t (numpy.ndarray): The preprocessed data array.
+    idx_array (numpy.ndarray): The indices array.
 
 
     Returns:
     ----------  
-        permutation_matrix (numpy.ndarray): The within-session continuos indices array.
+    permutation_matrix (numpy.ndarray): The within-session continuos indices array.
     """
     permutation_matrix = np.zeros((D_t.shape[0],Nperm), dtype=int)
     for perm in range(Nperm):
@@ -1988,7 +1993,7 @@ def pval_cluster_based_correction(test_statistics, pval, alpha=0.05):
     return p_values
 
 
-def get_timestamp_indices(n_timestamps, n_subjects):
+def get_indices_timestamp(n_timestamps, n_subjects):
     """
     Generate indices of the timestamps for each subject in the data.
 
@@ -2002,7 +2007,7 @@ def get_timestamp_indices(n_timestamps, n_subjects):
         indices (ndarray): NumPy array representing the indices of the timestamps for each subject.
 
     Example:
-    get_timestamp_indices(5, 3)
+    get_indices_timestamp(5, 3)
     array([[ 0,  5],
            [ 5, 10],
            [10, 15]])
@@ -2012,7 +2017,7 @@ def get_timestamp_indices(n_timestamps, n_subjects):
 
     return indices
 
-def get_session_indices(data_label):
+def get_indices_session(data_label):
     """
     Generate session indices in the data based on provided labels.
     This is done by using 'data_label' to define sessions and generates corresponding indices. 
@@ -2028,7 +2033,7 @@ def get_session_indices(data_label):
                             where each row represents the start and end index for a trial. 
 
     Example:
-    get_session_indices(np.array([1, 1, 2, 2, 2, 3, 3, 3, 3]))
+    get_indices_session(np.array([1, 1, 2, 2, 2, 3, 3, 3, 3]))
     array([[0, 2],
            [2, 5],
            [5, 9]])
@@ -2089,24 +2094,51 @@ def get_indices_from_list(data_list, count_timestamps = True):
     # Return the generated indices array
     return indices
 
-
-def get_concatenate_sessions(D_sessions, R_sessions, idx_sessions):
+def get_concatenate_subjects(D_sessions):
     """
-    Converts a  3D matrix into a 2D matrix by concatenating timepoints of every trial session into a new design matrix.
-
+    Converts a  3D matrix into a 2D matrix by concatenating timepoints of every subject into a new design matrix.
 
     Parameters:
     --------------
-        D_sessions (numpy.ndarray): Design matrix for each session.
-        R_sessions (numpy.ndarray): R  matrix time for each trial.
-        idx_sessions (numpy.ndarray): Indices representing the start and end of trials for each session.
+        D_sessions (numpy.ndarray): Design matrix for each subject.
 
     Returns:
     ----------  
         D_con (numpy.ndarray): Concatenated design matrix.
-        R_con (numpy.ndarray): Concatenated R matrix.
-        idx_sessions_con (numpy.ndarray): Updated indices after concatenation.
+
     """
+    D_con = []
+
+    for i in range(D_sessions.shape[1]):
+        # Extend data matrix with selected trials
+        D_con.extend(D_sessions[:, i, :])
+
+    return np.array(D_con)
+
+def get_concatenate_sessions(D_sessions, R_sessions=None, idx_sessions=None):
+    """
+    Converts a  3D matrix into a 2D matrix by concatenating timepoints of every trial session into a new design matrix.
+
+    Parameters:
+    --------------
+    D_sessions (numpy.ndarray): 
+        Design matrix for each session.
+    R_sessions (numpy.ndarray): 
+        R  matrix time for each trial.
+    idx_sessions (numpy.ndarray): 
+        Indices representing the start and end of trials for each session.
+
+    Returns:
+    ----------  
+    D_con (numpy.ndarray): 
+        Concatenated design matrix.
+    R_con (numpy.ndarray): 
+        Concatenated R matrix.
+    idx_sessions_con (numpy.ndarray): 
+        Updated indices after concatenation.
+    """
+    if idx_sessions is None:
+        raise ValueError("idx_sessions cannot be None")
     D_con, R_con, idx_sessions_con = [], [], np.zeros_like(idx_sessions)
 
     for i, (start_idx, end_idx) in enumerate(idx_sessions):
@@ -2114,8 +2146,10 @@ def get_concatenate_sessions(D_sessions, R_sessions, idx_sessions):
         for j in range(start_idx, end_idx):
             # Extend data matrix with selected trials
             D_con.extend(D_sessions[:, j, :])
-            # Extend time list for each trial
-            R_con.extend([R_sessions[j]] * D_sessions.shape[0])
+            if R_sessions is not None:
+                # Extend time list for each trial
+                R_con.extend([R_sessions[j]] * D_sessions.shape[0])
+
 
         # Update end index for the concatenated data matrix
         idx_sessions_con[i, 1] = len(D_con)
@@ -2134,15 +2168,21 @@ def reconstruct_concatenated_design(D_con,D_sessions=None, n_timepoints=None, n_
 
     Parameters:
     --------------
-        D_con (numpy.ndarray): Concatenated design matrix.
-        D_sessions (numpy.ndarray, optional): Original design matrix for each session.
-        n_timepoints (int, optional): Number of timepoints per trial.
-        n_trials (int, optional): Number of trials per session.
-        n_channels (int, optional): Number of channels.
+    D_con (numpy.ndarray): 
+        Concatenated design matrix.
+    D_sessions (numpy.ndarray, optional): 
+        Original design matrix for each session.
+    n_timepoints (int, optional): 
+        Number of timepoints per trial.
+    n_trials (int, optional): 
+        Number of trials per session.
+    n_channels (int, optional): 
+        Number of channels.
 
     Returns:
     ----------  
-        D_reconstruct (numpy.ndarray): Reconstructed design matrix for each session.
+    D_reconstruct (numpy.ndarray): 
+        Reconstructed design matrix for each session.
     """
     # Input validation and initialization
     if D_sessions is not None and len([arg for arg in [n_timepoints, n_trials, n_channels] if arg is not None]) == 0:
