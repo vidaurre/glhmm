@@ -1159,7 +1159,7 @@ def plot_switching_rates(SR, figsize=(8, 4), fontsize_labels=13, fontsize_title=
         rects = axes.bar(sessions + offset, SR[:, k], width, color=colors[k])
         multiplier += 1
     
-    axes.set_xticks(sessions + width, sessions)
+    axes.set_xticks(sessions)
     axes.set_xlabel('Subject', fontsize=fontsize_labels)
     axes.set_ylabel('Switching Rate', fontsize=fontsize_labels)
     axes.set_title('State Switching Rates', fontsize=fontsize_title)
@@ -1225,7 +1225,7 @@ def plot_state_lifetimes(LT, figsize=(8, 4), fontsize_labels=13, fontsize_title=
         rects = axes.bar(sessions + offset, LT[:, k], width, color=colors[k])
         multiplier += 1
     
-    axes.set_xticks(sessions + width, sessions)
+    axes.set_xticks(sessions, sessions)
     axes.set_xlabel(xlabel, fontsize=fontsize_labels)
     axes.set_ylabel(ylabel, fontsize=fontsize_labels)
     axes.set_title(title, fontsize=fontsize_title)
@@ -1272,7 +1272,13 @@ def plot_state_prob_and_covariance(init_stateP, TP, state_means, state_FC, cmap=
     num_ticks : int, optional
         Number of ticks for the colorbars
     """
-    fig, axes = plt.subplots(3, 3, figsize=figsize)
+    # Define the number of plots and their layout
+    num_plots = 3 + state_FC.shape[2]  # Number of plots including initial stateP, TP, state_means, and state_FC
+    num_cols = min(num_plots, 3)  # Maximum number of columns
+    num_rows = (num_plots - 1) // 3 + 1  # Calculate number of rows
+
+    # Create the figure and subplots
+    fig, axes = plt.subplots(num_rows, 3, figsize=figsize)  # Adjust figsize as needed
 
     # Plot initial state probabilities
     im0 = axes[0, 0].imshow(init_stateP.reshape(-1, 1), cmap=cmap)
@@ -1314,17 +1320,32 @@ def plot_state_prob_and_covariance(init_stateP, TP, state_means, state_FC, cmap=
     axes[0, 2].set_xticklabels(ticks + 1)  # Increment ticks by 1 for labels
     axes[0, 2].set_yticks(np.linspace(1, state_means.shape[0], num_ticks).astype(int))
 
-
     # Plot state covariances
     min_value = np.min(state_FC)
     max_value = np.max(state_FC)
-    for k in range(6):
-        im = axes[(k + 3) // 3, (k + 3) % 3].imshow(state_FC[:, :, k], cmap=cmap, vmin=min_value, vmax=max_value)
-        axes[(k + 3) // 3, (k + 3) % 3].set_title(f"State covariance\nstate #{k + 1}")
-        axes[(k + 3) // 3, (k + 3) % 3].set_xticks(np.linspace(1, state_FC.shape[0], num_ticks).astype(int))
-        axes[(k + 3) // 3, (k + 3) % 3].set_yticks(np.linspace(1, state_FC.shape[0], num_ticks).astype(int))
-        cbar = fig.colorbar(im, ax=axes[(k + 3) // 3, (k + 3) % 3])
-        cbar.set_ticks(np.linspace(min_value, max_value, num=num_ticks).round(2))
+    # Limits the number of ticks
+    if len(ticks)>10:
+        num_state = num_ticks
+    else:
+        num_state = len(ticks)
+        
+    ticks = np.linspace(0, state_FC.shape[0] - 1, num_state).astype(int)
+    # Plot state covariances
+    for k in range((num_cols*num_rows) -3): # have to fill the remaning number of subplots
+        row_idx = (k + 3) // 3  # Shift row index by 3 to start from the second row
+        col_idx = (k + 3) % 3
+        if k < num_plots - 3:
+            im = axes[row_idx, col_idx].imshow(state_FC[:, :, k], cmap=cmap, vmin=min_value, vmax=max_value)
+            axes[row_idx, col_idx].set_title("State covariance\nstate #%s" % (k + 1))
+            # Adjust tick locations
+            axes[row_idx, col_idx].set_xticks(ticks)
+            axes[row_idx, col_idx].set_yticks(ticks)
+            axes[row_idx, col_idx].set_xticklabels(ticks + 1)  # Increment ticks by 1 for labels
+            axes[row_idx, col_idx].set_yticklabels(ticks + 1) # Increment ticks by 1 for
+            cbar = fig.colorbar(im, ax=axes[row_idx, col_idx])
+            cbar.set_ticks(np.linspace(min_value, max_value, num=num_ticks).round(2))
+        else:
+            axes[row_idx, col_idx].axis('off')  # Leave empty plots blank
 
     plt.subplots_adjust(hspace=0.5, wspace=0.5)
     plt.show()
