@@ -1308,7 +1308,7 @@ class glhmm():
             if diagonal_covmat:
                 Y += rng.normal(loc=np.zeros(q),scale=C,size=Y.shape)
             else:
-                Y += rng.multivariate_normal(loc=np.zeros(q),cov=C,size=Y.shape)
+                Y += rng.multivariate_normal(mean=np.zeros(q),cov=C,size=Y.shape[0])
         else:
             for k in range(K):
                 C = self.get_covariance_matrix(k)
@@ -1316,7 +1316,7 @@ class glhmm():
                     Y += rng.normal(loc=np.zeros(q),scale=C,size=Y.shape)  \
                         * np.expand_dims(Gamma[:,k],axis=1)
                 else:
-                    Y += rng.multivariate_normal(loc=np.zeros(q),cov=C,size=Y.shape) \
+                    Y += rng.multivariate_normal(mean=np.zeros(q),cov=C,size=Y.shape[0]) \
                         * np.expand_dims(Gamma[:,k],axis=1)
 
         if X is None: 
