@@ -215,19 +215,35 @@ def read_flattened_hmm_mat(file):
     return hmm
 
 
-def save_hmm(hmm, filename):
+def save_hmm(hmm, filename, directory=None):
     """
-    Saves a glhmm object on filename
+    Saves a glhmm object in the specified directory with the given filename.
+    If directory is None, saves in the current working directory.
     """
-    with open(filename, 'wb') as outp:  # Overwrites any existing file.
+    # Combine the directory path and filename
+    if directory:
+        filepath = os.path.join(directory, filename)
+    else:
+        filepath = filename
+    
+    # Save the glhmm object to the specified file
+    with open(filepath, 'wb') as outp:  # Overwrites any existing file.
         pickle.dump(hmm, outp, pickle.HIGHEST_PROTOCOL)
 
 
-def load_hmm(filename):
+def load_hmm(filename, directory=None):
     """
-    Loads a glhmm object from filename
+    Loads a glhmm object from the specified directory with the given filename.
+    If directory is None, searches in the current working directory.
     """
-    with open(filename, 'rb') as inp:
+    # Combine the directory path and filename
+    if directory:
+        filepath = os.path.join(directory, filename)
+    else:
+        filepath = filename
+    
+    # Load the glhmm object from the specified file
+    with open(filepath, 'rb') as inp:
         hmm = pickle.load(inp)
     return hmm
 
