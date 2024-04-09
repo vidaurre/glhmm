@@ -103,6 +103,8 @@ class glhmm():
         self.alpha_beta = None
         self.alpha_mean = None
         self.Sigma = None
+        self.P = None
+        self.Pi = None
         self.active_states = np.ones(K,dtype=bool)
         self.trained = False
         
@@ -1244,13 +1246,13 @@ class glhmm():
 
         Returns:
         --------
-        Gamma : array of shape (n_samples, n_states)
-            The state probability timeseries.
-        Y: array of shape (n_samples,n_parcels)
-            The timeseries of set of variables 2.
-        If X=None:
+        If X is not None:
             X : array of shape (n_samples, n_parcels)
                The timeseries of set of variables 1.
+        Y: array of shape (n_samples,n_parcels)
+            The timeseries of set of variables 2.
+        Gamma : array of shape (n_samples, n_states)
+            The state probability timeseries.
 
         """
 
@@ -1284,6 +1286,8 @@ class glhmm():
         if (self.hyperparameters["model_beta"] != 'no') and (X is None):
             p = self.beta[0]["Mu"].shape[0]
             X = np.random.normal(size=(np.sum(T),p))
+        else: 
+            X = None
 
         # Y, mean
         Y = np.zeros((np.sum(T),q))
@@ -1300,13 +1304,14 @@ class glhmm():
 
         # Y, covariance
         if shared_covmat:
-            C = self.Sigma[0]["rate"] / self.Sigma[0]["shape"]
+            C = self.get_covariance_matrix()
             if diagonal_covmat:
                 Y += rng.normal(loc=np.zeros(q),scale=C,size=Y.shape)
             else:
                 Y += rng.multivariate_normal(loc=np.zeros(q),cov=C,size=Y.shape)
         else:
             for k in range(K):
+                C = self.get_covariance_matrix(k)
                 if diagonal_covmat:
                     Y += rng.normal(loc=np.zeros(q),scale=C,size=Y.shape)  \
                         * np.expand_dims(Gamma[:,k],axis=1)
@@ -1314,7 +1319,10 @@ class glhmm():
                     Y += rng.multivariate_normal(loc=np.zeros(q),cov=C,size=Y.shape) \
                         * np.expand_dims(Gamma[:,k],axis=1)
 
-        return X,Y,Gamma
+        if X is None: 
+            return Y,Gamma
+        else:
+            return X,Y,Gamma
 
 
     def get_active_K(self):
@@ -1628,6 +1636,23 @@ class glhmm():
             raise Exception("The model has not yet been trained") 
 
         return self.Sigma[k]["irate"] * self.Sigma[k]["shape"]
+    
+
+    def set_covariance_matrix(rate,shape,self,k=0):
+        """Sets the covariance matrix to specific values.
+        Useful to create synthetic data for simulations.
+
+        Parameters:
+        -----------
+        rate : ndarray of shape (n_variables_2 x n_variables_2),
+                The rate parameter of the covariance
+        shape : int, the shape parameter of the covariance
+        k : int, optional
+            The index of the state. Default=0.
+        """
+
+        self.Sigma[k]["rate"] = rate
+        self.Sigma[k]["shape"] = shape
 
 
     def get_beta(self,k=0):
@@ -1657,8 +1682,7 @@ class glhmm():
             raise Exception("The model has no beta")
 
         return self.beta[k]["Mu"]
-    
-
+   
 
     def get_betas(self):
         """Returns the regression coefficients (beta) for all states.
@@ -1688,8 +1712,22 @@ class glhmm():
         return betas
 
 
-    def get_mean(self,k=0):
+    def set_beta(self,beta,k=0):
+        """Sets the regression coefficients (beta) to specific values.
+        Useful to create synthetic data for simulations.
 
+        Parameters:
+        -----------
+        beta: ndarray of shape (n_variables_1 x n_variables_2)
+            The regression coefficients of each variable in X on each variable in Y for the specified state k.
+        k : int, optional, default=0
+            The index of the state for which to retrieve the beta value.
+        """
+
+        self.beta[k]["Mu"] = beta
+
+
+    def get_mean(self,k=0):
         """Returns the mean for the specified state.
 
         Parameters:
@@ -1719,7 +1757,6 @@ class glhmm():
     
 
     def get_means(self):
-
         """Returns the means for all states.
 
         Returns:
@@ -1749,6 +1786,83 @@ class glhmm():
         means = np.zeros((q,K))
         for k in range(K): means[:,k] = self.mean[k]["Mu"]
         return means    
+
+
+    def set_mean(self,mean,k=0):
+        """Sets the mean to specific values.
+        Useful to create synthetic data for simulations.
+
+        Parameters:
+        -----------
+        mean: ndarray of shape (n_variables_2,)
+            The mean value of each variable in Y for the specified state.
+        k : int, optional, default=0
+            The index of the state for which to retrieve the beta value.
+        """
+
+        self.mean[k]["Mu"] = mean
+
+
+    def get_P(self):
+        """Returns transition probability matrix
+
+        Returns:
+        --------
+        P: ndarray of shape (K,K), where K is the number of states
+
+        Raises:
+        -------
+        Exception
+            If the model has not yet been trained.
+        """
+
+        if not self.trained: 
+            raise Exception("The model has not yet been trained") 
+
+        return self.P
+
+
+    def get_Pi(self):
+        """Returns initial probabilities
+
+        Returns:
+        --------
+        Pi: ndarray of shape (K,), where K is the number of states
+
+        Raises:
+        -------
+        Exception
+            If the model has not yet been trained.
+        """
+
+        if not self.trained: 
+            raise Exception("The model has not yet been trained") 
+
+        return self.Pi    
+
+
+    def set_P(self,P):
+        """Set transition probability matrix.
+        Useful to create synthetic data for simulations.
+
+        Parameters:
+        --------
+        P: ndarray of shape (K,K), where K is the number of states
+        """
+
+        self.P = P
+
+
+    def set_Pi(self,Pi):
+        """Returns initial probabilities.
+        Useful to create synthetic data for simulations.
+
+        Parameters:
+        --------
+        Pi: ndarray of shape (K,), where K is the number of states
+        """
+
+        self.Pi = Pi  
 
 
     def dual_estimate(self,X,Y,indices=None,Gamma=None,Xi=None,for_kernel=False):
@@ -1808,6 +1922,29 @@ class glhmm():
             return hmm_dual,Gamma,Xi
         else:
             return hmm_dual
+
+
+    def initialize(self,p,q):
+        """
+        Initialize the parameters of the HMM with initial random values.
+        IMPORTANT: This should not be run before training. 
+        This is only useful for sampling data, and should be combined with subsequent calls to 
+        set_beta, set_mean, set_covariance_matrix, set_P and set_Pi.
+
+        Parameters:
+        -----------
+        p : number of channels in X (not used if only Y is modelled)
+        q : number of channels in Y      
+        """
+
+        T = 1000
+        if self.hyperparameters["model_beta"] != 'no': X = np.random.random((T,p))
+        else: X = None
+        Y = np.random.random((T,q))
+        options = {}
+        options["cyc"] = 1
+        options["initrep"] = 0
+        self.train(X=X,Y=Y,options=options)
 
 
     def train(self,X=None,Y=None,indices=None,files=None,Gamma=None,Xi=None,scale=None,options=None):
