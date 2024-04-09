@@ -201,19 +201,19 @@ class glhmm():
             #scale_ser=np.copy(scale)
 
         else:
-
+            
             if self.gpu_enabled:
 
                 start = time.time()
 
                 T,N,K = L.shape
 
-                #L = cp.asarray(L)
-                #P = cp.asarray(self.P)
+                L = cp.asarray(L)
+                P = cp.asarray(self.P)
 
                 indices_Xi = auxiliary.Gamma_indices_to_Xi_indices(ind)
 
-                a,b,sc = auxiliary.compute_alpha_beta_gpu(L,self.Pi,self.P,indices_individual)
+                a,b,sc = auxiliary.compute_alpha_beta_gpu(L,self.Pi,P,indices_individual)
 
                 ## convert scale to a vector for output.
                 scale = np.zeros(max(ind[:,1]))
@@ -224,11 +224,11 @@ class glhmm():
 
                     scale[tt] = sc[tt_ind,jj]
 
-                Gamma_ = np.einsum('ijk,ijk->ijk',b,a)
+                Gamma_ = cp.asnumpy(b * a)
 
                 ## Estiamte Xi per-subject, and save index if inf is found for Gamma or Xi in time series.
                 has_inf=[]
-                Xi_ = np.einsum('ijk,ijl,ijl,kl->ijkl',a[0:-1,:,:],b[1:,:,:],L[1:,:,:],self.P)
+                Xi_ = cp.asnumpy(cp.einsum('ijk,ijl,ijl,kl->ijkl',a[0:-1,:,:],b[1:,:,:],L[1:,:,:],P))
                 for jj in range(N):
                     #Xi_[:,jj,:,:] = cp.matmul( cp.expand_dims(a[0:-1,jj,:],axis=2), \
                     #    cp.expand_dims((b[1:,jj,:] * L[1:,jj,:]),axis=1)) * P
@@ -241,17 +241,17 @@ class glhmm():
 
                 # repeat if a Nan is produced, scaling the loglikelood
                 if len(has_inf)>0:     
-                    Lsub = np.asarray(L[:,has_inf,:])
+                    Lsub = cp.asarray(L[:,has_inf,:])
 
-                    LL = np.log(Lsub)
+                    LL = cp.log(Lsub)
                     for jj in range(len(has_inf)):
-                        t = np.all(LL[:,jj,:]<0,axis=1)
-                        LL[t,jj,:] = LL[t,jj,:] -  np.expand_dims(np.max(LL[t,jj,:],axis=1), axis=1)
+                        t = cp.all(LL[:,jj,:]<0,axis=1)
+                        LL[t,jj,:] = LL[t,jj,:] -  cp.expand_dims(cp.max(LL[t,jj,:],axis=1), axis=1)
 
-                    a,b,_ = auxiliary.compute_alpha_beta_gpu(np.exp(LL),self.Pi,self.P,indices_individual[has_inf,:])
+                    a,b,_ = auxiliary.compute_alpha_beta_gpu(cp.exp(LL),self.Pi,P,indices_individual[has_inf,:])
 
-                    Gamma_[:,has_inf,:] = np.einsum('ijk,ijk->ijk',b,a)
-                    Xi_[:,has_inf,:,:] = np.einsum('ijk,ijl,ijl,kl->ijkl',a[0:-1,:,:],b[1:,:,:],Lsub[1:,:,:],self.P)
+                    Gamma_[:,has_inf,:] = cp.asnumpy(b * a)
+                    Xi_[:,has_inf,:,:] = cp.asnumpy(cp.einsum('ijk,ijl,ijl,kl->ijkl',a[0:-1,:,:],b[1:,:,:],Lsub[1:,:,:],P))
                     #for jj in range(len(has_inf)):
                     #    idx = has_inf[jj]
                     #    Xi_[:,idx,:,:] = cp.matmul( cp.expand_dims(a[0:-1,jj,:],axis=2), \
@@ -283,6 +283,8 @@ class glhmm():
 
                 T,N,K = L.shape
 
+                Gamma_ = np.zeros((T,N,K))
+                Xi_ = np.zeros((T-1,N,K,K))
                 indices_Xi = auxiliary.Gamma_indices_to_Xi_indices(ind)
 
                 a,b,sc = auxiliary.compute_alpha_beta_parallel(L,self.Pi,self.P,indices_individual)
@@ -295,15 +297,14 @@ class glhmm():
                     tt_ind = range(indices_individual[jj,0],indices_individual[jj,1])
 
                     scale[tt] = sc[tt_ind,jj]
-                
+
                 Gamma_ = b * a
 
                 ## Estiamte Xi per-subject, and save index if inf is found for Gamma or Xi in time series.
                 has_inf=[]
-                Xi_ = np.einsum('ijk,ijl,ijl,kl->ijkl',a[0:-1,:,:],b[1:,:,:],L[1:,:,:],self.P)
                 for jj in range(N):
-                #    Xi_[:,jj,:,:] = np.matmul( np.expand_dims(a[0:-1,jj,:],axis=2), \
-                #        np.expand_dims((b[1:,jj,:] * L[1:,jj,:]),axis=1)) * self.P
+                    Xi_[:,jj,:,:] = np.matmul( np.expand_dims(a[0:-1,jj,:],axis=2), \
+                        np.expand_dims((b[1:,jj,:] * L[1:,jj,:]),axis=1)) * self.P
 
                     ind_indiv = range(indices_individual[jj,0],indices_individual[jj,1])
                     Xi_ind_indiv = range(indices_individual[jj,0],indices_individual[jj,1]-1)
@@ -323,11 +324,10 @@ class glhmm():
                     a,b,_ = auxiliary.compute_alpha_beta_parallel(np.exp(LL),self.Pi,self.P,indices_individual[has_inf,:])
                     
                     Gamma_[:,has_inf,:] = b * a
-                    Xi_[:,has_inf,:,:] = np.einsum('ijk,ijl,ijl,kl->ijkl',a[0:-1,:,:],b[1:,:,:],Lsub[1:,:,:],self.P)
-                    #for jj in range(len(has_inf)):
-                    #    idx = has_inf[jj]
-                    #    Xi_[:,idx,:,:] = np.matmul( np.expand_dims(a[0:-1,jj,:],axis=2), \
-                    #        np.expand_dims((b[1:,jj,:] * Lsub[1:,jj,:]),axis=1)) * self.P
+                    for jj in range(len(has_inf)):
+                        idx = has_inf[jj]
+                        Xi_[:,idx,:,:] = np.matmul( np.expand_dims(a[0:-1,jj,:],axis=2), \
+                            np.expand_dims((b[1:,jj,:] * Lsub[1:,jj,:]),axis=1)) * self.P
 
                 ## Restructure data to n_samples * n_states
 

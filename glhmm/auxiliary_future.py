@@ -229,12 +229,12 @@ def compute_alpha_beta_parallel(L,Pi,P,indices_individual):
         a[t,:,:] = a[t,:,:] / np.expand_dims(sc[t,:],axis=1)
 
     ## bottom-align L and the scaling matrix to estiamte beta.
-    L_ = roll_by_vector(L,T-indices_individual[:,1],axis=0)
-    sc_ = roll_by_vector(sc,T-indices_individual[:,1],axis=0)
+    L_b = roll_by_vector(L,T-indices_individual[:,1],axis=0)
+    sc_b = roll_by_vector(sc,T-indices_individual[:,1],axis=0)
 
-    b_[T-1,:,:] = np.ones((1,N,K)) / np.expand_dims(sc_[T-1,:],axis=1)
+    b_[T-1,:,:] = np.ones((1,N,K)) / np.expand_dims(sc_b[T-1,:],axis=1)
     for t in range(T-2,-1,-1):
-        b_[t,:,:] = ( (b_[t+1,:,:] * L_[t+1,:,:]) @ P.T ) / np.expand_dims(sc_[t,:],axis=1)
+        b_[t,:,:] = ( (b_[t+1,:,:] * L_b[t+1,:,:]) @ P.T ) / np.expand_dims(sc_b[t,:],axis=1)
         #bad = b[t,:]>maxreal
         #if bad.sum()>0: b[t,bad] = maxreal
 
@@ -267,8 +267,6 @@ def compute_alpha_beta_gpu(L,Pi,P,indices_individual):
     """
     ## Convert to cupy arrays
     Pi = cp.asarray(Pi)
-    L = cp.asarray(L)
-    P = cp.asarray(P)
 
     T,N,K = L.shape
     #minreal = sys.float_info.min
@@ -290,12 +288,12 @@ def compute_alpha_beta_gpu(L,Pi,P,indices_individual):
         a[t,:,:] = a[t,:,:] / cp.expand_dims(sc[t,:],axis=1)
 
     ## bottom-align L and the scaling matrix to estiamte beta.
-    L_ = roll_by_vector_gpu(L,T-indices_individual[:,1],axis=0)
-    sc_ = roll_by_vector_gpu(sc,T-indices_individual[:,1],axis=0)
+    L_b = roll_by_vector_gpu(L,T-indices_individual[:,1],axis=0)
+    sc_b = roll_by_vector_gpu(sc,T-indices_individual[:,1],axis=0)
 
-    b_[T-1,:,:] = cp.ones((1,N,K)) / cp.expand_dims(sc_[T-1,:],axis=1)
+    b_[T-1,:,:] = cp.ones((1,N,K)) / cp.expand_dims(sc_b[T-1,:],axis=1)
     for t in range(T-2,-1,-1):
-        b_[t,:,:] = cp.einsum('ij,ij,kj->ik',b_[t+1,:,:],L_[t+1,:,:],P) / cp.expand_dims(sc_[t,:],axis=1)
+        b_[t,:,:] = cp.einsum('ij,ij,kj->ik',b_[t+1,:,:],L_b[t+1,:,:],P) / cp.expand_dims(sc_b[t,:],axis=1)
         #b_[t,:,:] = ( (b_[t+1,:,:] * L_b[t+1,:,:]) @ P.T ) / cp.expand_dims(sc_b[t,:],axis=1)
         #bad = b[t,:]>maxreal
         #if bad.sum()>0: b[t,bad] = maxreal
@@ -304,8 +302,6 @@ def compute_alpha_beta_gpu(L,Pi,P,indices_individual):
     b = roll_by_vector_gpu(b_,indices_individual[:,1],axis=0)
 
     sc = cp.asnumpy(sc)
-    a = cp.asnumpy(a)
-    b = cp.asnumpy(b)
 
     return a,b,sc
 
