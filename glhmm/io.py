@@ -10,6 +10,7 @@ import scipy.special
 import scipy.io
 import pickle
 import os
+import warnings
 
 from . import glhmm
 from . import auxiliary
@@ -217,31 +218,62 @@ def read_flattened_hmm_mat(file):
 
 def save_hmm(hmm, filename, directory=None):
     """
-    Saves a glhmm object in the specified directory with the given filename.
-    If directory is None, saves in the current working directory.
+    Save a glhmm object in the specified directory with the given filename.
+
+    Parameters:
+    -----------
+    hmm (object)
+        The glhmm object to be saved.
+    filename (str)
+        The name of the file to which the object will be saved.
+    directory (str, optional), default=None:
+        The directory where the file will be saved. If None, saves in the current working directory.
+
     """
     # Combine the directory path and filename
     if directory:
+        # Ensure the directory exists, create it if not
+        if not os.path.exists(directory):
+            print(f"Created a folder here: {directory}")
+            os.makedirs(directory)
         filepath = os.path.join(directory, filename)
+        
     else:
         filepath = filename
     
     # Save the glhmm object to the specified file
     with open(filepath, 'wb') as outp:  # Overwrites any existing file.
         pickle.dump(hmm, outp, pickle.HIGHEST_PROTOCOL)
-
+    
+    print(f"{filename} saved to: {filepath}") if directory else print(f"{filename} saved")
+        
 
 def load_hmm(filename, directory=None):
     """
-    Loads a glhmm object from the specified directory with the given filename.
-    If directory is None, searches in the current working directory.
+    Load a glhmm object from the specified file.
+
+    Parameters:
+    -----------
+    filename (str):
+        Name of the file containing the glhmm object.
+    directory (str, optional), default=None:
+        Directory where the file is located. If None, searches in the current working directory.
+
+    Returns:
+    --------
+    glhmm : object
+        Loaded glhmm object.
     """
     # Combine the directory path and filename
     if directory:
         filepath = os.path.join(directory, filename)
     else:
         filepath = filename
-    
+        
+    # Check if the directory exists
+    if directory and not os.path.exists(directory):
+        warnings.warn(f"The specified directory '{directory}' does not exist.")
+
     # Load the glhmm object from the specified file
     with open(filepath, 'rb') as inp:
         hmm = pickle.load(inp)
@@ -249,74 +281,62 @@ def load_hmm(filename, directory=None):
 
 
 
-
-def save_statistics(data_dict, file_name='statistics', save_directory=None, format='npy'):
+def save_statistics(data_dict, filename='statistics', directory=None, format='npy'):
     """
     Save statistics data to a file in the specified directory with optional format (npy or npz).
 
     Parameters
     ----------
-    data_dict : dict
-        The dictionary containing statistics data to be saved.
-    file_name : str, optional
-        The name of the file (default is 'statistics').
-    save_directory : str, optional
-        The directory path where the file will be saved (default is the current working directory).
-    format : str
-        The serialization format ('npy' or 'npz', default is 'npy').
-
-    Returns
-    -------
-    None
+    data_dict (dict):
+        Dictionary containing statistics data to be saved.
+    filename (str, optional), default='statistics':
+        Name of the file.
+    directory (str, optional), default=None:
+        Directory path where the file will be saved (default is the current working directory).
+    format (str, optional), default='npy':
+        Serialization format ('npy' or 'npz').
     """
-    # Set default directory to current working directory if not provided
-    save_directory = save_directory or os.getcwd()
-
-    # Ensure the directory exists, create it if not
-    if not os.path.exists(save_directory):
-        os.makedirs(save_directory)
-
+    
     # Construct the full file path
-    file_path = os.path.join(save_directory, f'{file_name}.{format}')
+    if directory:
+        # Ensure the directory exists, create it if not
+        if not os.path.exists(directory):
+            print(f"Created a folder here: {directory}")
+            os.makedirs(directory)
+        filepath = os.path.join(directory, f'{filename}.{format}')
+    else:
+        filepath = f'{filename}.{format}'
 
     # Save the dictionary to the file using the specified format
     if format == 'npy':
-        np.save(file_path, data_dict)
+        np.save(filepath, data_dict)
     elif format == 'npz':
-        np.savez(file_path, **data_dict)
+        np.savez(filepath, **data_dict)
     else:
         raise ValueError("Invalid format. Use 'npy' or 'npz'.")
+    print(f"{filename}.{format} saved to: {filepath}") if directory else print(f"{filename}.{format} saved")
 
-    print(f"Statistics data saved to: {file_path}")
-
-def load_statistics(file_name, load_directory=None):
+def load_statistics(filename, directory=None):
     """
     Load statistics data from a file.
 
     Parameters
     ----------
-    file_name : str
+    filename : str
         The name of the file containing the saved statistics data, with or without extension.
-    load_directory : str, optional
+    load_directory (str, optional), default=None:
         The directory path where the file is located (default is the current working directory).
 
     Returns
     -------
     data_dict : dict
         The dictionary containing the loaded statistics data.
-
-    Raises
-    ------
-    FileNotFoundError
-        If the specified file does not exist.
-    ValueError
-        If an unsupported file format is encountered.
     """
     # Set default directory to current working directory if not provided
-    load_directory = load_directory or os.getcwd()
+    directory = directory or os.getcwd()
 
     # Construct the full file path
-    file_path = os.path.join(load_directory, file_name)
+    file_path = os.path.join(directory, filename)
 
     if not os.path.exists(file_path):
         # If the file with the given name does not exist, try adding '.npy' and '.npz' extensions
@@ -324,7 +344,7 @@ def load_statistics(file_name, load_directory=None):
         file_path_npz = file_path + '.npz'
 
         if not (os.path.exists(file_path_npy) or os.path.exists(file_path_npz)):
-            raise FileNotFoundError(f"File not found: {file_name} or {file_name}.npy or {file_name}.npz")
+            raise FileNotFoundError(f"File not found: {filename} or {filename}.npy or {filename}.npz")
 
     try:
         if os.path.exists(file_path):
@@ -337,7 +357,7 @@ def load_statistics(file_name, load_directory=None):
             loaded_data = np.load(file_path_npz, allow_pickle=True)
             data_dict = {key: loaded_data[key] for key in loaded_data.files}
     except Exception as e:
-        raise ValueError(f"Error loading data from {file_name}: {e}")
+        raise ValueError(f"Error loading data from {filename}: {e}")
 
     return data_dict
 
