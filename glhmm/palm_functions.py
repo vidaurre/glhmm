@@ -30,18 +30,26 @@ def hcp2block(tmp, blocksfile=None, dz2sib=False, ids=None):
     Convert HCP-style twin data into block structure.
 
     Parameters:
-    --------------
-        file (str): Path to the input CSV file containing twin data.
-        blocksfile (str, optional): Path to save the resulting blocks as a CSV file.
-        dz2sib (bool, optional): If True, handle non-monozygotic twins as siblings. Default is False.
-        ids (list or array-like, optional): List of subject IDs to include. Default is None.
+    -----------
+    file (str):
+        Path to the input CSV file containing twin data.
+    blocksfile (str, optional), default=None:
+        Path to save the resulting blocks as a CSV file.
+    dz2sib (bool, optional), default=False:
+        If True, handle non-monozygotic twins as siblings.
+    ids (list or array-like, optional), default=None:
+        List of subject IDs to include.
 
     Returns:
-    ----------  
-        tuple: A tuple containing three elements:
-            tab (numpy.ndarray): A modified table of twin data.
-            B (numpy.ndarray): Block structure representing relationships between subjects.
-            famtype (numpy.ndarray): An array indicating the type of each family.
+    --------
+    tuple
+        A tuple containing three elements:
+            tab : numpy.ndarray
+                A modified table of twin data.
+            B : numpy.ndarray
+                Block structure representing relationships between subjects.
+            famtype : numpy.ndarray
+                An array indicating the type of each family.
     """
     # # Load data
     # tmp = pd.read_csv(file)
@@ -293,21 +301,21 @@ import numpy as np
 def renumber(B):
     
     """
-    Renumber the elements in a 2D numpy array B, preserving their order within distinct blocks.
-
     This function renumbers the elements in the input array B based on distinct values in its first column.
     Each distinct value represents a block, and the elements within each block are renumbered sequentially,
     while preserving the relative order of elements within each block.
 
     Parameters:
-    --------------
-    B (numpy.ndarray): The 2D input array to be renumbered.
+    -----------
+    B (numpy.ndarray): 
+        The 2D input array to be renumbered.
 
     Returns:
-    ----------  
-    tuple: A tuple containing:
-        - Br (numpy.ndarray): The renumbered array, where elements are renumbered within blocks.
-        - addcol (bool): A boolean indicating whether a column was added during renumbering.
+    -----------  
+    Br (numpy.ndarray): 
+        The renumbered array, where elements are renumbered within blocks.
+    addcol (bool): 
+        A boolean indicating whether a column was added during renumbering.
 
     """
 
@@ -347,36 +355,33 @@ def renumber(B):
 
 def palm_reindex(B, meth='fixleaves'):
     """
-    Reindex a 2D numpy array using different procedures while preserving block structure.
-
     This function reorders the elements of a 2D numpy array `B` by applying one of several reindexing methods.
     The primary goal of reindexing is to assign new values to elements in such a way that they are organized
     in a desired order or structure.
 
     Parameters:
-    --------------
-    B (numpy.ndarray): The 2D input array to be reindexed.
-    meth (str, optional): The reindexing method to be applied. It can take one of the following values:
+    -----------
+    B (numpy.ndarray):
+        The 2D input array to be reindexed.
+    meth (str, optional):
+        The reindexing method to be applied. It can take one of the following values:
         - 'fixleaves': This method reindexes the input array by preserving the order of unique values in the
-          first column and recursively reindexes the remaining columns. It is well-suited for hierarchical
-          data where the first column represents levels or leaves.
+        first column and recursively reindexes the remaining columns. It is well-suited for hierarchical
+        data where the first column represents levels or leaves.
         - 'continuous': This method reindexes the input array by assigning new values to elements in a
-          continuous, non-overlapping manner within each column. It is useful for continuous data or when
-          preserving the order of unique values is not a requirement.
+        continuous, non-overlapping manner within each column. It is useful for continuous data or when
+        preserving the order of unique values is not a requirement.
         - 'restart': This method reindexes the input array by restarting the numbering from 1 for each block
-          of unique values in the first column. It is suitable for data that naturally breaks into distinct
-          segments or blocks.
+        of unique values in the first column. It is suitable for data that naturally breaks into distinct
+        segments or blocks.
         - 'mixed': This method combines both the 'fixleaves' and 'continuous' reindexing methods. It reindexes
-          the first columns using 'fixleaves' and the remaining columns using 'continuous', creating a mixed
-          reindexing scheme.
+        the first columns using 'fixleaves' and the remaining columns using 'continuous', creating a mixed
+        reindexing scheme.
 
     Returns:
-    ----------  
-    numpy.ndarray: The reindexed array, preserving the block structure based on the chosen method.
-
-
-    Raises:
-    ValueError: If the `meth` parameter is not one of the valid reindexing methods.
+    -----------
+    Br (numpy.ndarray):
+        The reindexed array, preserving the block structure based on the chosen method.
     """
 
     # Convert meth to lowercase
@@ -465,27 +470,29 @@ def palm_reindex(B, meth='fixleaves'):
 
 def palm_permtree(Ptree, nP, CMC=False, maxP=None):
     """
-    Generate permutations of a given palm tree structure.
-
-    This function generates permutations of a palm tree structure represented by Ptree. Permutations are created by
-    shuffling the branches of the palm tree. The number of permutations is controlled by the 'nP' parameter.
+    This function generates permutations of a palm tree structure represented by Ptree.
 
     Parameters:
-    --------------
-    Ptree (list or numpy.ndarray): The palm tree structure to be permuted.
-    nP (int): The number of permutations to generate.
-    CMC (bool, optional): Whether to use Conditional Monte Carlo (CMC) method for permutation.
-                          Defaults to False.
-    maxP (int, optional): The maximum number of permutations allowed. If not provided, it is calculated automatically.
+    -----------
+    Ptree (list or numpy.ndarray)
+        The palm tree structure to be permuted.
+    nP (int)
+        The number of permutations to generate.
+    CMC (bool, optional), default=False:
+        Whether to use Conditional Monte Carlo (CMC) method for permutation.
+    maxP (int, optional), default=None
+        The maximum number of permutations allowed. If not provided, it is calculated automatically.
 
     Returns:
-    ----------  
-    numpy.ndarray: An array representing the permutations. Each row corresponds to a permutation, with the first
-                   column always representing the identity permutation.
+    ---------  
+    P (numpy.ndarray)
+        An array representing the permutations. Each row corresponds to a permutation, with the first
+        column always representing the identity permutation.
 
-    Note:
+    Notes:
+    ---------  
     - If 'CMC' is False and 'nP' is greater than 'maxP' / 2, a warning message is displayed, as it may take a
-      considerable amount of time to find non-repeated permutations.
+    considerable amount of time to find non-repeated permutations.
     - The function utilizes the 'pickperm' and 'randomperm' helper functions for the permutation process.
     """
     
@@ -536,19 +543,20 @@ def palm_permtree(Ptree, nP, CMC=False, maxP=None):
 
 def pickperm(Ptree, P):
     """
-    Extract a permutation from a palm tree structure.
-
     This function extracts a permutation from a given palm tree structure. It does not perform the permutation
     but returns the indices representing the already permuted tree.
 
     Parameters:
-    --------------
-    Ptree (list or numpy.ndarray): The palm tree structure.
-    P (numpy.ndarray): The current state of the permutation.
+    -----------
+    Ptree (list or numpy.ndarray): 
+        The palm tree structure.
+    P (numpy.ndarray): 
+        The current state of the permutation.
 
     Returns:
     ----------  
-    numpy.ndarray: An array of indices representing the permutation of the palm tree structure.
+    P (numpy.ndarray): 
+        An array of indices representing the permutation of the palm tree structure.
     """
     # Check if Ptree is a list and has three elements, then recursively call pickperm on the third element
     if isinstance(Ptree,list):
@@ -572,17 +580,17 @@ def pickperm(Ptree, P):
 
 def randomperm(Ptree_perm):
     """
-    Create a random permutation of a palm tree structure.
-
-    This function generates a random permutation of a given palm tree structure by shuffling its branches.
+    Create a random permutation of a palm tree structure by shuffling its branches.
 
     Parameters:
-    --------------
-    Ptree_perm (list or numpy.ndarray): The palm tree structure to be permuted.
+    -----------
+    Ptree_perm (list or numpy.ndarray): 
+        The palm tree structure to be permuted.
 
     Returns:
     ----------  
-    list: The randomly permuted palm tree structure.
+    Ptree_perm (list): 
+        The randomly permuted palm tree structure.
     """
     # Check if Ptree_perm is a list and has three elements, then recursively call randomperm on the third element
     if isinstance(Ptree_perm,list):
@@ -641,14 +649,18 @@ def palm_maxshuf(Ptree, stype='perms', uselog=False):
     Calculate the maximum number of shufflings (permutations or sign-flips) for a given palm tree structure.
 
     Parameters:
-    --------------
-    Ptree (list or numpy.ndarray): The palm tree structure.
-    stype (str, optional): The type of shuffling to calculate ('perms' for permutations by default).
-    uselog (bool, optional): A flag indicating whether to calculate using logarithmic values (defaults to False).
+    -----------
+    Ptree (list or numpy.ndarray): 
+        The palm tree structure.
+    stype (str, optional), default='perms: 
+        The type of shuffling to calculate.
+    uselog (bool, optional), defaults=False: 
+        A flag indicating whether to calculate using logarithmic values.
 
     Returns:
     ----------  
-    int: The maximum number of shufflings (permutations or sign-flips) based on the specified criteria.
+    maxb (int): 
+        The maximum number of shufflings (permutations or sign-flips) based on the specified criteria.
     """
     
     # Calculate the maximum number of shufflings based on user-defined options
@@ -665,16 +677,17 @@ def maxpermnode(Ptree, np):
     """
     Calculate the maximum number of permutations within a palm tree node.
 
-    This function recursively calculates the maximum number of permutations within a palm tree node.
-
     Parameters:
-    --------------
-    Ptree (list or numpy.ndarray): The palm tree structure.
-    np (int): The current number of permutations (initialized to 1).
+    -----------
+    Ptree (list or numpy.ndarray): 
+        The palm tree structure.
+    np (int): 
+        The current number of permutations (initialized to 1).
 
     Returns:
     ----------  
-    int: The maximum number of permutations within the node.
+    n_p (int): 
+        The maximum number of permutations within the node.
     """
     for u in range(len(Ptree)):
         n_p = n_p * seq2np(Ptree[u][0][:, 0])
@@ -686,15 +699,15 @@ def seq2np(S):
     """
     Calculate the number of permutations for a given sequence.
 
-    This function calculates the number of permutations for a given sequence.
-
     Parameters:
-    --------------
-    S (numpy.ndarray): The input sequence.
+    -----------
+    S (numpy.ndarray): 
+        The input sequence.
 
     Returns:
     ----------  
-    int: The number of permutations for the sequence.
+    n_p (int): 
+        The number of permutations for the sequence.
     """
     U, cnt = np.unique(S, return_counts=True)
     n_p = np.math.factorial(len(S)) / np.prod(np.math.factorial(cnt))
@@ -704,16 +717,17 @@ def maxflipnode(Ptree, ns):
     """
     Calculate the maximum number of sign-flips within a palm tree node.
 
-    This function recursively calculates the maximum number of sign-flips within a palm tree node.
-
     Parameters:
-    --------------
-    Ptree (list or numpy.ndarray): The palm tree structure.
-    ns (int): The current number of sign-flips (initialized to 1).
+    -----------
+    Ptree (list or numpy.ndarray): 
+        The palm tree structure.
+    ns (int): 
+        The current number of sign-flips (initialized to 1).
 
     Returns:
     ----------  
-    int: The maximum number of sign-flips within the node.
+    ns (int): 
+        The maximum number of sign-flips within the node.
     """
     for u in range(len(Ptree)):
         if len(Ptree[u][2][0]) > 1:
@@ -725,16 +739,17 @@ def lmaxpermnode(Ptree, n_p):
     """
     Calculate the logarithm of the maximum number of permutations within a palm tree node.
 
-    This function calculates the logarithm of the maximum number of permutations within a palm tree node.
-
     Parameters:
-    --------------
-    Ptree (list or numpy.ndarray): The palm tree structure.
-    n_p (int): The current logarithm of permutations (initialized to 0).
+    -----------
+    Ptree (list or numpy.ndarray): 
+        The palm tree structure.
+    n_p (int): 
+        The current logarithm of permutations (initialized to 0).
 
     Returns:
     ----------  
-    int: The logarithm of the maximum number of permutations within the node.
+    n_p (int): 
+        The logarithm of the maximum number of permutations within the node.
     """
     if isinstance(Ptree,list):
         n_p = n_p + lseq2np(Ptree[0])
@@ -764,15 +779,15 @@ def lseq2np(S):
     """
     Calculate the logarithm of the number of permutations for a given sequence.
 
-    This function calculates the logarithm of the number of permutations for a given sequence.
-
     Parameters:
-    --------------
-    S (numpy.ndarray): The input sequence.
+    -----------
+    S (numpy.ndarray): 
+        The input sequence.
 
     Returns:
     ----------  
-    int: The logarithm of the number of permutations for the sequence.
+    n_p (int): 
+        The logarithm of the number of permutations for the sequence.
     """
     if is_single_value(S):
         nS = 1
@@ -794,17 +809,18 @@ def lseq2np(S):
 def lmaxflipnode(Ptree, ns):
     """
     Calculate the logarithm of the maximum number of sign-flips within a palm tree node.
-
-    This function calculates the logarithm of the maximum number of sign-flips within a palm tree node.
-
+    
     Parameters:
-    --------------
-    Ptree (list or numpy.ndarray): The palm tree structure.
-    ns (int): The current logarithm of sign-flips (initialized to 0).
+    -----------
+    Ptree (list or numpy.ndarray): 
+        The palm tree structure.
+    ns (int): 
+        The current logarithm of sign-flips (initialized to 0).
 
     Returns:
     ----------  
-    int: The logarithm of the maximum number of sign-flips within the node.
+    ns (int): 
+        The logarithm of the maximum number of sign-flips within the node.
     """
     for u in range(len(Ptree)):
         if len(Ptree[u][2][0]) > 1:
@@ -816,15 +832,15 @@ def is_single_value(variable):
     """
     Check if an array contains a singlevalue.
 
-    This function checks if an array contains a singlevalue.
-
     Parameters:
-    --------------
-    arr (numpy.ndarray or list): The array to be checked.
+    -----------
+    variable (numpy.ndarray or list): 
+        The array to be checked.
 
     Returns:
     ----------  
-    bool: True if the array contains a single value, False otherwise.
+    bool: 
+        True if the array contains a single value, False otherwise.
     """
     return isinstance(variable, (int, float, complex))
 
@@ -832,15 +848,15 @@ def palm_factorial(N=101):
     """
     Calculate logarithmically scaled factorials up to a given number.
 
-    This function precomputes logarithmically scaled factorials up to a specified number.
-
     Parameters:
-    --------------
-    N (int, optional): The maximum number for which to precompute factorials (defaults to 101).
+    -----------
+    N (int, optional), default=101: 
+        The maximum number for which to precompute factorials.
 
     Returns:
     ----------  
-    numpy.ndarray: An array of precomputed logarithmically scaled factorials.
+    lf (numpy.ndarray): 
+        An array of precomputed logarithmically scaled factorials.
     """
     if N == 1:
         N = 101
@@ -857,30 +873,32 @@ def palm_factorial(N=101):
 #### Permute PALM tree
 
 
-
 def palm_permtree(Ptree, nP, CMC=False, maxP=None):
     """
-    Generate permutations of a given palm tree structure.
-
-    This function generates permutations of a palm tree structure represented by Ptree. Permutations are created by
-    shuffling the branches of the palm tree. The number of permutations is controlled by the 'nP' parameter.
+    Generate permutations of a given palm tree structure represented by Ptree.
+    Permutations are created by shuffling the branches of the palm tree. 
 
     Parameters:
-    --------------
-    Ptree (list or numpy.ndarray): The palm tree structure to be permuted.
-    nP (int): The number of permutations to generate.
-    CMC (bool, optional): Whether to use Conditional Monte Carlo (CMC) method for permutation.
-                          Defaults to False.
-    maxP (int, optional): The maximum number of permutations allowed. If not provided, it is calculated automatically.
+    -----------
+    Ptree (list or numpy.ndarray):
+        The palm tree structure to be permuted.
+    nP (int):
+        The number of permutations to generate.
+    CMC (bool, optional), default=False:
+        Whether to use Conditional Monte Carlo (CMC) method for permutation. Defaults to False.
+    maxP (int, optional), default=None:
+        The maximum number of permutations allowed. If not provided, it is calculated automatically.
 
     Returns:
     ----------  
-    numpy.ndarray: An array representing the permutations. Each row corresponds to a permutation, with the first
-                   column always representing the identity permutation.
+    P (numpy.ndarray)
+        An array representing the permutations. Each row corresponds to a permutation, with the first
+        column always representing the identity permutation.
 
-    Note:
+    Notes:
+    ----------  
     - If 'CMC' is False and 'nP' is greater than 'maxP' / 2, a warning message is displayed, as it may take a
-      considerable amount of time to find non-repeated permutations.
+    considerable amount of time to find non-repeated permutations.
     - The function utilizes the 'pickperm' and 'randomperm' helper functions for the permutation process.
     """
     
@@ -931,19 +949,20 @@ def palm_permtree(Ptree, nP, CMC=False, maxP=None):
 
 def pickperm(Ptree, P):
     """
-    Extract a permutation from a palm tree structure.
-
-    This function extracts a permutation from a given palm tree structure. It does not perform the permutation
-    but returns the indices representing the already permuted tree.
+    Extract a permutation from a palm tree structure. 
+    It does not perform the permutation but returns the indices representing the already permuted tree.
 
     Parameters:
-    --------------
-    Ptree (list or numpy.ndarray): The palm tree structure.
-    P (numpy.ndarray): The current state of the permutation.
+    -----------
+    Ptree (list or numpy.ndarray): 
+        The palm tree structure.
+    P (numpy.ndarray): 
+        The current state of the permutation.
 
     Returns:
     ----------  
-    numpy.ndarray: An array of indices representing the permutation of the palm tree structure.
+    P (numpy.ndarray): 
+        An array of indices representing the permutation of the palm tree structure.
     """
     # Check if Ptree is a list and has three elements, then recursively call pickperm on the third element
     if isinstance(Ptree,list):
@@ -967,17 +986,17 @@ def pickperm(Ptree, P):
 
 def randomperm(Ptree_perm):
     """
-    Create a random permutation of a palm tree structure.
-
-    This function generates a random permutation of a given palm tree structure by shuffling its branches.
+    Create a random permutation of a palm tree structure by shuffling its branches.
 
     Parameters:
-    --------------
-    Ptree_perm (list or numpy.ndarray): The palm tree structure to be permuted.
+    -----------
+    Ptree_perm (list or numpy.ndarray): 
+        The palm tree structure to be permuted.
 
     Returns:
     ----------  
-    list: The randomly permuted palm tree structure.
+    Ptree_perm (list): 
+        The randomly permuted palm tree structure.
     """
     # Check if Ptree_perm is a list and has three elements, then recursively call randomperm on the third element
     if isinstance(Ptree_perm,list):
@@ -1033,23 +1052,25 @@ import warnings
 import numpy as np
 
 
-def palm_shuftree(Ptree,nP,CMC= False,EE = True):
+def palm_shuftree(Ptree, nP, CMC= False,EE = True):
     """
     Generate a set of shufflings (permutations or sign-flips) for a given palm tree structure.
 
     Parameters:
-    --------------
-    Ptree (list): The palm tree structure.
-    nP (int): The number of permutations to generate.
-
-    CMC (bool, optional): A flag indicating whether to use the Conditional Monte Carlo method (CMC).
-                          Defaults to False.
-    EE (bool, optional): A flag indicating whether to assume exchangeable errors, which allows permutation.
-                        Defaults to True.
+    -----------
+    Ptree (list):
+        The palm tree structure.
+    nP (int):
+        The number of permutations to generate.
+    CMC (bool, optional), default=False:
+        A flag indicating whether to use the Conditional Monte Carlo method (CMC).
+    EE (bool, optional), default=True:
+        A flag indicating whether to assume exchangeable errors, which allows permutation.
 
     Returns:
     ----------  
-    list: A list containing the generated shufflings (permutations).
+    Pset (list): 
+        A list containing the generated shufflings (permutations).
     """ 
     
     # Maximum number of shufflings (perms, sign-flips, or both)
@@ -1097,22 +1118,25 @@ def palm_shuftree(Ptree,nP,CMC= False,EE = True):
 ######################### PART 4 - quick_perm #########################################################
 def palm_quickperms(EB, M=None, nP=1000, CMC=False, EE=True):
     """
-    Generate a set of permutations for a given input matrix using palm methods.
+    Generate a set of permutations for a given input matrix using PALM methods.
 
     Parameters:
-    --------------
-    EB (numpy.ndarray): Block structure representing relationships between subjects.
-    M (numpy.ndarray, optional): The matrix of attributes, which is not typically required.
-                                Defaults to None.
-    nP (int): The number of permutations to generate.
-    CMC (bool, optional): A flag indicating whether to use the Conditional Monte Carlo method (CMC).
-                          Defaults to False.
-    EE (bool, optional): A flag indicating whether to assume exchangeable errors, which allows permutation.
-                        Defaults to True.
+    -----------
+    EB (numpy.ndarray)
+        Block structure representing relationships between subjects.
+    M (numpy.ndarray, optional), default=None:
+        The matrix of attributes, which is not typically required.
+    nP (int), default=1000:
+        The number of permutations to generate.
+    CMC (bool, optional), default=False:
+        A flag indicating whether to use the Conditional Monte Carlo method (CMC).
+    EE (bool, optional), default=True:
+        A flag indicating whether to assume exchangeable errors, which allows permutation.
 
     Returns:
-    ----------  
-    list: A list containing the generated permutations.
+    -----------
+    Pset (list):
+        A list containing the generated permutations.
     """
     # Filter out the specific RuntimeWarning
     warnings.filterwarnings("ignore", message="overflow encountered in exp")
@@ -1135,12 +1159,18 @@ def palm_maxshuf(Ptree, stype='perms', uselog=False):
     Calculate the maximum number of shufflings (permutations or sign-flips) for a given palm tree structure.
 
     Parameters:
-    Ptree (list or numpy.ndarray): The palm tree structure.
-    stype (str, optional): The type of shuffling to calculate ('perms' for permutations by default).
-    uselog (bool, optional): A flag indicating whether to calculate using logarithmic values (defaults to False).
+    -----------
+    Ptree (list or numpy.ndarray): 
+        The palm tree structure.
+    stype (str, optional), default='perms:
+        The type of shuffling to calculate ('perms' for permutations by default).
+    uselog (bool, optional), default=False:
+        A flag indicating whether to calculate using logarithmic values.
 
     Returns:
-    int: The maximum number of shufflings (permutations or sign-flips) based on the specified criteria.
+    -----------
+    maxb (int): 
+        The maximum number of shufflings (permutations or sign-flips) based on the specified criteria.
     """
     
     # Calculate the maximum number of shufflings based on user-defined options
@@ -1157,14 +1187,17 @@ def maxpermnode(Ptree, np):
     """
     Calculate the maximum number of permutations within a palm tree node.
 
-    This function recursively calculates the maximum number of permutations within a palm tree node.
-
     Parameters:
-    Ptree (list or numpy.ndarray): The palm tree structure.
-    np (int): The current number of permutations (initialized to 1).
+    -----------
+    Ptree (list or numpy.ndarray): 
+        The palm tree structure.
+    np (int): 
+        The current number of permutations.
 
     Returns:
-    int: The maximum number of permutations within the node.
+    -----------
+    n_p (int): 
+        The maximum number of permutations within the node.
     """
     for u in range(len(Ptree)):
         n_p = n_p * seq2np(Ptree[u][0][:, 0])
@@ -1176,13 +1209,15 @@ def seq2np(S):
     """
     Calculate the number of permutations for a given sequence.
 
-    This function calculates the number of permutations for a given sequence.
-
     Parameters:
-    S (numpy.ndarray): The input sequence.
+    -----------
+    S (numpy.ndarray): 
+        The input sequence.
 
     Returns:
-    int: The number of permutations for the sequence.
+    -----------
+    n_p (int): 
+        The number of permutations for the sequence.
     """
     U, cnt = np.unique(S, return_counts=True)
     n_p = np.math.factorial(len(S)) / np.prod(np.math.factorial(cnt))
@@ -1192,14 +1227,17 @@ def maxflipnode(Ptree, ns):
     """
     Calculate the maximum number of sign-flips within a palm tree node.
 
-    This function recursively calculates the maximum number of sign-flips within a palm tree node.
-
     Parameters:
-    Ptree (list or numpy.ndarray): The palm tree structure.
-    ns (int): The current number of sign-flips (initialized to 1).
+    -----------
+    Ptree (list or numpy.ndarray): 
+        The palm tree structure.
+    ns (int): 
+        The current number of sign-flips (initialized to 1).
 
     Returns:
-    int: The maximum number of sign-flips within the node.
+    -----------
+    ns (int): 
+        The maximum number of sign-flips within the node.
     """
     for u in range(len(Ptree)):
         if len(Ptree[u][2][0]) > 1:
@@ -1211,14 +1249,17 @@ def lmaxpermnode(Ptree, n_p):
     """
     Calculate the logarithm of the maximum number of permutations within a palm tree node.
 
-    This function calculates the logarithm of the maximum number of permutations within a palm tree node.
-
     Parameters:
-    Ptree (list or numpy.ndarray): The palm tree structure.
-    n_p (int): The current logarithm of permutations (initialized to 0).
+    ----------- 
+    Ptree (list or numpy.ndarray): 
+        The palm tree structure.
+    n_p (int): 
+        The current logarithm of permutations (initialized to 0).
 
     Returns:
-    int: The logarithm of the maximum number of permutations within the node.
+    -----------
+    n_p (int): 
+        The logarithm of the maximum number of permutations within the node.
     """
     if isinstance(Ptree,list):
         n_p = n_p + lseq2np(Ptree[0])
@@ -1248,13 +1289,15 @@ def lseq2np(S):
     """
     Calculate the logarithm of the number of permutations for a given sequence.
 
-    This function calculates the logarithm of the number of permutations for a given sequence.
-
     Parameters:
-    S (numpy.ndarray): The input sequence.
+    -----------
+    S (numpy.ndarray): 
+        The input sequence.
 
     Returns:
-    int: The logarithm of the number of permutations for the sequence.
+    -----------
+    n_p (int): 
+        The logarithm of the number of permutations for the sequence.
     """
     if is_single_value(S):
         nS = 1
@@ -1277,14 +1320,17 @@ def lmaxflipnode(Ptree, ns):
     """
     Calculate the logarithm of the maximum number of sign-flips within a palm tree node.
 
-    This function calculates the logarithm of the maximum number of sign-flips within a palm tree node.
-
     Parameters:
-    Ptree (list or numpy.ndarray): The palm tree structure.
-    ns (int): The current logarithm of sign-flips (initialized to 0).
+    -----------
+    Ptree (list or numpy.ndarray): 
+        The palm tree structure.
+    ns (int): 
+        The current logarithm of sign-flips (initialized to 0).
 
     Returns:
-    int: The logarithm of the maximum number of sign-flips within the node.
+    -----------
+    ns (int): 
+        The logarithm of the maximum number of sign-flips within the node.
     """
     for u in range(len(Ptree)):
         if len(Ptree[u][2][0]) > 1:
@@ -1296,13 +1342,15 @@ def is_single_value(variable):
     """
     Check if an array contains a singlevalue.
 
-    This function checks if an array contains a singlevalue.
-
     Parameters:
-    arr (numpy.ndarray or list): The array to be checked.
+    -----------
+    variable (numpy.ndarray or list): 
+        The array to be checked.
 
     Returns:
-    bool: True if the array contains a single value, False otherwise.
+    -----------
+    bool: 
+        True if the array contains a single value, False otherwise.
     """
     return isinstance(variable, (int, float, complex))
 
@@ -1310,13 +1358,15 @@ def palm_factorial(N=101):
     """
     Calculate logarithmically scaled factorials up to a given number.
 
-    This function precomputes logarithmically scaled factorials up to a specified number.
-
     Parameters:
-    N (int, optional): The maximum number for which to precompute factorials (defaults to 101).
+    -----------
+    N (int, optional), default=101: 
+        The maximum number for which to precompute factorials.
 
     Returns:
-    numpy.ndarray: An array of precomputed logarithmically scaled factorials.
+    -----------
+    lf (numpy.ndarray): 
+        An array of precomputed logarithmically scaled factorials.
     """
     if N == 1:
         N = 101
@@ -1329,25 +1379,23 @@ def palm_factorial(N=101):
 
     return lf
 
-import numpy as np
-
-def renumber(B):
-    
+def renumber(B):  
     """
-    Renumber the elements in a 2D numpy array B, preserving their order within distinct blocks.
-
-    This function renumbers the elements in the input array B based on distinct values in its first column.
+    Renumber the elements in the input array B based on distinct values in its first column.
     Each distinct value represents a block, and the elements within each block are renumbered sequentially,
     while preserving the relative order of elements within each block.
 
     Parameters:
-    B (numpy.ndarray): The 2D input array to be renumbered.
+    -----------
+    B (numpy.ndarray):
+        The 2D input array to be renumbered.
 
     Returns:
-    tuple: A tuple containing:
-        - Br (numpy.ndarray): The renumbered array, where elements are renumbered within blocks.
-        - addcol (bool): A boolean indicating whether a column was added during renumbering.
-
+    --------
+    Br (numpy.ndarray):
+        The renumbered array, where elements are renumbered within blocks.
+    addcol (bool):
+        A boolean indicating whether a column was added during renumbering.
     """
 
     # Extract the first column of the input array B
@@ -1386,34 +1434,26 @@ def renumber(B):
 
 def palm_reindex(B, meth='fixleaves'):
     """
-    Reindex a 2D numpy array using different procedures while preserving block structure.
-
-    This function reorders the elements of a 2D numpy array `B` by applying one of several reindexing methods.
-    The primary goal of reindexing is to assign new values to elements in such a way that they are organized
-    in a desired order or structure.
+    Reindex a 2D numpy array preserving block structure based on different reindexing methods.
 
     Parameters:
-    B (numpy.ndarray): The 2D input array to be reindexed.
-    meth (str, optional): The reindexing method to be applied. It can take one of the following values:
-        - 'fixleaves': This method reindexes the input array by preserving the order of unique values in the
-          first column and recursively reindexes the remaining columns. It is well-suited for hierarchical
-          data where the first column represents levels or leaves.
-        - 'continuous': This method reindexes the input array by assigning new values to elements in a
-          continuous, non-overlapping manner within each column. It is useful for continuous data or when
-          preserving the order of unique values is not a requirement.
-        - 'restart': This method reindexes the input array by restarting the numbering from 1 for each block
-          of unique values in the first column. It is suitable for data that naturally breaks into distinct
-          segments or blocks.
-        - 'mixed': This method combines both the 'fixleaves' and 'continuous' reindexing methods. It reindexes
-          the first columns using 'fixleaves' and the remaining columns using 'continuous', creating a mixed
-          reindexing scheme.
+    -----------
+    B (numpy.ndarray): 
+        The 2D input array to be reindexed.
+    meth (str, optional), default='fixleaves':
+        - 'fixleaves': Reindexes the input array by preserving the order of unique values in the first column 
+                        and recursively reindexes the remaining columns. Suitable for hierarchical data.
+        - 'continuous': Reindexes the input array by assigning new values to elements in a continuous, 
+                        non-overlapping manner within each column. Useful for continuous data.
+        - 'restart': Reindexes the input array by restarting the numbering from 1 for each block of 
+                        unique values in the first column. Suitable for data with distinct segments or blocks.
+        - 'mixed': Combines both 'fixleaves' and 'continuous' reindexing methods. Reindexes the first columns 
+                        using 'fixleaves' and the remaining columns using 'continuous', creating a mixed scheme.
 
     Returns:
-    numpy.ndarray: The reindexed array, preserving the block structure based on the chosen method.
-
-
-    Raises:
-    ValueError: If the `meth` parameter is not one of the valid reindexing methods.
+    --------
+    Br (numpy.ndarray):
+        The reindexed array, preserving the block structure based on the chosen method.
     """
 
     # Convert meth to lowercase
@@ -1497,8 +1537,6 @@ def palm_reindex(B, meth='fixleaves'):
     return Br
 
 
-import numpy as np
-
 def palm_tree(B, M=None):
     """
     Construct a palm tree structure from an input matrix B and an optional design-matrix M.
@@ -1509,16 +1547,23 @@ def palm_tree(B, M=None):
     - The right branch contains nested structures.
 
     Parameters:
-    B (numpy.ndarray): The input matrix where each row represents the Multi-level block definitions of the PALM tree.
-    M (numpy.ndarray, optional): An optional Design-matrix that associates each node in B with additional data.
-                                 Defaults to None.
+    -----------
+    B (numpy.ndarray):
+        The input matrix where each row represents the Multi-level block definitions of the PALM tree.
+    M (numpy.ndarray, optional):
+        An optional Design-matrix that associates each node in B with additional data.
+        Defaults to None.
 
     Returns:
-    list: A list containing three elements:
-        - Ptree[0] (numpy.ndarray or list): The left branch of the palm tree, containing data elements.
-        - Ptree[1] (numpy.ndarray, list, or empty list): The middle branch of the palm tree, representing
-                                                       special features (if any).
-        - Ptree[2] (numpy.ndarray or list): The right branch of the palm tree, containing nested structures.
+    --------
+    list
+        A list containing three elements:
+        - Ptree[0] : numpy.ndarray or list
+            The left branch of the palm tree, containing data elements.
+        - Ptree[1] : numpy.ndarray, list, or empty list
+            The middle branch of the palm tree, representing special features (if any).
+        - Ptree[2] : numpy.ndarray or list
+            The right branch of the palm tree, containing nested structures.
     """
 
     # If M is not provided, create a default M matrix with sequential values
@@ -1551,23 +1596,28 @@ def palm_tree(B, M=None):
 
 def maketree(B, M, O, wholeblock, nosf):
     """
-    Recursively construct a palm tree structure from input matrices.
-
-    This function builds a palm tree structure by recursively processing input matrices representing
+    Recursively construct a palm tree structure from input matrices that is representing
     nodes in the palm tree.
 
     Parameters:
-    B (numpy.ndarray): The input matrix where each row represents a node in the palm tree (Block definitions).
-    M (numpy.ndarray): The corresponding Design-matrix, which associates nodes in B with additional data.
-    O (numpy.ndarray): Observation indices
-    wholeblock (bool): A boolean indicating if the entire block is positive based on the first element of B.
-    nosf (bool): A boolean indicating if there are no signflip this level
-
+    -----------
+    B (numpy.ndarray):
+        The input matrix where each row represents a node in the palm tree (Block definitions).
+    M (numpy.ndarray):
+        The corresponding Design-matrix, which associates nodes in B with additional data.
+    O (numpy.ndarray):
+        Observation indices.
+    wholeblock (bool):
+        A boolean indicating if the entire block is positive based on the first element of B.
+    nosf (bool):
+        A boolean indicating if there are no signflips this level.
 
     Returns:
-    tuple: A tuple containing:
-        - S (numpy.ndarray or float): The palm tree structure for this branch.
-        - Ptree (numpy.ndarray or list): The palm tree structure
+    -----------
+    S (numpy.ndarray):
+        The palm tree structure for this branch.
+    Ptree (list):
+        The palm tree structure.
     """
     
     # Extract the first column of the input matrix B

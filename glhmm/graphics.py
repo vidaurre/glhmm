@@ -331,6 +331,14 @@ def show_beta(hmm,only_active_states=True,recompute_states=False,
 
 
 def custom_colormap():
+    """
+    Generate a custom colormap consisting of segments from red to blue.
+
+    Returns:
+    --------
+    A custom colormap with defined color segments.
+    """
+    # Retrieve existing colormaps
     coolwarm_cmap = plt.get_cmap('coolwarm').reversed()
     coolwarm_cmap2 = plt.get_cmap('autumn')
     copper_cmap = plt.get_cmap('copper').reversed()
@@ -340,11 +348,7 @@ def custom_colormap():
     red = (1,0,0)
     red2 = (66/255, 13/255, 9/255)
     orange =(1, 0.5, 0)
-    red_color1 = to_rgba_array(coolwarm_cmap(0))[0][:3]
-    # red_color2 = to_rgba_array(coolwarm_cmap(0.1))[0][:3]
-    # red_color3 = to_rgba_array(coolwarm_cmap(0.20))[0][:3]
-    # red_color4 = to_rgba_array(coolwarm_cmap(0.25))[0][:3]
-    # warm_color1 = to_rgba_array(coolwarm_cmap2(0.4))[0][:3]
+    # red_color1 = to_rgba_array(coolwarm_cmap(0))[0][:3]
     warm_color2 = to_rgba_array(coolwarm_cmap2(0.8))[0][:3]
     blue_color1 = to_rgba_array(coolwarm_cmap(0.6))[0][:3]
     blue_color2 = to_rgba_array(coolwarm_cmap(1.0))[0][:3] # Extract the blue color from coolwarm
@@ -368,6 +372,13 @@ def custom_colormap():
     return custom_cmap
 
 def red_colormap():
+    """
+    Generate a custom colormap consisting of red and warm colors.
+
+    Returns:
+    --------
+    A custom colormap with red and warm color segments.
+    """
     # Get the reversed 'coolwarm' colormap
     coolwarm_cmap = plt.get_cmap('coolwarm').reversed()
     # Get the 'autumn' colormap
@@ -394,6 +405,13 @@ def red_colormap():
     return custom_cmap
 
 def blue_colormap():
+    """
+    Generate a custom blue colormap.
+
+    Returns:
+    --------
+    A custom colormap with shades of blue.
+    """
     coolwarm_cmap = plt.get_cmap('coolwarm').reversed()
     copper_cmap = plt.get_cmap('copper').reversed()
     # cool_cmap = plt.get_cmap('cool')
@@ -419,6 +437,22 @@ def blue_colormap():
     return blue_cmap
 
 def create_cmap_alpha(cmap_list,color_array, alpha):
+    """
+    Modify the colors in a colormap based on an alpha threshold.
+
+    Parameters:
+    -----------
+    cmap_list (numpy.ndarray)
+        List of colors representing the original colormap.
+    color_array (numpy.ndarray)
+        Array of color values corresponding to each colormap entry.
+    alpha (float)
+        Alpha threshold for modifying colors.
+
+    Returns:
+    --------
+    Modified list of colors representing the colormap with adjusted alpha values.
+    """
     cmap_list_alpha =cmap_list.copy()
 
     _,idx_alpha =np.where(color_array <= alpha)
@@ -445,11 +479,13 @@ def interpolate_colormap(cmap_list):
 
     Parameters:
     --------------
-    cmap_list (numpy.ndarray): Original color array for the colormap.
+    cmap_list (numpy.ndarray): 
+        Original color array for the colormap.
 
     Returns:
     ----------  
-    modified_cmap (numpy.ndarray): Modified colormap array.
+    modified_cmap (numpy.ndarray): 
+        Modified colormap array.
     """
     # Create a new colormap with the modified color_array
     modified_cmap  = np.ones_like(cmap_list)
@@ -500,34 +536,31 @@ def plot_p_value_matrix(pval, alpha = 0.05, normalize_vals=True, figsize=(9, 5),
 
     Parameters:
     -----------
-    pval : numpy.ndarray
+    pval (numpy.ndarray)
         The p-values data to be plotted.
-    normalize_vals : bool, optional
-        If True, the data range will be normalized from 0 to 1 (Default=False).
-    figsize : tuple, optional
-        Figure size in inches (width, height) (Default=(12, 7)).
-    steps : int, optional
-        Number of steps for x and y-axis ticks (Default= 11).
-    title_text : str, optional
-        Title text for the heatmap (Default= Heatmap (p-values)).
-    annot : bool, optional
-        If True, annotate each cell with the numeric value (Default= True).
-    cmap : str, optional
+    normalize_vals : (bool, optional), default=False:
+        If True, the data range will be normalized from 0 to 1.
+    figsize tuple, optional, default=(12,7):
+        Figure size in inches (width, height).
+    steps (int, optional), default=11:
+        Number of steps for x and y-axis ticks.
+    title_text (str, optional), default= "Heatmap (p-values)"
+        Title text for the heatmap.
+    annot (bool, optional), default=True:
+        If True, annotate each cell with the numeric value.
+    cmap (str, optional), default= "default":
         Colormap to use. Default is a custom colormap based on 'coolwarm'.
-    xlabel : str, optional
+    xlabel (str, optional), default=""
         X-axis label. If not provided, default labels based on the method will be used.
-    ylabel : str, optional
+    ylabel (str, optional), default=""
         Y-axis label. If not provided, default labels based on the method will be used.
-    xticklabels : List[str], optional
+    xticklabels (List[str], optional), default=None:
         If not provided, labels will be numbers equal to shape of pval.shape[1].
         Else you can define your own labels, e.g., xticklabels=['sex', 'age'].
-    none_diagonal : bool, optional
-        If you want to turn the diagonal into NaN numbers (Default=False).
-
-    Returns:
-    --------
-    None
-        Displays the heatmap plot.
+    none_diagonal (bool, optional), default=False:
+        If you want to turn the diagonal into NaN numbers.
+    num_colors (numpy.ndarray), default=259:
+        Define the number of different shades of color.
     """
     if pval.ndim==0:
         pval = np.reshape(pval, (1, 1))
@@ -668,40 +701,39 @@ def plot_correlation_matrix(corr_vals, performed_tests, normalize_vals=False, fi
     from matplotlib import cm, colors
     from mpl_toolkits.axes_grid1 import make_axes_locatable
     """
-    Plot a heatmap of p-values.
+    Plot a heatmap of correlation coefficients.
 
     Parameters:
     -----------
-    corr_vals : numpy.ndarray
-        base statistics of corelation coefficients.
-    performed_tests : dict
-        Holds information about the different test statistics that has been applied
-    normalize_vals : bool, optional
-        If True, the data range will be normalized from 0 to 1 (Default=False).
-    figsize : tuple, optional
-        Figure size in inches (width, height) (Default=(12, 7)).
-    steps : int, optional
-        Number of steps for x and y-axis ticks (Default= 11).
-    title_text : str, optional
-        Title text for the heatmap (Default= Heatmap (p-values)).
-    annot : bool, optional
-        If True, annotate each cell with the numeric value (Default= True).
-    cmap : str, optional
-        Colormap to use. Default is a custom colormap based on 'coolwarm'.
-    xlabel : str, optional
+    corr_vals (numpy.ndarray)
+        Base statistics of correlation coefficients.
+    performed_tests (dict)
+        Holds information about the different test statistics that have been applied.
+    normalize_vals (bool, optional)
+        If True, the data range will be normalized from 0 to 1 (default is False).
+    figsize (tuple, optional), default=(9, 5):
+        Figure size in inches (width, height).
+    steps (int, optional), default=11:
+        Number of steps for x and y-axis ticks).
+    title_text (str, optional), default="Correlation Coefficients Heatmap"
+        Title text for the heatmap.
+    annot (bool, optional), default=True:
+        If True, annotate each cell with the numeric value.
+    cmap_type (str, optional), default='default':
+        Colormap to use.
+    cmap_reverse (bool, optional), default=True:
+        If True, reverse the colormap.
+    xlabel (str, optional), default='':
         X-axis label. If not provided, default labels based on the method will be used.
-    ylabel : str, optional
+    ylabel (str, optional), default='':
         Y-axis label. If not provided, default labels based on the method will be used.
-    xticklabels : List[str], optional
-        If not provided, labels will be numbers equal to shape of corr_vals.shape[1].
-        Else you can define your own labels, e.g., xticklabels=['sex', 'age'].
-    none_diagonal : bool, optional
-        If you want to turn the diagonal into NaN numbers (Default=False).
-
-    Returns:
-    --------
-    None
-        Displays the heatmap plot.
+    xticklabels (List[str], optional), default=None:
+        If not provided, labels will be numbers equal to the shape of corr_vals.shape[1].
+        Else, you can define your own labels, e.g., xticklabels=['sex', 'age'].
+    none_diagonal (bool, optional), default=False:
+        If True, turn the diagonal into NaN numbers.
+    num_colors (int, optional), default=256:
+        Number of colors to use in the colormap.
     """
     if performed_tests["t_test_cols"]!=[] or performed_tests["f_test_cols"]!=[]:
         raise ValueError("Cannot plot the base statistics for the correlation coefficients because different test statistics have been used.")
@@ -782,19 +814,14 @@ def plot_permutation_distribution(test_statistic, title_text="Permutation Distri
 
     Parameters:
     -----------
-    test_statistic : numpy.ndarray
+    test_statistic (numpy.ndarray)
         An array containing the permutation values.
-    title_text : str, optional
-        Title text of the plot (Default="Permutation Distribution").
-    xlabel : str, optional
-        Text of the xlabel (Default="Test Statistic Values").
-    ylabel : str, optional
-        Text of the ylabel (Default="Density").
-
-    Returns:
-    --------
-    None
-        Displays the histogram plot.
+    title_text (str, optional), default="Permutation Distribution":
+        Title text of the plot.
+    xlabel (str, optional), default="Test Statistic Values"
+        Text of the xlabel.
+    ylabel (str, optional), default="Density"
+        Text of the ylabel.
     """
     plt.figure()
     sb.histplot(test_statistic, kde=True)
@@ -814,24 +841,20 @@ def plot_scatter_with_labels(p_values, alpha=0.05, title_text="", xlabel=None, y
 
     Parameters:
     -----------
-    p_values : numpy.ndarray
+    p_values (numpy.ndarray)
         An array of p-values. Can be a 1D array or a 2D array with shape (1, 5).
-    alpha : float, optional
-        Threshold for significance (Default=0.05).
-    title_text : str, optional
-        The title text for the plot (Default="").
-    xlabel : str, optional
-        The label for the x-axis (Default=None).
-    ylabel : str, optional
-        The label for the y-axis (Default=None).
-    xlim_start : float, optional
-        Start position of x-axis limits (Default=-5).
-    ylim_start : float, optional
-        Start position of y-axis limits (Default=-0.1).
-
-    Returns:
-    --------
-    None
+    alpha (float, optional), default=0.05:
+        Threshold for significance.
+    title_text (str, optional), default="":
+        The title text for the plot.
+    xlabel (str, optional), default=None:
+        The label for the x-axis.
+    ylabel (str, optional), default=None:
+        The label for the y-axis.
+    xlim_start (float, optional), default=-5
+        Start position of x-axis limits.
+    ylim_start (float, optional), default=-0.1
+        Start position of y-axis limits.
 
     Notes:
     ------
@@ -892,10 +915,7 @@ def plot_scatter_with_labels(p_values, alpha=0.05, title_text="", xlabel=None, y
     plt.tight_layout()
     plt.show()
     
-    
-import matplotlib.pyplot as plt
 import seaborn as sns
-import numpy as np
 
 def plot_vpath(viterbi_path, signal=None, idx_data=None, figsize=(7, 4), fontsize_labels=13, fontsize_title=16, yticks=None, time_conversion_rate=None, xlabel="Timepoints", ylabel="", title="Viterbi Path", signal_label="Signal", show_legend=True, vertical_linewidth=1.5):
     """
@@ -903,7 +923,7 @@ def plot_vpath(viterbi_path, signal=None, idx_data=None, figsize=(7, 4), fontsiz
 
     Parameters:
     -----------
-    viterbi_path : array-like
+    viterbi_path
         The Viterbi path data matrix.
     signal : array-like, optional
         Signal data to overlay on the plot. Default is None.
@@ -1000,26 +1020,21 @@ def plot_average_probability(Gamma_reconstruct, title='Average probability for e
 
     Parameters:
     -----------
-    Gamma_reconstruct : numpy.ndarray
+    Gamma_reconstruct (numpy.ndarray)
         3D array representing reconstructed gamma values.
         Shape: (num_timepoints, num_trials, num_states)
-    title : str, optional
-        Title for the plot (Default='Average probability for each state').
-    fontsize : int, optional
-        Font size for labels and title (Default=16).
-    figsize : tuple, optional
-        Figure size (width, height) in inches (Default=(8, 6)).
-    vertical_lines : list of tuples, optional
-        List of pairs specifying indices for vertical lines (Default=None).
-    line_colors : list of str or bool, optional
-        List of colors for each pair of vertical lines. If True, generates random colors
-        (unless a list is provided) (Default=None).
-    highlight_boxes : bool, optional
-        Whether to include highlighted boxes for each pair of vertical lines (Default=False).
-    
-    Returns:
-    --------
-    None
+    title (str, optional), default='Average probability for each state':
+        Title for the plot.
+    fontsize (int, optional), default=16:
+        Font size for labels and title.
+    figsize (tuple, optional), default=(8,6):
+        Figure size (width, height) in inches).
+    vertical_lines (list of tuples, optional), default=None:
+        List of pairs specifying indices for vertical lines.
+    line_colors (list of str or bool, optional), default=None:
+        List of colors for each pair of vertical lines. If True, generates random colors (unless a list is provided).
+    highlight_boxes (bool, optional), default=False:
+        Whether to include highlighted boxes for each pair of vertical lines.
     """
 
     # Initialize an array for average gamma values
@@ -1064,24 +1079,30 @@ def plot_average_probability(Gamma_reconstruct, title='Average probability for e
     # Show the plot
     plt.show()
 
-def plot_FO(FO, figsize=(8, 4), fontsize_labels=13, fontsize_title=16, width=0.8, show_legend=True, num_ticks=10):
+def plot_FO(FO, figsize=(8, 4), fontsize_labels=13, fontsize_title=16, width=0.8,xlabel='Subject',ylabel='Fractional occupancy',title='State Fractional Occupancies', show_legend=True, num_ticks=10):
     """
     Plot fractional occupancies for different states.
 
     Parameters:
     -----------
-    FO : array-like
+    FO (numpy.ndarray):
         Fractional occupancy data matrix.
-    figsize : tuple, optional
-        Figure size. Default is (8, 4).
-    fontsize_labels : int, optional
-        Font size for axes labels. Default is 13.
-    fontsize_title : int, optional
-        Font size for plot title. Default is 16.
-    width : float, optional
-        Width of the bars. Default is 0.5.
-    show_legend : bool, optional
-        Whether to show the legend. Default is True.
+    figsize (tuple, optional), default=(8,4):
+        Figure size.
+    fontsize_labels (int, optional), default=13:
+        Font size for axes labels.
+    fontsize_title (int, optional), default=16:
+        Font size for plot title.
+    width (float, optional), default=0.5:
+        Width of the bars.
+    xlabel (str, optional), default='Subject':
+        Label for the x-axesis.
+    ylabel (str, optional), default='Fractional occupancy':
+        Label for the y-axesis.
+    title (str, optional), default='State Fractional Occupancies':
+        Title for the plot.
+    show_legend (bool, optional), default=True:
+        Whether to show the legend.
     """
     fig, axes = plt.subplots(figsize=figsize)
     bottom = np.zeros(FO.shape[0])
@@ -1097,9 +1118,9 @@ def plot_FO(FO, figsize=(8, 4), fontsize_labels=13, fontsize_title=16, width=0.8
         bottom += FO[:, k]
     
     axes.set_xticks(sessions)
-    axes.set_xlabel('Subject', fontsize=fontsize_labels)
-    axes.set_ylabel('Fractional occupancy', fontsize=fontsize_labels)
-    axes.set_title('State Fractional Occupancies', fontsize=fontsize_title)
+    axes.set_xlabel(xlabel, fontsize=fontsize_labels)
+    axes.set_ylabel(ylabel, fontsize=fontsize_labels)
+    axes.set_title(title, fontsize=fontsize_title)
     
     ticks = np.linspace(1, FO.shape[0], FO.shape[0]).astype(int)
     # If there are more than 10 states then make a steps of 5
@@ -1126,24 +1147,30 @@ def plot_FO(FO, figsize=(8, 4), fontsize_labels=13, fontsize_title=16, width=0.8
     plt.show()
 
 
-def plot_switching_rates(SR, figsize=(8, 4), fontsize_labels=13, fontsize_title=16, width=0.18, show_legend=True, num_ticks=10):
+def plot_switching_rates(SR, figsize=(8, 4), fontsize_labels=13, fontsize_title=16, width=0.18, , xlabel='Subject', ylabel='Switching Rate', title='State Switching Rates', show_legend=True, num_ticks=10):
     """
     Plot switching rates for different states.
 
     Parameters:
     -----------
-    SR : 
+    SR (numpy.ndarray):
         Switching rate data matrix.
-    figsize : tuple, optional
-        Figure size. Default is (6, 4).
-    fontsize_labels : int, optional
-        Font size for axes labels. Default is 13.
-    fontsize_title : int, optional
-        Font size for plot title. Default is 16.
-    width : float, optional
-        Width of the bars. Default is 0.18.
-    show_legend : bool, optional
-        Whether to show the legend. Default is True.
+    figsize (tuple, optional), default=(8, 4):
+        Figure size.
+    fontsize_labels (int, optional), default=13:
+        Font size for axes labels.
+    fontsize_title (int, optional), default=16:
+        Font size for plot title.
+    width (float, optional), default=0.18:
+        Width of the bars.
+    xlabel (str, optional), default='Subject':
+        Label for the x-axesis.
+    ylabel (str, optional), default='Switching Rate':
+        Label for the y-axesis.
+    title (str, optional), default='State Switching Rates':
+        Title for the plot.
+    show_legend (bool, optional), default=True:
+        Whether to show the legend.
     """
     fig, axes = plt.subplots(figsize=figsize, constrained_layout=True)
     multiplier = 0
@@ -1160,9 +1187,9 @@ def plot_switching_rates(SR, figsize=(8, 4), fontsize_labels=13, fontsize_title=
         multiplier += 1
     
     axes.set_xticks(sessions)
-    axes.set_xlabel('Subject', fontsize=fontsize_labels)
-    axes.set_ylabel('Switching Rate', fontsize=fontsize_labels)
-    axes.set_title('State Switching Rates', fontsize=fontsize_title)
+    axes.set_xlabel(xlabel, fontsize=fontsize_labels)
+    axes.set_ylabel(ylabel, fontsize=fontsize_labels)
+    axes.set_title(title, fontsize=fontsize_title)
     
     ticks = np.linspace(1, SR.shape[0], SR.shape[0]).astype(int)
     # If there are more than 10 states then make a steps of 5
@@ -1192,24 +1219,24 @@ def plot_state_lifetimes(LT, figsize=(8, 4), fontsize_labels=13, fontsize_title=
 
     Parameters:
     -----------
-    LT : 
+    LT (numpy.ndarray): 
         State lifetime (dwell time) data matrix.
-    figsize : tuple, optional
-        Figure size. Default is (8, 4).
-    fontsize_labels : int, optional
-        Font size for axeses labels. Default is 13.
-    fontsize_title : int, optional
-        Font size for plot title. Default is 16.
-    width : float, optional
-        Width of the bars. Default is 0.18.
-    xlabel : str, optional
-        Label for the x-axesis. Default is 'Subject'.
-    ylabel : str, optional
-        Label for the y-axesis. Default is 'Lifetime'.
-    title : str, optional
-        Title for the plot. Default is 'State Lifetimes'.
-    show_legend : bool, optional
-        Whether to show the legend. Default is True.
+    figsize (tuple, optional), default=(8, 4):
+        Figure size.
+    fontsize_labels (int, optional), default=13:
+        Font size for axeses labels.
+    fontsize_title (int, optional), default=16:
+        Font size for plot title.
+    width (float, optional), default=0.18:
+        Width of the bars.
+    xlabel (str, optional), default='Subject':
+        Label for the x-axesis.
+    ylabel (str, optional), default='Lifetime':
+        Label for the y-axesis.
+    title (str, optional), default='State Lifetimes':
+        Title for the plot.
+    show_legend (bool, optional), default=True:
+        Whether to show the legend.
     """
     fig, axes = plt.subplots(figsize=figsize, constrained_layout=True)
     multiplier = 0
@@ -1356,25 +1383,24 @@ def plot_condition_difference(Gamma_reconstruct, R_trials, title='Average Probab
 
     Parameters:
     -----------
-    Gamma_reconstruct : numpy.ndarray
-        3D array representing reconstructed gamma values.
-        Shape: (num_timepoints, num_trials, num_states)
-    R_trials : numpy.ndarray
+    Gamma_reconstruct (numpy.ndarray)
+        3D array representing reconstructed gamma values. Shape: (num_timepoints, num_trials, num_states)
+    R_trials (numpy.ndarray)
         1D array representing the condition for each trial.
         Should have the same length as the second dimension of Gamma_reconstruct.
-    title : str, optional
-        Title for the plot (Default='Average Probability and Difference').
-    fontsize : int, optional
-        Font size for labels and title (Default=16).
-    figsize : tuple, optional
-        Figure size (width, height) in inches (Default=(9, 2)).
-    vertical_lines : list of tuples, optional
-        List of pairs specifying indices for vertical lines (Default=None).
-    line_colors : list of str or bool, optional
+    title (str, optional), default='Average Probability and Difference':
+        Title for the plot.
+    fontsize (int, optional), default=16:
+        Font size for labels and title.
+    figsize (tuple, optional), default=(9, 2):
+        Figure size (width, height).
+    vertical_lines (list of tuples, optional), default=None:
+        List of pairs specifying indices for vertical lines.
+    line_colors (list of str or bool, optional), default=None:
         List of colors for each pair of vertical lines. If True, generates random colors
-        (unless a list is provided) (Default= None).
-    highlight_boxes : bool, optional
-        Whether to include highlighted boxes for each pair of vertical lines (Default=False).
+        (unless a list is provided).
+    highlight_boxes (bool, optional), default=False:
+        Whether to include highlighted boxes for each pair of vertical lines.
 
     Example usage:
     --------------
@@ -1441,28 +1467,30 @@ def plot_p_values_over_time(pval, figsize=(8, 4), total_time_seconds=None, xlabe
 
     Parameters:
     -----------
-    pval : numpy.ndarray
+    pval (numpy.ndarray):
         The p-values data to be plotted.
-    total_time_seconds (float, optional): 
+    figsize : tuple, optional, default=(8, 4):
+        Figure size in inches (width, height).
+    total_time_seconds : float, optional, default=None
         Total time duration in seconds. If provided, time points will be scaled accordingly.
-    xlabel (str, optional): 
-        Label for the x-axis. Default is 'Timepoints'.
-    ylabel (str, optional): 
-        Label for the y-axis. Default is 'Y-axis (log scale)'.
-    title_text (str, optional): 
-        Title for the plot. Default is 'P-values over time'.
-    tick_positions (list, optional): 
-        Specific values to mark on the y-axis. Default is [0, 0.001, 0.01, 0.05, 0.1, 0.3, 1].
-    num_colors (int, optional): 
-        Resolution for the color bar. Default is 259.
-    alpha (float, optional): 
-        Alpha value is the threshold we set for the p-values when doing visualization. Default is 0.05.
-    plot_style (str, optional): 
-        Style of plot. Default is 'line'.  
-        
-    Returns:
-    -----------
-    None (displays the plot).
+    xlabel (str, optional), default="Timepoints":
+        Label for the x-axis.
+    ylabel (str, optional), default="P-values (Log Scale)":
+        Label for the y-axis.
+    title_text (str, optional), default="P-values over time":
+        Title for the plot.
+    xlim_start (int, optional), default=0:
+        Starting point for the x-axis limit.
+    tick_positions (list, optional), default=[0, 0.001, 0.01, 0.05, 0.1, 0.3, 1]:
+        Specific values to mark on the y-axis.
+    num_colors (int, optional), default=259:
+        Resolution for the color bar.
+    alpha (float, optional), default=0.05:
+        Alpha value is the threshold we set for the p-values when doing visualization.
+    plot_style (str, optional), default="line":
+        Style of plot.
+    linewidth (float, optional), default=2.5:
+        Width of the lines in the plot.
     """
     if pval.ndim != 1:
         # Raise an exception and stop function execution
@@ -1504,12 +1532,6 @@ def plot_p_values_over_time(pval, figsize=(8, 4), total_time_seconds=None, xlabe
         # Apply the colormap to the generated values
         cmap_red = red_cmap(colormap_val_red)
         cmap_blue = blue_cmap(colormap_val_blue)
-
-        # shift values a bit
-        # cmap_red[:,:3] -= 0.15
-        # # Set values above 1 to 1
-        # # overwrite the values below alpha
-        # cmap_red[cmap_red < 0] = 0
 
         # overwrite the values below alpha
         cmap_list[:num_elements_red,:]=cmap_red
@@ -1587,20 +1609,29 @@ def plot_p_values_bar(pval,xticklabels=[],  figsize=(9, 4), num_colors=256, xlab
     Visualize a bar plot with LogNorm and a colorbar.
 
     Parameters:
-    --------------
-    xticklabels (list): List of categories or variables.
-    pval (array-like): Array of p-values.
-    figsize (tuple, optional): Figure size, default is (9, 4).
-    num_colors (int, optional): Number of colors in the colormap, default is 256.
-    xlabel (str, optional): X-axis label, default is "Categories".
-    ylabel (str, optional): Y-axis label, default is "Values (log scale)".
-    title_text (str, optional): Plot title, default is "Bar Plot with LogNorm".
-    tick_positions (list, optional): Positions of ticks on the colorbar, default is [0, 0.001, 0.01, 0.05, 0.1, 0.3, 1].
-    top_adjustment (float, optional): Adjustment for extra space between title and plot, default is 0.9.
-
-    Returns:
-    ---------
-    None
+    -----------
+    pval (numpy.ndarray):
+        Array of p-values to be plotted.
+    xticklabels (list, optional), default=[]:
+        List of categories or variables.
+    figsize (tuple, optional), default=(9, 4):
+        Figure size in inches (width, height).
+    num_colors (int, optional), default=256:
+        Number of colors in the colormap.
+    xlabel (str, optional), default="":
+        X-axis label.
+    ylabel (str, optional), default="P-values (Log Scale)":
+        Y-axis label.
+    title_text (str, optional), default="Bar Plot":
+        Title for the plot.
+    tick_positions (list, optional), default=[0, 0.001, 0.01, 0.05, 0.1, 0.3, 1]
+        Positions of ticks on the colorbar.
+    top_adjustment (float, optional), default=0.9:
+        Adjustment for extra space between title and plot.
+    alpha (float, optional), default=0.05:
+        Alpha value is the threshold we set for the p-values when doing visualization.
+    pad_title (int, optional), default=20:
+        Padding for the plot title.
     """
     # Choose a colormap
     coolwarm_cmap = custom_colormap()
