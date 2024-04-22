@@ -570,14 +570,14 @@ class glhmm():
         if not "verbose" in options: options["verbose"] = True
         if not "serial" in options: options["serial"] = False
         if not "gpu_acceleration" in options: options["gpu_acceleration"] = 0
-        if not "MemSaver" in options: options["MemSaver"] = 1
+        if not "gpuChunks" in options: options["gpuChunks"] = 1
 
-        ### Check MemSaver validity.
-        if options["serial"] and options["MemSaver"] > 1:
+        ### Check gpuChunks validity.
+        if options["serial"] and options["gpuChunks"] > 1:
             print("WARNING: Memory Saver setting is selected for serial computing. This will have no effect on Memory use. If serial computation exceeds Memory limits, use stochastic training. Disabling Memory Saver.")
-            options["MemSaver"] = 1
-        elif options["MemSaver"] > 1 and options["verbose"]:
-            print("Memory saver selected. Running parallel computations in ", options["MemSaver"], "chunks.") 
+            options["gpuChunks"] = 1
+        elif options["gpuChunks"] > 1 and options["verbose"]:
+            print("Memory saver selected. Running parallel computations in ", options["gpuChunks"], "chunks.") 
 
         ### Check GPU acceletation validity.
         if options["gpu_acceleration"] > 0 and options["serial"]:
@@ -1258,7 +1258,7 @@ class glhmm():
         # collect subject specific free energy terms
         for j in range(N):
             X,Y,indices,indices_individual = io.load_files(files,j)
-            Gamma,Xi,_ = self.decode(X,Y,indices,serial=options["serial"],gpu_acceleration=options["gpu_acceleration"],MemSaver=options["MemSaver"])
+            Gamma,Xi,_ = self.decode(X,Y,indices,serial=options["serial"],gpu_acceleration=options["gpu_acceleration"],gpuChunks=options["gpuChunks"])
             # data likelihood
             todo = (False,True,False,False,False)
             if X is None:
@@ -1288,7 +1288,7 @@ class glhmm():
             indices_Xi = auxiliary.Gamma_indices_to_Xi_indices(indices)
 
             # E-step
-            Gamma,Xi,_ = self.decode(X,Y,indices,serial=options["serial"],gpu_acceleration=options["gpu_acceleration"],MemSaver=options["MemSaver"])
+            Gamma,Xi,_ = self.decode(X,Y,indices,serial=options["serial"],gpu_acceleration=options["gpu_acceleration"],gpuChunks=options["gpuChunks"])
             sum_Gamma[:,I] = utils.get_FO(Gamma,indices,True).T
             
             # which states are active? 
@@ -1403,7 +1403,7 @@ class glhmm():
         return L
 
 
-    def decode(self,X,Y,indices=None,files=None,viterbi=False,set=None,serial=False,gpu_acceleration=0,MemSaver=1):
+    def decode(self,X,Y,indices=None,files=None,viterbi=False,set=None,serial=False,gpu_acceleration=0,gpuChunks=1):
         """Calculates state time courses for all the data using either parallel or sequential processing.
 
         Parameters:
@@ -1500,9 +1500,9 @@ class glhmm():
             vpath = self.__forward_backward_vp(L_,indices_sliced,indices_individual)
             return vpath
         else:
-            if MemSaver > 1:
+            if gpuChunks > 1:
 
-                n_chunks = MemSaver
+                n_chunks = gpuChunks
 
                 chunk_size = int(np.ceil(N/n_chunks))
                 if N < (chunk_size*n_chunks):
@@ -2277,7 +2277,7 @@ class glhmm():
             if options["updateGamma"]:
 
                 # E-step
-                Gamma,Xi,scale = self.decode(X,Y,indices,serial=options["serial"],gpu_acceleration=options["gpu_acceleration"],MemSaver=options["MemSaver"])
+                Gamma,Xi,scale = self.decode(X,Y,indices,serial=options["serial"],gpu_acceleration=options["gpu_acceleration"],gpuChunks=options["gpuChunks"])
                 status = self.__check_Gamma(Gamma)
                 if status:
                     warnings.warn('Gamma has almost zero variance: stuck in a weird solution')
