@@ -187,17 +187,21 @@ def compute_alpha_beta_serial(L,Pi,P):
     return a,b,sc
 
 
-def compute_alpha_beta_parallel(L,Pi,P,indices_individual):
+def compute_alpha_beta_parallel(L,Pi,P,indices_individual,gpu_acceleration):
     """Computes alpha and beta values and scaling factors.
 
     Parameters:
     -----------
-    L : GPU array-like of shape (n_samples, n_states)
+    L : array-like of shape (n_samples, n_timeseries, n_states)
         The L matrix.
-    Pi : GPU array-like with shape (n_states,)
+    Pi : array-like with shape (n_states,)
         The initial state probabilities.
-    P : GPU array-like of shape (n_states, n_states)
+    P : array-like of shape (n_states, n_states)
         The transition probabilities across states.
+    indices_individual : array-like of shape (n_timeseries,2)
+        The first and last index of the subject-specific time series
+    gpu_acceleration : int
+        GPU acceleration setting.
 
     Returns:
     --------
@@ -209,42 +213,61 @@ def compute_alpha_beta_parallel(L,Pi,P,indices_individual):
         The scaling factors.
 
     """
+    gpu = gpu_acceleration > 0
+    xp = cp if gpu else np
+
     T,N,K = L.shape
     #minreal = sys.float_info.min
     #maxreal = sys.float_info.max
+    Pi = xp.asarray(Pi)
+    if gpu_acceleration == 1:
+        L = cp.asarray(L)
+        P = cp.asarray(P)
 
-    a = np.zeros((T,N,K))
-    b_ = np.zeros((T,N,K))
-    sc = np.zeros((T,N))
+    a = xp.zeros((T,N,K))
+    sc = xp.zeros((T,N))
 
     ## Compute alpha per time point for all subjects simultaneously.
     a[0,:,:] = Pi * L[0,:,:]
-    sc[0,:] = np.sum(a[0,:,:],axis=1)
-    a[0,:,:] = a[0,:,:] / np.expand_dims(sc[0,:],axis=1)
+    del Pi
+
+    sc[0,:] = xp.sum(a[0,:,:],axis=1)
+    a[0,:,:] = a[0,:,:] / xp.expand_dims(sc[0,:],axis=1)
 
     for t in range(1,T):
-        a[t,:,:] = (a[t-1,:,:] @ P) * L[t,:,:]
-        sc[t,:] = np.sum(a[t,:,:],axis=1)
+        a[t,:,:] = xp.einsum('ij,jk,ik->ik',a[t-1,:,:],P,L[t,:,:])
+        sc[t,:] = xp.einsum('ij->i',a[t,:,:])
         #if sc[t]<minreal: sc[t] = minreal
-        a[t,:,:] = a[t,:,:] / np.expand_dims(sc[t,:],axis=1)
+        a[t,:,:] = a[t,:,:] / xp.expand_dims(sc[t,:],axis=1)
 
     ## bottom-align L and the scaling matrix to estiamte beta.
-    L_ = roll_by_vector(L,T-indices_individual[:,1],axis=0)
-    sc_ = roll_by_vector(sc,T-indices_individual[:,1],axis=0)
+    L_ = roll_by_vector(L,T-indices_individual[:,1],axis=0,gpu_enabled=gpu)
+    del L
 
-    b_[T-1,:,:] = np.ones((1,N,K)) / np.expand_dims(sc_[T-1,:],axis=1)
+    sc_ = roll_by_vector(sc,T-indices_individual[:,1],axis=0,gpu_enabled=gpu)
+    b_ = xp.zeros((T,N,K))
+
+    b_[T-1,:,:] = xp.ones((1,N,K)) / xp.expand_dims(sc_[T-1,:],axis=1)
     for t in range(T-2,-1,-1):
-        b_[t,:,:] = ( (b_[t+1,:,:] * L_[t+1,:,:]) @ P.T ) / np.expand_dims(sc_[t,:],axis=1)
+        b_[t,:,:] = xp.einsum('ij,ij,kj->ik',b_[t+1,:,:],L_[t+1,:,:],P) / xp.expand_dims(sc_[t,:],axis=1)
         #bad = b[t,:]>maxreal
         #if bad.sum()>0: b[t,bad] = maxreal
+    del P, sc_, L_
 
     ## top-align beta for output.
-    b = roll_by_vector(b_,indices_individual[:,1],axis=0)
+    b = roll_by_vector(b_,indices_individual[:,1],axis=0,gpu_enabled=gpu)
+    del b_
+
+    if gpu:
+        sc = cp.asnumpy(sc)
+        if gpu_acceleration == 1:
+            a = cp.asnumpy(a)
+            b = cp.asnumpy(b)
 
     return a,b,sc
 
-def compute_alpha_beta_gpu(L,Pi,P,indices_individual):
-    """Computes alpha and beta values and scaling factors.
+"""def compute_alpha_beta_gpu(L,Pi,P,indices_individual):
+    \"""Computes alpha and beta values and scaling factors.
 
     Parameters:
     -----------
@@ -264,7 +287,7 @@ def compute_alpha_beta_gpu(L,Pi,P,indices_individual):
     sc : GPU array-like of shape (n_samples,)
         The scaling factors.
 
-    """
+    \"""
     ## Convert to cupy arrays
     Pi = cp.asarray(Pi)
     L = cp.asarray(L)
@@ -275,11 +298,12 @@ def compute_alpha_beta_gpu(L,Pi,P,indices_individual):
     #maxreal = sys.float_info.max
 
     a = cp.zeros((T,N,K))
-    b_ = cp.zeros((T,N,K))
     sc = cp.zeros((T,N))
 
     ## Compute alpha per time point for all subjects simultaneously.
     a[0,:,:] = Pi * L[0,:,:]
+    del Pi
+
     sc[0,:] = cp.sum(a[0,:,:],axis=1)
     a[0,:,:] = a[0,:,:] / cp.expand_dims(sc[0,:],axis=1)
 
@@ -291,7 +315,10 @@ def compute_alpha_beta_gpu(L,Pi,P,indices_individual):
 
     ## bottom-align L and the scaling matrix to estiamte beta.
     L_ = roll_by_vector_gpu(L,T-indices_individual[:,1],axis=0)
+    del L
+
     sc_ = roll_by_vector_gpu(sc,T-indices_individual[:,1],axis=0)
+    b_ = cp.zeros((T,N,K))
 
     b_[T-1,:,:] = cp.ones((1,N,K)) / cp.expand_dims(sc_[T-1,:],axis=1)
     for t in range(T-2,-1,-1):
@@ -299,15 +326,17 @@ def compute_alpha_beta_gpu(L,Pi,P,indices_individual):
         #b_[t,:,:] = ( (b_[t+1,:,:] * L_b[t+1,:,:]) @ P.T ) / cp.expand_dims(sc_b[t,:],axis=1)
         #bad = b[t,:]>maxreal
         #if bad.sum()>0: b[t,bad] = maxreal
+    del P, sc_, L_
 
     ## top-align beta for output.
     b = roll_by_vector_gpu(b_,indices_individual[:,1],axis=0)
+    del b_
 
     sc = cp.asnumpy(sc)
     a = cp.asnumpy(a)
     b = cp.asnumpy(b)
 
-    return a,b,sc
+    return a,b,sc """
 
 
 def compute_qstar_serial(L,Pi,P):
@@ -366,16 +395,16 @@ def compute_qstar_parallel(L,Pi,P,indices_individual):
 
     Parameters:
     -----------
-    L : GPU array-like of shape (n_samples, n_states)
+    L : array-like of shape (n_samples, n_states)
         The L matrix.
-    Pi : GPU array-like with shape (n_states,)
+    Pi : array-like with shape (n_states,)
         The initial state probabilities.
-    P : GPU array-like of shape (n_states, n_states)
+    P : array-like of shape (n_states, n_states)
         The transition probabilities across states.
 
     Returns:
     --------
-    qstar : GPU array-like of shape (n_samples, n_states)
+    qstar : array-like of shape (n_samples, n_states)
         The most probable state sequence.
 
     """
@@ -690,7 +719,7 @@ def padGamma(Gamma, T, options):
 
     return Gamma  # Return the adjusted Gamma
 
-def roll_by_vector(arr, shifts, axis=1):
+def roll_by_vector(arr, shifts, axis=1,gpu_enabled=False):
     """Apply an independent roll for each dimensions of a single axis.
 
     Parameters
@@ -703,15 +732,22 @@ def roll_by_vector(arr, shifts, axis=1):
 
     axis : int
         Axis along which elements are shifted. 
+
+    gpu_enabled : bool
+        Whether input arrays are loaded in the GPU or not.
     """
-    arr = np.swapaxes(arr,axis,-1)
-    all_idcs = np.ogrid[[slice(0,n) for n in arr.shape]]
+    xp = cp if gpu_enabled else np
+
+    shifts = xp.asarray(shifts)
+
+    arr = xp.swapaxes(arr,axis,-1)
+    all_idcs = xp.ogrid[[slice(0,n) for n in arr.shape]]
 
     # Convert to a positive shift
-    all_idcs[-1] = all_idcs[-1] - np.expand_dims(shifts,axis=1)
+    all_idcs[-1] = all_idcs[-1] - xp.expand_dims(shifts,axis=1)
 
     result = arr[tuple(all_idcs)]
-    arr = np.swapaxes(result,-1,axis)
+    arr = xp.swapaxes(result,-1,axis)
     return arr
 
 def roll_by_vector_gpu(arr, shifts, axis=1):
