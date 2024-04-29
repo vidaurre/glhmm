@@ -406,9 +406,7 @@ class glhmm():
         if options["serial"] and options["gpuChunks"] > 1:
             print("WARNING: GPU chunking setting is selected for serial computing. This will have no effect on Memory use. If serial computation exceeds Memory limits, use stochastic training. Disabling Memory Saver.")
             options["gpuChunks"] = 1
-        elif options["gpuChunks"] > 1 and options["verbose"]:
-            print("Memory saver selected. Running parallel computations in ", options["gpuChunks"], "chunks.") 
-
+        
         ### Check GPU acceletation validity.
         if options["gpu_acceleration"] > 0 and options["serial"]:
             print("WARNING: GPU acceleration for serial processing is non-sensical. Disabling GPU acceleration.")
@@ -472,6 +470,7 @@ class glhmm():
             self.__init_prior_P_Pi() # init P,Pi priors
             self.__update_dynamics() # make P,Pi based on priors
             Gamma = self.sample_Gamma(indices)
+            options["verbose"] = verbose
             return Gamma
 
         fe = np.zeros(options["initrep"])
