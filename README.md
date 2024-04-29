@@ -22,6 +22,8 @@ The required dependencies to use glhmm are:
 - matplotlib
 - seaborn
 
+- cupy (only when using GPU acceleration; requires manual install)
+
 ## Installation
 
 - To install the latest development version from the repository, use the following command:

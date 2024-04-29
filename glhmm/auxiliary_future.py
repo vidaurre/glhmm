@@ -187,21 +187,17 @@ def compute_alpha_beta_serial(L,Pi,P):
     return a,b,sc
 
 
-def compute_alpha_beta_parallel(L,Pi,P,indices_individual,gpu_acceleration):
+def compute_alpha_beta_parallel(L,Pi,P,indices_individual):
     """Computes alpha and beta values and scaling factors.
 
     Parameters:
     -----------
-    L : array-like of shape (n_samples, n_timeseries, n_states)
+    L : GPU array-like of shape (n_samples, n_states)
         The L matrix.
-    Pi : array-like with shape (n_states,)
+    Pi : GPU array-like with shape (n_states,)
         The initial state probabilities.
-    P : array-like of shape (n_states, n_states)
+    P : GPU array-like of shape (n_states, n_states)
         The transition probabilities across states.
-    indices_individual : array-like of shape (n_timeseries,2)
-        The first and last index of the subject-specific time series
-    gpu_acceleration : int
-        GPU acceleration setting.
 
     Returns:
     --------
@@ -213,56 +209,99 @@ def compute_alpha_beta_parallel(L,Pi,P,indices_individual,gpu_acceleration):
         The scaling factors.
 
     """
-    gpu = gpu_acceleration > 0
-    xp = cp if gpu else np
+    T,N,K = L.shape
+    #minreal = sys.float_info.min
+    #maxreal = sys.float_info.max
+
+    a = np.zeros((T,N,K))
+    b_ = np.zeros((T,N,K))
+    sc = np.zeros((T,N))
+
+    ## Compute alpha per time point for all subjects simultaneously.
+    a[0,:,:] = Pi * L[0,:,:]
+    sc[0,:] = np.sum(a[0,:,:],axis=1)
+    a[0,:,:] = a[0,:,:] / np.expand_dims(sc[0,:],axis=1)
+
+    for t in range(1,T):
+        a[t,:,:] = (a[t-1,:,:] @ P) * L[t,:,:]
+        sc[t,:] = np.sum(a[t,:,:],axis=1)
+        #if sc[t]<minreal: sc[t] = minreal
+        a[t,:,:] = a[t,:,:] / np.expand_dims(sc[t,:],axis=1)
+
+    ## bottom-align L and the scaling matrix to estiamte beta.
+    L_b = roll_by_vector(L,T-indices_individual[:,1],axis=0)
+    sc_b = roll_by_vector(sc,T-indices_individual[:,1],axis=0)
+
+    b_[T-1,:,:] = np.ones((1,N,K)) / np.expand_dims(sc_b[T-1,:],axis=1)
+    for t in range(T-2,-1,-1):
+        b_[t,:,:] = ( (b_[t+1,:,:] * L_b[t+1,:,:]) @ P.T ) / np.expand_dims(sc_b[t,:],axis=1)
+        #bad = b[t,:]>maxreal
+        #if bad.sum()>0: b[t,bad] = maxreal
+
+    ## top-align beta for output.
+    b = roll_by_vector(b_,indices_individual[:,1],axis=0)
+
+    return a,b,sc
+
+def compute_alpha_beta_gpu(L,Pi,P,indices_individual):
+    """Computes alpha and beta values and scaling factors.
+
+    Parameters:
+    -----------
+    L : GPU array-like of shape (n_samples, n_states)
+        The L matrix.
+    Pi : GPU array-like with shape (n_states,)
+        The initial state probabilities.
+    P : GPU array-like of shape (n_states, n_states)
+        The transition probabilities across states.
+
+    Returns:
+    --------
+    a : GPU array-like of shape (n_samples, n_states)
+        The alpha values.
+    b : GPU array-like of shape (n_samples, n_states)
+        The beta values.
+    sc : GPU array-like of shape (n_samples,)
+        The scaling factors.
+
+    """
+    ## Convert to cupy arrays
+    Pi = cp.asarray(Pi)
 
     T,N,K = L.shape
     #minreal = sys.float_info.min
     #maxreal = sys.float_info.max
-    Pi = xp.asarray(Pi)
-    if gpu_acceleration == 1:
-        L = cp.asarray(L)
-        P = cp.asarray(P)
 
-    a = xp.zeros((T,N,K))
-    sc = xp.zeros((T,N))
+    a = cp.zeros((T,N,K))
+    b_ = cp.zeros((T,N,K))
+    sc = cp.zeros((T,N))
 
     ## Compute alpha per time point for all subjects simultaneously.
     a[0,:,:] = Pi * L[0,:,:]
-    del Pi
-
-    sc[0,:] = xp.sum(a[0,:,:],axis=1)
-    a[0,:,:] = a[0,:,:] / xp.expand_dims(sc[0,:],axis=1)
+    sc[0,:] = cp.sum(a[0,:,:],axis=1)
+    a[0,:,:] = a[0,:,:] / cp.expand_dims(sc[0,:],axis=1)
 
     for t in range(1,T):
-        a[t,:,:] = xp.einsum('ij,jk,ik->ik',a[t-1,:,:],P,L[t,:,:])
-        sc[t,:] = xp.einsum('ij->i',a[t,:,:])
+        a[t,:,:] = cp.einsum('ij,jk,ik->ik',a[t-1,:,:],P,L[t,:,:])
+        sc[t,:] = cp.einsum('ij->i',a[t,:,:])
         #if sc[t]<minreal: sc[t] = minreal
-        a[t,:,:] = a[t,:,:] / xp.expand_dims(sc[t,:],axis=1)
+        a[t,:,:] = a[t,:,:] / cp.expand_dims(sc[t,:],axis=1)
 
     ## bottom-align L and the scaling matrix to estiamte beta.
-    L_ = roll_by_vector(L,T-indices_individual[:,1],axis=0,gpu_enabled=gpu)
-    del L
+    L_b = roll_by_vector_gpu(L,T-indices_individual[:,1],axis=0)
+    sc_b = roll_by_vector_gpu(sc,T-indices_individual[:,1],axis=0)
 
-    sc_ = roll_by_vector(sc,T-indices_individual[:,1],axis=0,gpu_enabled=gpu)
-    b_ = xp.zeros((T,N,K))
-
-    b_[T-1,:,:] = xp.ones((1,N,K)) / xp.expand_dims(sc_[T-1,:],axis=1)
+    b_[T-1,:,:] = cp.ones((1,N,K)) / cp.expand_dims(sc_b[T-1,:],axis=1)
     for t in range(T-2,-1,-1):
-        b_[t,:,:] = xp.einsum('ij,ij,kj->ik',b_[t+1,:,:],L_[t+1,:,:],P) / xp.expand_dims(sc_[t,:],axis=1)
+        b_[t,:,:] = cp.einsum('ij,ij,kj->ik',b_[t+1,:,:],L_b[t+1,:,:],P) / cp.expand_dims(sc_b[t,:],axis=1)
+        #b_[t,:,:] = ( (b_[t+1,:,:] * L_b[t+1,:,:]) @ P.T ) / cp.expand_dims(sc_b[t,:],axis=1)
         #bad = b[t,:]>maxreal
         #if bad.sum()>0: b[t,bad] = maxreal
-    del P, sc_, L_
 
     ## top-align beta for output.
-    b = roll_by_vector(b_,indices_individual[:,1],axis=0,gpu_enabled=gpu)
-    del b_
+    b = roll_by_vector_gpu(b_,indices_individual[:,1],axis=0)
 
-    if gpu:
-        sc = cp.asnumpy(sc)
-        if gpu_acceleration == 1:
-            a = cp.asnumpy(a)
-            b = cp.asnumpy(b)
+    sc = cp.asnumpy(sc)
 
     return a,b,sc
 
@@ -323,16 +362,16 @@ def compute_qstar_parallel(L,Pi,P,indices_individual):
 
     Parameters:
     -----------
-    L : array-like of shape (n_samples, n_states)
+    L : GPU array-like of shape (n_samples, n_states)
         The L matrix.
-    Pi : array-like with shape (n_states,)
+    Pi : GPU array-like with shape (n_states,)
         The initial state probabilities.
-    P : array-like of shape (n_states, n_states)
+    P : GPU array-like of shape (n_states, n_states)
         The transition probabilities across states.
 
     Returns:
     --------
-    qstar : array-like of shape (n_samples, n_states)
+    qstar : GPU array-like of shape (n_samples, n_states)
         The most probable state sequence.
 
     """
@@ -647,7 +686,7 @@ def padGamma(Gamma, T, options):
 
     return Gamma  # Return the adjusted Gamma
 
-def roll_by_vector(arr, shifts, axis=1,gpu_enabled=False):
+def roll_by_vector(arr, shifts, axis=1):
     """Apply an independent roll for each dimensions of a single axis.
 
     Parameters
@@ -660,20 +699,39 @@ def roll_by_vector(arr, shifts, axis=1,gpu_enabled=False):
 
     axis : int
         Axis along which elements are shifted. 
-
-    gpu_enabled : bool
-        Whether input arrays are loaded in the GPU or not.
     """
-    xp = cp if gpu_enabled else np
-
-    shifts = xp.asarray(shifts)
-
-    arr = xp.swapaxes(arr,axis,-1)
-    all_idcs = xp.ogrid[[slice(0,n) for n in arr.shape]]
+    arr = np.swapaxes(arr,axis,-1)
+    all_idcs = np.ogrid[[slice(0,n) for n in arr.shape]]
 
     # Convert to a positive shift
-    all_idcs[-1] = all_idcs[-1] - xp.expand_dims(shifts,axis=1)
+    all_idcs[-1] = all_idcs[-1] - np.expand_dims(shifts,axis=1)
 
     result = arr[tuple(all_idcs)]
-    arr = xp.swapaxes(result,-1,axis)
+    arr = np.swapaxes(result,-1,axis)
+    return arr
+
+def roll_by_vector_gpu(arr, shifts, axis=1):
+    """Apply an independent roll for each dimensions of a single axis.
+
+    Parameters
+    ----------
+    arr : np.ndarray
+        Array of any shape.
+
+    shifts : np.ndarray
+        How many shifting to use for each dimension. Shape: `(arr.shape[axis],)`.
+
+    axis : int
+        Axis along which elements are shifted. 
+    """
+    shifts = cp.asarray(shifts)
+
+    arr = cp.swapaxes(arr,axis,-1)
+    all_idcs = cp.ogrid[[slice(0,n) for n in arr.shape]]
+
+    # Convert to a positive shift
+    all_idcs[-1] = all_idcs[-1] - cp.expand_dims(shifts,axis=1)
+
+    result = arr[tuple(all_idcs)]
+    arr = cp.swapaxes(result,-1,axis)
     return arr
