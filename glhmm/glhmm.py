@@ -125,8 +125,6 @@ class glhmm():
 
         if serial:
 
-            start = time.time()
-
             T,K = L.shape
             N = ind.shape[0]
             indices_Xi = auxiliary.Gamma_indices_to_Xi_indices(ind)
@@ -160,16 +158,7 @@ class glhmm():
                 Gamma[tt,:] = Gamma[tt,:] / np.expand_dims(np.sum(Gamma[tt,:],axis=1), axis=1)
                 Xi[tt_xi,:,:] = Xi[tt_xi,:,:] / np.expand_dims(np.sum(Xi[tt_xi,:,:],axis=(1,2)),axis=(1,2))
 
-            elapsed = time.time() - start
-            print("Serialised forward backwards computation time on CPU: ",  elapsed, ".\n")
-
-            #Gamma_ser=np.copy(Gamma)
-            #Xi_ser=np.copy(Xi)
-            #scale_ser=np.copy(scale)
-
         else:
-
-            start = time.time()
 
             T,N,K = L.shape
             indices_Xi = auxiliary.Gamma_indices_to_Xi_indices(ind)
@@ -229,8 +218,8 @@ class glhmm():
             else:
                 del L
             del P
-            ## Restructure data to n_samples * n_states
 
+            ## Restructure data to n_samples * n_states
             Gamma = np.zeros((max(ind[:,1]),K))
             Xi = np.zeros((max(ind[:,1])-N,K,K))
 
@@ -244,167 +233,6 @@ class glhmm():
                     Xi[tt_xi,:,:] = Xi_[tt_xi_ind,jj,:,:] / np.expand_dims(np.sum(Xi_[tt_xi_ind,jj,:,:],axis=(1,2)),axis=(1,2))
 
             del Gamma_, Xi_
-
-            elapsed = time.time() - start
-            print("Optimised forward backwards computation time: ",  elapsed, ". GPU acceleration set to: ", gpu_acceleration)
-
-            
-            """if self.gpu_enabled:
-
-                start = time.time()
-
-                T,N,K = L.shape
-
-                L = cp.asarray(L)
-                P = cp.asarray(self.P)
-
-                indices_Xi = auxiliary.Gamma_indices_to_Xi_indices(ind)
-
-                a,b,sc = auxiliary.compute_alpha_beta_gpu(L,self.Pi,P,indices_individual)
-
-                ## convert scale to a vector for output.
-                scale = np.zeros(max(ind[:,1]))
-
-                for jj in range(N):
-                    tt = range(ind[jj,0],ind[jj,1])
-                    tt_ind = range(indices_individual[jj,0],indices_individual[jj,1])
-
-                    scale[tt] = sc[tt_ind,jj]
-
-                Gamma_ = cp.asnumpy(b * a)
-
-                ## Estiamte Xi per-subject, and save index if inf is found for Gamma or Xi in time series.
-                has_inf=[]
-                Xi_ = cp.asnumpy(cp.einsum('ijk,ijl,ijl,kl->ijkl',a[0:-1,:,:],b[1:,:,:],L[1:,:,:],P))
-                del a, b
-                for jj in range(N):
-                    #Xi_[:,jj,:,:] = cp.matmul( cp.expand_dims(a[0:-1,jj,:],axis=2), \
-                    #    cp.expand_dims((b[1:,jj,:] * L[1:,jj,:]),axis=1)) * P
-
-                    ind_indiv = range(indices_individual[jj,0],indices_individual[jj,1])
-                    Xi_ind_indiv = range(indices_individual[jj,0],indices_individual[jj,1]-1)
-
-                    if np.any(np.isinf(Gamma_[ind_indiv,jj,:])) or np.any(np.isinf(Xi_[Xi_ind_indiv,jj,:])):
-                        has_inf.append(jj)
-
-                # repeat if a Nan is produced, scaling the loglikelood
-                if len(has_inf)>0:     
-                    Lsub = cp.asarray(L[:,has_inf,:])
-                    del L
-
-                    LL = cp.log(Lsub)
-                    for jj in range(len(has_inf)):
-                        t = cp.all(LL[:,jj,:]<0,axis=1)
-                        LL[t,jj,:] = LL[t,jj,:] -  cp.expand_dims(cp.max(LL[t,jj,:],axis=1), axis=1)
-
-                    a,b,_ = auxiliary.compute_alpha_beta_gpu(cp.exp(LL),self.Pi,P,indices_individual[has_inf,:])
-                    del LL
-
-                    Gamma_[:,has_inf,:] = cp.asnumpy(b * a)
-                    Xi_[:,has_inf,:,:] = cp.asnumpy(cp.einsum('ijk,ijl,ijl,kl->ijkl',a[0:-1,:,:],b[1:,:,:],Lsub[1:,:,:],P))
-                    #for jj in range(len(has_inf)):
-                    #    idx = has_inf[jj]
-                    #    Xi_[:,idx,:,:] = cp.matmul( cp.expand_dims(a[0:-1,jj,:],axis=2), \
-                    #        cp.expand_dims((b[1:,jj,:] * Lsub[1:,jj,:]),axis=1)) * P
-                    del Lsub, b, a
-                else:
-                    del L
-                del P
-                ## Restructure data to n_samples * n_states
-                #Xi_ = cp.asnumpy(Xi_)
-
-                Gamma = np.zeros((max(ind[:,1]),K))
-                Xi = np.zeros((max(ind[:,1])-N,K,K))
-
-                for jj in range(N):
-                    tt = range(ind[jj,0],ind[jj,1])
-                    tt_ind = range(indices_individual[jj,0],indices_individual[jj,1])
-                    tt_xi = range(indices_Xi[jj,0],indices_Xi[jj,1])
-                    tt_xi_ind = range(indices_individual[jj,0],indices_individual[jj,1]-1)
-
-                    Gamma[tt,:] = Gamma_[tt_ind,jj,:] / np.expand_dims(np.sum(Gamma_[tt_ind,jj,:],axis=1), axis=1)
-                    Xi[tt_xi,:,:] = Xi_[tt_xi_ind,jj,:,:] / np.expand_dims(np.sum(Xi_[tt_xi_ind,jj,:,:],axis=(1,2)),axis=(1,2))
-
-                del Gamma_, Xi_
-
-                elapsed = time.time() - start
-                print("Optimised forward backwards computation time on GPU: ",  elapsed, ".\n")
-
-            else:
-
-                start = time.time()
-
-                T,N,K = L.shape
-
-                #Gamma_ = np.zeros((T,N,K))
-                #Xi_ = np.zeros((T-1,N,K,K))
-                indices_Xi = auxiliary.Gamma_indices_to_Xi_indices(ind)
-
-                a,b,sc = auxiliary.compute_alpha_beta_parallel(L,self.Pi,self.P,indices_individual)
-
-                ## convert scale to a vector for output.
-                scale = np.zeros(max(ind[:,1]))
-
-                for jj in range(N):
-                    tt = range(ind[jj,0],ind[jj,1])
-                    tt_ind = range(indices_individual[jj,0],indices_individual[jj,1])
-
-                    scale[tt] = sc[tt_ind,jj]
-
-                Gamma_ = b * a
-
-                ## Estiamte Xi per-subject, and save index if inf is found for Gamma or Xi in time series.
-                has_inf=[]
-                Xi_ = np.einsum('ijk,ijl,ijl,kl->ijkl',a[0:-1,:,:],b[1:,:,:],L[1:,:,:],self.P)
-                for jj in range(N):
-                #    Xi_[:,jj,:,:] = np.matmul( np.expand_dims(a[0:-1,jj,:],axis=2), \
-                #        np.expand_dims((b[1:,jj,:] * L[1:,jj,:]),axis=1)) * self.P
-
-                    ind_indiv = range(indices_individual[jj,0],indices_individual[jj,1])
-                    Xi_ind_indiv = range(indices_individual[jj,0],indices_individual[jj,1]-1)
-
-                    if np.any(np.isinf(Gamma_[ind_indiv,jj,:])) or np.any(np.isinf(Xi_[Xi_ind_indiv,jj,:])):
-                        has_inf.append(jj)
-
-                # repeat if a Nan is produced, scaling the loglikelood
-                if len(has_inf)>0:     
-                    Lsub = L[:,has_inf,:]
-
-                    LL = np.log(Lsub)
-                    for jj in range(len(has_inf)):
-                        t = np.all(LL[:,jj,:]<0,axis=1)
-                        LL[t,jj,:] = LL[t,jj,:] -  np.expand_dims(np.max(LL[t,jj,:],axis=1), axis=1)
-
-                    a,b,_ = auxiliary.compute_alpha_beta_parallel(np.exp(LL),self.Pi,self.P,indices_individual[has_inf,:])
-                    
-                    Gamma_[:,has_inf,:] = b * a
-                    Xi_[:,has_inf,:,:] = np.einsum('ijk,ijl,ijl,kl->ijkl',a[0:-1,:,:],b[1:,:,:],Lsub[1:,:,:],self.P)
-                    #for jj in range(len(has_inf)):
-                    #    idx = has_inf[jj]
-                    #    Xi_[:,idx,:,:] = np.matmul( np.expand_dims(a[0:-1,jj,:],axis=2), \
-                    #        np.expand_dims((b[1:,jj,:] * Lsub[1:,jj,:]),axis=1)) * self.P
-
-                ## Restructure data to n_samples * n_states
-
-                Gamma = np.zeros((max(ind[:,1]),K))
-                Xi = np.zeros((max(ind[:,1])-N,K,K))
-
-                for jj in range(N):
-                    tt = range(ind[jj,0],ind[jj,1])
-                    tt_ind = range(indices_individual[jj,0],indices_individual[jj,1])
-                    tt_xi = range(indices_Xi[jj,0],indices_Xi[jj,1])
-                    tt_xi_ind = range(indices_individual[jj,0],indices_individual[jj,1]-1)
-
-                    Gamma[tt,:] = Gamma_[tt_ind,jj,:] / np.expand_dims(np.sum(Gamma_[tt_ind,jj,:],axis=1), axis=1)
-                    Xi[tt_xi,:,:] = Xi_[tt_xi_ind,jj,:,:] / np.expand_dims(np.sum(Xi_[tt_xi_ind,jj,:,:],axis=(1,2)),axis=(1,2))
-
-                del Gamma_, Xi_
-
-                elapsed = time.time() - start
-                print("Optimised forward backwards computation time on CPU: ",  elapsed, ".\n")"""
-
-    #        if (not np.allclose(Gamma,Gamma_ser,atol=0)) or (not np.allclose(Xi,Xi_ser,atol=0)) or (not np.allclose(scale,scale_ser,atol=0)):
-    #            print("Arrays do not match.")
 
         return Gamma,Xi,scale
 
@@ -574,7 +402,7 @@ class glhmm():
 
         ### Check gpuChunks validity.
         if options["serial"] and options["gpuChunks"] > 1:
-            print("WARNING: Memory Saver setting is selected for serial computing. This will have no effect on Memory use. If serial computation exceeds Memory limits, use stochastic training. Disabling Memory Saver.")
+            print("WARNING: GPU chunking setting is selected for serial computing. This will have no effect on Memory use. If serial computation exceeds Memory limits, use stochastic training. Disabling Memory Saver.")
             options["gpuChunks"] = 1
         elif options["gpuChunks"] > 1 and options["verbose"]:
             print("Memory saver selected. Running parallel computations in ", options["gpuChunks"], "chunks.") 
@@ -593,9 +421,12 @@ class glhmm():
             if options["verbose"]:
                 if options["gpu_acceleration"] > 0:
                     print("GPU acceleration enabled.")
+                    if options["gpuChunks"] > 1: print("GPU Chunking selected. Running GPU computations in ", options["gpuChunks"], "chunks.")
                 elif options["gpu_acceleration"] == 0 and (not options["serial"]):
                     ### Notify users of GPU aceleration if it is readily available.
                     print("GPU acceleration not selected, but cupy detected. Consider enabling GPU acceleration by setting the \"gpu_acceleration\" option to >=1.")
+                    if options["gpuChunks"] > 1:
+                        print("Warning: Chunked computations are selected without GPU computing. This likely increases peak memory use and run time with no benefit. To reduce run-time and peak memory use, run stochastic training. Training will now run with chunked computations.")
         
         return options
 
@@ -1258,7 +1089,7 @@ class glhmm():
         # collect subject specific free energy terms
         for j in range(N):
             X,Y,indices,indices_individual = io.load_files(files,j)
-            Gamma,Xi,_ = self.decode(X,Y,indices,serial=options["serial"],gpu_acceleration=options["gpu_acceleration"],gpuChunks=options["gpuChunks"])
+            Gamma,Xi,_ = self.decode(X,Y,indices,serial=True,gpu_acceleration=0,gpuChunks=1)
             # data likelihood
             todo = (False,True,False,False,False)
             if X is None:

@@ -266,78 +266,6 @@ def compute_alpha_beta_parallel(L,Pi,P,indices_individual,gpu_acceleration):
 
     return a,b,sc
 
-"""def compute_alpha_beta_gpu(L,Pi,P,indices_individual):
-    \"""Computes alpha and beta values and scaling factors.
-
-    Parameters:
-    -----------
-    L : GPU array-like of shape (n_samples, n_states)
-        The L matrix.
-    Pi : GPU array-like with shape (n_states,)
-        The initial state probabilities.
-    P : GPU array-like of shape (n_states, n_states)
-        The transition probabilities across states.
-
-    Returns:
-    --------
-    a : GPU array-like of shape (n_samples, n_states)
-        The alpha values.
-    b : GPU array-like of shape (n_samples, n_states)
-        The beta values.
-    sc : GPU array-like of shape (n_samples,)
-        The scaling factors.
-
-    \"""
-    ## Convert to cupy arrays
-    Pi = cp.asarray(Pi)
-    L = cp.asarray(L)
-    P = cp.asarray(P)
-
-    T,N,K = L.shape
-    #minreal = sys.float_info.min
-    #maxreal = sys.float_info.max
-
-    a = cp.zeros((T,N,K))
-    sc = cp.zeros((T,N))
-
-    ## Compute alpha per time point for all subjects simultaneously.
-    a[0,:,:] = Pi * L[0,:,:]
-    del Pi
-
-    sc[0,:] = cp.sum(a[0,:,:],axis=1)
-    a[0,:,:] = a[0,:,:] / cp.expand_dims(sc[0,:],axis=1)
-
-    for t in range(1,T):
-        a[t,:,:] = cp.einsum('ij,jk,ik->ik',a[t-1,:,:],P,L[t,:,:])
-        sc[t,:] = cp.einsum('ij->i',a[t,:,:])
-        #if sc[t]<minreal: sc[t] = minreal
-        a[t,:,:] = a[t,:,:] / cp.expand_dims(sc[t,:],axis=1)
-
-    ## bottom-align L and the scaling matrix to estiamte beta.
-    L_ = roll_by_vector_gpu(L,T-indices_individual[:,1],axis=0)
-    del L
-
-    sc_ = roll_by_vector_gpu(sc,T-indices_individual[:,1],axis=0)
-    b_ = cp.zeros((T,N,K))
-
-    b_[T-1,:,:] = cp.ones((1,N,K)) / cp.expand_dims(sc_[T-1,:],axis=1)
-    for t in range(T-2,-1,-1):
-        b_[t,:,:] = cp.einsum('ij,ij,kj->ik',b_[t+1,:,:],L_[t+1,:,:],P) / cp.expand_dims(sc_[t,:],axis=1)
-        #b_[t,:,:] = ( (b_[t+1,:,:] * L_b[t+1,:,:]) @ P.T ) / cp.expand_dims(sc_b[t,:],axis=1)
-        #bad = b[t,:]>maxreal
-        #if bad.sum()>0: b[t,bad] = maxreal
-    del P, sc_, L_
-
-    ## top-align beta for output.
-    b = roll_by_vector_gpu(b_,indices_individual[:,1],axis=0)
-    del b_
-
-    sc = cp.asnumpy(sc)
-    a = cp.asnumpy(a)
-    b = cp.asnumpy(b)
-
-    return a,b,sc """
-
 
 def compute_qstar_serial(L,Pi,P):
     """Compute the most probable state sequence.
@@ -748,30 +676,4 @@ def roll_by_vector(arr, shifts, axis=1,gpu_enabled=False):
 
     result = arr[tuple(all_idcs)]
     arr = xp.swapaxes(result,-1,axis)
-    return arr
-
-def roll_by_vector_gpu(arr, shifts, axis=1):
-    """Apply an independent roll for each dimensions of a single axis.
-
-    Parameters
-    ----------
-    arr : np.ndarray
-        Array of any shape.
-
-    shifts : np.ndarray
-        How many shifting to use for each dimension. Shape: `(arr.shape[axis],)`.
-
-    axis : int
-        Axis along which elements are shifted. 
-    """
-    shifts = cp.asarray(shifts)
-
-    arr = cp.swapaxes(arr,axis,-1)
-    all_idcs = cp.ogrid[[slice(0,n) for n in arr.shape]]
-
-    # Convert to a positive shift
-    all_idcs[-1] = all_idcs[-1] - cp.expand_dims(shifts,axis=1)
-
-    result = arr[tuple(all_idcs)]
-    arr = cp.swapaxes(result,-1,axis)
     return arr
