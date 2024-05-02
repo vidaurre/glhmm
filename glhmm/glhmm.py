@@ -373,7 +373,7 @@ class glhmm():
                     #print(time.time()-start)
 
                     #start = time.time()
-                    norm_wish_trace_W_test = norm_wish_trace_W_test + (-0.5 * C[j1,j1] * np.expand_dims(np.sum(tmp * np.repeat(X,q,axis=1), axis=1),axis=1))
+                    norm_wish_trace_W = norm_wish_trace_W + (-0.5 * C[j1,j1] * np.expand_dims(np.sum(tmp * np.repeat(X,q,axis=1), axis=1),axis=1))
                     #print(time.time()-start)
 
                 ### Set np.repeat axis to 2 to do matmul per time series?
