@@ -361,7 +361,7 @@ class glhmm():
                     Cb = self.beta[k_beta]['Sigma'][jj,jj[:,np.newaxis],j]
                     norm_wish_trace_W -= 0.5 * C[j] * np.sum(((X[:,jj] @ Cb)) * X[:,jj], axis=1)
             else:
-                ind = np.arange(p) * q
+                #ind = np.arange(p) * q
                 #start = time.time()
                 #for j1 in range(q):
                 #    ind1 = ind + j1
@@ -372,19 +372,14 @@ class glhmm():
                 #        norm_wish_trace_W -= 0.5 * C[j1,j2] * np.sum(tmp[:,ind2] * X, axis=1)
                 #print(time.time()-start)
 
-                ### Set np.repeat axis to 2 to do matmul per time series?
-                #ind = np.arange(p) * q
+                ind = np.arange(p) * q
                 tmp = np.repeat(X,q,axis=1) @ self.beta[k_beta]['Sigma']
-                start = time.time()
+                #start = time.time()
                 for j1 in range(q):
                     ind1 = ind + j1
-                    #norm_wish_trace_W_test = norm_wish_trace_W_test + np.sum((-0.5 * C[np.arange(q),np.arange(q)] * np.expand_dims(np.sum(tmp[:,ind1] * np.repeat(X,q,axis=1), axis=1),axis=1)),axis=1)
                     norm_wish_trace_W = norm_wish_trace_W + (-0.5 * C[j1,j1] * np.expand_dims(np.sum(tmp[:,ind1] * X, axis=1),axis=1))
                 norm_wish_trace_W = norm_wish_trace_W.reshape(-1,)
-                print(time.time()-start)
-
-                #print(".")
-                #### Likely culprit
+                #print(time.time()-start)
 
         # cov trace for mean
         norm_wish_trace_mean = np.zeros(T)
