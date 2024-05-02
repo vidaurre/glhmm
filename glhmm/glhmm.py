@@ -273,8 +273,6 @@ class glhmm():
 
                 vpath[tt,:] = qstar[tt_ind,j,:]
 
-
-
         return vpath   
     
 
@@ -353,6 +351,7 @@ class glhmm():
 
         # cov trace for beta
         norm_wish_trace_W = np.zeros((T,))
+        norm_wish_trace_W_test = np.zeros((T,1))
         if self.beta is not None:
             if diagonal_covmat:
                 jj = np.arange(p)
@@ -365,10 +364,30 @@ class glhmm():
                 ind = np.arange(p) * q
                 for j1 in range(q):
                     ind1 = ind + j1
-                    tmp = X @ self.beta[k_beta]['Sigma'][ind1,:]
-                    for j2 in range(q):
-                        ind2 = ind + j2
-                        norm_wish_trace_W -= 0.5 * C[j1,j2] * np.sum(tmp[:,ind2] * X, axis=1)
+                    tmp = X @ self.beta[k_beta]['Sigma'][ind1,:]  ### is this always sparse?
+
+                    #start = time.time()
+                #    for j2 in range(q):
+                #        ind2 = ind + j2
+                #        norm_wish_trace_W -= 0.5 * C[j1,j2] * np.sum(tmp[:,ind2] * X, axis=1)
+                    #print(time.time()-start)
+
+                    #start = time.time()
+                    norm_wish_trace_W_test = norm_wish_trace_W_test + (-0.5 * C[j1,j1] * np.expand_dims(np.sum(tmp * np.repeat(X,q,axis=1), axis=1),axis=1))
+                    #print(time.time()-start)
+
+                ### Set np.repeat axis to 2 to do matmul per time series?
+                #ind = np.arange(p) * q
+                #tmp=np.zeros((T,p*q,q))
+                #for j1 in range(q):
+                #    ind1 = ind + j1
+                #    XX = X @ self.beta[k_beta]['Sigma'][ind1,:]
+                #    tmp[:,:,j1] = XX[:,:]  ### is this always sparse?
+                #norm_wish_trace_W_test = np.sum(-0.5 * C[np.arange(q),np.arange(q)] * np.expand_dims(np.sum(tmp * np.repeat(X,q,axis=1), axis=1),axis=1),axis=1)
+                #norm_wish_trace_W_test = norm_wish_trace_W_test + (-0.5 * C[np.arange(q),np.arange(q)] * np.expand_dims(np.sum(tmp * np.repeat(X,q,axis=1), axis=1),axis=1))
+
+                print(".")
+                #### Likely culprit
 
         # cov trace for mean
         norm_wish_trace_mean = np.zeros(T)
