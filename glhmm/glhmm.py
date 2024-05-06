@@ -15,6 +15,12 @@ import warnings
 import copy
 import time
 
+### Import cupy for GPU acceleration if available, otherwise pass.
+try:
+    import cupy as cp
+except:
+    pass
+
 # import auxiliary
 # import io
 # import utils
@@ -74,7 +80,7 @@ class glhmm():
         dirichlet_diag=10,
         connectivity=None,
         Pstructure=None,
-        Pistructure=None
+        Pistructure=None,
     ):
 
         if (connectivity is not None) and not ((covtype == 'shareddiag') or (covtype == 'diag')):
@@ -97,7 +103,6 @@ class glhmm():
         else:
             self.hyperparameters["Pistructure"] = Pistructure
 
-
         self.beta = None
         self.mean = None
         self.alpha_beta = None
@@ -110,7 +115,7 @@ class glhmm():
         
     ## Private methods
 
-    def __forward_backward(self,L,indices):
+    def __forward_backward(self,L,indices,indices_individual,serial,gpu_acceleration):
         """
         Calculate state time courses for a collection of segments
         """        
@@ -119,42 +124,122 @@ class glhmm():
         if len(ind.shape) == 1:
             ind = np.expand_dims(indices,axis=0)
 
-        T,K = L.shape
-        N = ind.shape[0]
-        Gamma = np.zeros((T,K))
-        Xi = np.zeros((T-N,K,K))
-        scale = np.zeros(T)
-        indices_Xi = auxiliary.Gamma_indices_to_Xi_indices(ind)
 
-        for j in range(N):
+        if serial:
 
-            tt = range(ind[j,0],ind[j,1])
-            tt_xi = range(indices_Xi[j,0],indices_Xi[j,1])
+            T,K = L.shape
+            N = ind.shape[0]
+            indices_Xi = auxiliary.Gamma_indices_to_Xi_indices(ind)
 
-            a,b,sc = auxiliary.compute_alpha_beta(L[tt,:],self.Pi,self.P)
+            Gamma = np.zeros((T,K))
+            Xi = np.zeros((T-N,K,K))
+            scale = np.zeros((T))
 
-            scale[tt] = sc
-            Gamma[tt,:] = b * a
-            Xi[tt_xi,:,:] = np.matmul( np.expand_dims(a[0:-1,:],axis=2), \
-                np.expand_dims((b[1:,:] * L[tt[1:],:]),axis=1)) * self.P
+            for j in range(N):
 
-            # repeat if a Nan is produced, scaling the loglikelood
-            if np.any(np.isinf(Gamma)) or np.any(np.isinf(Xi)):
-                LL = np.log(L[tt,:])
-                t = np.all(LL<0,axis=1)
-                LL[t,:] = LL[t,:] -  np.expand_dims(np.max(LL[t,:],axis=1), axis=1)
-                a,b,_ = auxiliary.compute_alpha_beta(np.exp(LL),self.Pi,self.P)
+                tt = range(ind[j,0],ind[j,1])
+                tt_xi = range(indices_Xi[j,0],indices_Xi[j,1])
+                
+                a,b,sc = auxiliary.compute_alpha_beta_serial(L[tt,:],self.Pi,self.P)
+
+                scale[tt] = sc
                 Gamma[tt,:] = b * a
                 Xi[tt_xi,:,:] = np.matmul( np.expand_dims(a[0:-1,:],axis=2), \
                     np.expand_dims((b[1:,:] * L[tt[1:],:]),axis=1)) * self.P
 
-            Gamma[tt,:] = Gamma[tt,:] / np.expand_dims(np.sum(Gamma[tt,:],axis=1), axis=1)
-            Xi[tt_xi,:,:] = Xi[tt_xi,:,:] / np.expand_dims(np.sum(Xi[tt_xi,:,:],axis=(1,2)),axis=(1,2))
+                # repeat if a Nan is produced, scaling the loglikelood
+                if np.any(np.isinf(Gamma)) or np.any(np.isinf(Xi)):
+                    LL = np.log(L[tt,:])
+                    t = np.all(LL<0,axis=1)
+                    LL[t,:] = LL[t,:] -  np.expand_dims(np.max(LL[t,:],axis=1), axis=1)
+                    a,b,_ = auxiliary.compute_alpha_beta_serial(np.exp(LL),self.Pi,self.P)
+                    Gamma[tt,:] = b * a
+                    Xi[tt_xi,:,:] = np.matmul( np.expand_dims(a[0:-1,:],axis=2), \
+                        np.expand_dims((b[1:,:] * L[tt[1:],:]),axis=1)) * self.P
+
+                Gamma[tt,:] = Gamma[tt,:] / np.expand_dims(np.sum(Gamma[tt,:],axis=1), axis=1)
+                Xi[tt_xi,:,:] = Xi[tt_xi,:,:] / np.expand_dims(np.sum(Xi[tt_xi,:,:],axis=(1,2)),axis=(1,2))
+
+        else:
+
+            T,N,K = L.shape
+            indices_Xi = auxiliary.Gamma_indices_to_Xi_indices(ind)
+
+            xp = cp if gpu_acceleration == 2 else np
+
+            L = xp.asarray(L)
+            P = xp.asarray(self.P)
+
+            a,b,sc = auxiliary.compute_alpha_beta_parallel(L,self.Pi,P,indices_individual,gpu_acceleration)
+
+            ## convert scale to a vector for output.
+            scale = np.zeros(max(ind[:,1]))
+
+            for j in range(N):
+                tt = range(ind[j,0],ind[j,1])
+                tt_ind = range(indices_individual[j,0],indices_individual[j,1])
+
+                scale[tt] = sc[tt_ind,j]
+
+            if gpu_acceleration == 2:
+                Gamma_ = cp.asnumpy(b * a)
+                Xi_ = cp.asnumpy(cp.einsum('ijk,ijl,ijl,kl->ijkl',a[0:-1,:,:],b[1:,:,:],L[1:,:,:],P))
+            else:
+                Gamma_ = b * a
+                Xi_ = np.einsum('ijk,ijl,ijl,kl->ijkl',a[0:-1,:,:],b[1:,:,:],L[1:,:,:],self.P)
+
+            has_inf=[]
+            del a, b
+
+            for jj in range(N):
+                    ind_indiv = range(indices_individual[jj,0],indices_individual[jj,1])
+                    Xi_ind_indiv = range(indices_individual[jj,0],indices_individual[jj,1]-1)
+
+                    if np.any(np.isinf(Gamma_[ind_indiv,jj,:])) or np.any(np.isinf(Xi_[Xi_ind_indiv,jj,:])):
+                        has_inf.append(jj)
+
+            if len(has_inf)>0:     
+                Lsub = xp.asarray(L[:,has_inf,:])
+                del L
+
+                LL = xp.log(Lsub)
+                for jj in range(len(has_inf)):
+                    t = xp.all(LL[:,jj,:]<0,axis=1)
+                    LL[t,jj,:] = LL[t,jj,:] -  xp.expand_dims(xp.max(LL[t,jj,:],axis=1), axis=1)
+
+                a,b,_ = auxiliary.compute_alpha_beta_parallel(xp.exp(LL),self.Pi,P,indices_individual[has_inf,:],gpu_acceleration)
+                del LL
+
+                if gpu_acceleration == 2:
+                    Gamma_[:,has_inf,:] = cp.asnumpy(b * a)
+                    Xi_[:,has_inf,:,:] = cp.asnumpy(cp.einsum('ijk,ijl,ijl,kl->ijkl',a[0:-1,:,:],b[1:,:,:],Lsub[1:,:,:],P))
+                else:
+                    Gamma_[:,has_inf,:] = b * a
+                    Xi_[:,has_inf,:,:] = np.einsum('ijk,ijl,ijl,kl->ijkl',a[0:-1,:,:],b[1:,:,:],Lsub[1:,:,:],self.P)
+                del Lsub, b, a
+            else:
+                del L
+            del P
+
+            ## Restructure data to n_samples * n_states
+            Gamma = np.zeros((max(ind[:,1]),K))
+            Xi = np.zeros((max(ind[:,1])-N,K,K))
+
+            for jj in range(N):
+                    tt = range(ind[jj,0],ind[jj,1])
+                    tt_ind = range(indices_individual[jj,0],indices_individual[jj,1])
+                    tt_xi = range(indices_Xi[jj,0],indices_Xi[jj,1])
+                    tt_xi_ind = range(indices_individual[jj,0],indices_individual[jj,1]-1)
+
+                    Gamma[tt,:] = Gamma_[tt_ind,jj,:] / np.expand_dims(np.sum(Gamma_[tt_ind,jj,:],axis=1), axis=1)
+                    Xi[tt_xi,:,:] = Xi_[tt_xi_ind,jj,:,:] / np.expand_dims(np.sum(Xi_[tt_xi_ind,jj,:,:],axis=(1,2)),axis=(1,2))
+
+            del Gamma_, Xi_
 
         return Gamma,Xi,scale
 
 
-    def __forward_backward_vp(self,L,indices):
+    def __forward_backward_vp(self,L,indices,indices_individual,serial=False):
         """
         Calculate viterbi path for a collection of segments
         """        
@@ -163,14 +248,32 @@ class glhmm():
         if len(ind.shape) == 1:
             ind = np.expand_dims(indices,axis=0)
 
-        T,K = L.shape
-        N = ind.shape[0]
-        vpath = np.zeros((T,K))
-        
-        for j in range(N):
-            tt = range(ind[j,0],ind[j,1])
-            qstar = auxiliary.compute_qstar(L[tt,:],self.Pi,self.P)
-            vpath[tt,:] = qstar
+        if serial:
+            
+            T,K = L.shape
+            N = ind.shape[0]
+
+            vpath = np.zeros((T,K))
+
+            for j in range(N):
+                tt = range(ind[j,0],ind[j,1])
+
+                qstar = auxiliary.compute_qstar_serial(L[tt,:],self.Pi,self.P)
+                vpath[tt,:] = qstar
+
+        else:
+            T,N,K = L.shape
+            vpath = np.zeros((max(ind[:,1]),K))
+
+            qstar = auxiliary.compute_qstar_parallel(L,self.Pi,self.P,indices_individual)
+
+            for j in range(N):
+                tt = range(ind[j,0],ind[j,1])
+                tt_ind = range(indices_individual[j,0],indices_individual[j,1])
+
+                vpath[tt,:] = qstar[tt_ind,j,:]
+
+
 
         return vpath   
     
@@ -295,6 +398,36 @@ class glhmm():
         if not "updateDyn" in options: options["updateDyn"] = True
         if not "updateObs" in options: options["updateObs"] = True
         if not "verbose" in options: options["verbose"] = True
+        if not "serial" in options: options["serial"] = False
+        if not "gpu_acceleration" in options: options["gpu_acceleration"] = 0
+        if not "gpuChunks" in options: options["gpuChunks"] = 1
+
+        ### Check gpuChunks validity.
+        if options["serial"] and options["gpuChunks"] > 1:
+            print("WARNING: GPU chunking setting is selected for serial computing. This will have no effect on Memory use. If serial computation exceeds Memory limits, use stochastic training. Disabling Memory Saver.")
+            options["gpuChunks"] = 1
+        
+        ### Check GPU acceletation validity.
+        if options["gpu_acceleration"] > 0 and options["serial"]:
+            print("WARNING: GPU acceleration for serial processing is non-sensical. Disabling GPU acceleration.")
+            options["gpu_acceleration"] = 0
+        try:
+            cp
+        except:
+            if options["gpu_acceleration"] > 0:
+                ### Throw an error if GPU acceleration is selected but cupy could not be imported. 
+                raise ImportError("GPU acceleration selected but cupy not available. Install RAPIDS or disable GPU acceleration.")
+        else:
+            if options["verbose"]:
+                if options["gpu_acceleration"] > 0:
+                    print("GPU acceleration enabled.")
+                    if options["gpuChunks"] > 1: print("GPU Chunking selected. Running GPU computations in ", options["gpuChunks"], "chunks.")
+                elif options["gpu_acceleration"] == 0 and (not options["serial"]):
+                    ### Notify users of GPU aceleration if it is readily available.
+                    print("GPU acceleration not selected, but cupy detected. Consider enabling GPU acceleration by setting the \"gpu_acceleration\" option to >=1.")
+                    if options["gpuChunks"] > 1:
+                        print("Warning: Chunked computations are selected without GPU computing. This likely increases peak memory use and run time with no benefit. To reduce run-time and peak memory use, run stochastic training. Training will now run with chunked computations.")
+        
         return options
 
 
@@ -337,6 +470,7 @@ class glhmm():
             self.__init_prior_P_Pi() # init P,Pi priors
             self.__update_dynamics() # make P,Pi based on priors
             Gamma = self.sample_Gamma(indices)
+            options["verbose"] = verbose
             return Gamma
 
         fe = np.zeros(options["initrep"])
@@ -956,7 +1090,7 @@ class glhmm():
         # collect subject specific free energy terms
         for j in range(N):
             X,Y,indices,indices_individual = io.load_files(files,j)
-            Gamma,Xi,_ = self.decode(X,Y,indices)
+            Gamma,Xi,_ = self.decode(X,Y,indices,serial=True,gpu_acceleration=0,gpuChunks=1)
             # data likelihood
             todo = (False,True,False,False,False)
             if X is None:
@@ -986,7 +1120,7 @@ class glhmm():
             indices_Xi = auxiliary.Gamma_indices_to_Xi_indices(indices)
 
             # E-step
-            Gamma,Xi,_ = self.decode(X,Y,indices)
+            Gamma,Xi,_ = self.decode(X,Y,indices,serial=options["serial"],gpu_acceleration=options["gpu_acceleration"],gpuChunks=options["gpuChunks"])
             sum_Gamma[:,I] = utils.get_FO(Gamma,indices,True).T
             
             # which states are active? 
@@ -1101,7 +1235,7 @@ class glhmm():
         return L
 
 
-    def decode(self,X,Y,indices=None,files=None,viterbi=False,set=None):
+    def decode(self,X,Y,indices=None,files=None,viterbi=False,set=None,serial=False,gpu_acceleration=0,gpuChunks=1):
         """Calculates state time courses for all the data using either parallel or sequential processing.
 
         Parameters:
@@ -1155,6 +1289,8 @@ class glhmm():
             indices = np.zeros((1,2)).astype(int)
             indices[0,0] = 0
             indices[0,1] = Y.shape[0]
+#        else:
+            #indices_individual = indices - np.expand_dims(indices[:,0],axis=1)
         if len(indices.shape) == 1: 
             indices = np.expand_dims(indices,axis=0)
 
@@ -1168,6 +1304,8 @@ class glhmm():
         else:
             indices_sliced = indices
 
+        indices_individual = indices_sliced - np.expand_dims(indices_sliced[:,0],axis=1)
+
         L = np.exp(self.loglikelihood(X_sliced,Y_sliced))
 
         minreal = sys.float_info.min
@@ -1177,12 +1315,67 @@ class glhmm():
 
         N = indices.shape[0]
 
+        maxt = np.max(indices_individual[:,1])
+
+        if serial:
+            L_ = L
+        else:
+            ## Convert L into a 3D matrix (time points * samples * states)
+            L_ = np.zeros((maxt, N, L.shape[1]))
+            for j in range(N):
+                tt = range(indices_sliced[j,0],indices_sliced[j,1])
+                tti = range(indices_individual[j,0],indices_individual[j,1])
+                L_[tti,j,:] = L[tt,:]
+        
+
         if viterbi: 
-            vpath = self.__forward_backward_vp(L,indices_sliced)
+            vpath = self.__forward_backward_vp(L_,indices_sliced,indices_individual)
             return vpath
         else:
-            Gamma,Xi,scale = self.__forward_backward(L,indices_sliced)
-            return Gamma,Xi,scale
+            if gpuChunks > 1:
+
+                n_chunks = gpuChunks
+
+                chunk_size = int(np.ceil(N/n_chunks))
+                if N < (chunk_size*n_chunks):
+                    n_chunks -= 1
+                    chunk_rem = N-(chunk_size * n_chunks)
+                else:
+                    chunk_rem = 0
+
+                T,K = L.shape
+
+                Gamma = np.zeros((T,K))
+                Xi = np.zeros((T-N,K,K))
+                scale = np.zeros((T))
+
+                for nn in range(n_chunks):
+                    sub_n = range(nn*chunk_size,(nn+1)*chunk_size)
+                    ind_chunk = indices_sliced[sub_n,:]-indices_sliced[sub_n[0],0]
+                    Gamma_,Xi_,scale_ = self.__forward_backward(L_[:,sub_n,:],ind_chunk,indices_individual[sub_n,:],serial,gpu_acceleration)
+                    
+                    tt = range(indices_sliced[nn*chunk_size,0],indices_sliced[(nn+1)*chunk_size-1,1])
+                    tt_xi = range(indices_sliced[nn*chunk_size,0]-nn*chunk_size,indices_sliced[(nn+1)*chunk_size-1,1]-(nn+1)*chunk_size)
+                    Gamma[tt,:] = Gamma_
+                    Xi[tt_xi,:,:] = Xi_
+                    scale[tt] = scale_
+
+                if chunk_rem>0:
+                    sub_n = range((n_chunks * chunk_size), ((n_chunks * chunk_size) + chunk_rem))
+                    ind_chunk = indices_sliced[sub_n,:]-indices_sliced[sub_n[0],0]
+                    Gamma_,Xi_,scale_ = self.__forward_backward(L_[:,sub_n,:],ind_chunk,indices_individual[sub_n,:],serial,gpu_acceleration)
+
+                    tt = range(indices_sliced[(n_chunks * chunk_size),0],indices_sliced[(n_chunks * chunk_size) + chunk_rem-1,1])
+                    tt_xi = range(indices_sliced[(n_chunks * chunk_size),0]-n_chunks*chunk_size,indices_sliced[(n_chunks * chunk_size) + chunk_rem-1,1]-(n_chunks * chunk_size + chunk_rem))
+                    Gamma[tt,:] = Gamma_
+                    Xi[tt_xi,:,:] = Xi_
+                    scale[tt] = scale_
+
+                return Gamma,Xi,scale
+
+            else:        
+                Gamma,Xi,scale = self.__forward_backward(L_,indices_sliced,indices_individual,serial,gpu_acceleration)
+                return Gamma,Xi,scale
 
 
     def sample_Gamma(self,size):
@@ -2048,7 +2241,7 @@ class glhmm():
             if options["updateGamma"]:
 
                 # E-step
-                Gamma,Xi,scale = self.decode(X,Y,indices)
+                Gamma,Xi,scale = self.decode(X,Y,indices,serial=options["serial"],gpu_acceleration=options["gpu_acceleration"],gpuChunks=options["gpuChunks"])
                 status = self.__check_Gamma(Gamma)
                 if status:
                     warnings.warn('Gamma has almost zero variance: stuck in a weird solution')
