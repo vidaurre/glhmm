@@ -351,8 +351,6 @@ class glhmm():
 
         # cov trace for beta
         norm_wish_trace_W = np.zeros((T,))
-        norm_wish_trace_W_sum = np.zeros((T,))
-        norm_wish_trace_W_test = np.zeros((T,))
         if self.beta is not None:
             if diagonal_covmat:
                 jj = np.arange(p)
@@ -362,40 +360,22 @@ class glhmm():
                     Cb = self.beta[k_beta]['Sigma'][jj,jj[:,np.newaxis],j]
                     norm_wish_trace_W -= 0.5 * C[j] * np.sum(((X[:,jj] @ Cb)) * X[:,jj], axis=1)
             else:
-                ind = np.arange(p) * q
-                start = time.time()
-                for j1 in range(q):
-                    ind1 = ind + j1
-                    tmp = X @ self.beta[k_beta]['Sigma'][ind1,:]  ### is this always sparse?
-
-                    for j2 in range(q):
-                        ind2 = ind + j2
-                        norm_wish_trace_W -= 0.5 * C[j1,j2] * np.sum(tmp[:,ind2] * X, axis=1)
-                        norm_wish_trace_W_sum += np.sum(tmp[:,ind2] * X, axis=1)
-                print(time.time()-start)
-
-                ## Works: 70% less runtime
                 #ind = np.arange(p) * q
-                #start = time.time()
-                #Ct = np.tile(C,p)
-                #M=np.repeat(np.eye(p),q,axis=1).T
                 #for j1 in range(q):
                 #    ind1 = ind + j1
-                #    tmp = X @ (Ct[j1,:] * self.beta[k_beta]['Sigma'])[ind1,:]  ### is this always sparse?
-                #    norm_wish_trace_W_test = norm_wish_trace_W_test + np.sum(-0.5 * ((tmp @ M) * X),axis=1)
-                #del Ct, M
+                #    tmp = X @ self.beta[k_beta]['Sigma'][ind1,:]  ### is this always sparse?
+
+                #    for j2 in range(q):
+                #        ind2 = ind + j2
+                #        norm_wish_trace_W -= 0.5 * C[j1,j2] * np.sum(tmp[:,ind2] * X, axis=1)
 
 
                 ind = np.arange(p) * q
-                start = time.time()
                 tmp = np.repeat(X,q,axis=1) @ (np.tile(C,(p,p)) * self.beta[k_beta]['Sigma'])
                 for j1 in range(q):
                     ind1 = ind + j1
-                    norm_wish_trace_W_test = norm_wish_trace_W_test + (-0.5 * np.sum(tmp[:,ind1] * X, axis=1))
-                print(time.time()-start)
+                    norm_wish_trace_W = norm_wish_trace_W + (-0.5 * np.sum(tmp[:,ind1] * X, axis=1))
 
-                if not np.allclose(norm_wish_trace_W,norm_wish_trace_W_test):
-                    print(".")
 
         # cov trace for mean
         norm_wish_trace_mean = np.zeros(T)
