@@ -6,6 +6,7 @@ Permutation testing from Gaussian Linear Hidden Markov Model
 import numpy as np
 import pandas as pd
 import random
+import math
 from tqdm import tqdm
 from glhmm.palm_functions import *
 from statsmodels.stats import multitest as smt
@@ -460,7 +461,6 @@ def test_across_sessions_within_subject(D_data, R_data, idx_data, method="regres
             Update your data so that the number of trials is the same within each session; 
             otherwise, you cannot run the function 'test_across_sessions_within_subject'.
             """)
-
     # Initialize variable
     category_columns = []    
     # Have to run the permutation test function 1 time at least once
@@ -490,6 +490,14 @@ def test_across_sessions_within_subject(D_data, R_data, idx_data, method="regres
     else:
         idx_array =idx_data.copy()
 
+    # Calculate the maximum number of permutations
+    max_permutations = math.factorial(len(np.unique(idx_array)))
+    if Nperm > max_permutations:
+        raise ValueError(f"Maximum number of permutations with {len(np.unique(idx_array))} sessions is: {max_permutations}."
+                         "Reduce the number of permutations to the maximum number of permutations to run the test probably.")
+    if verbose:
+        print(f"Maximum number of permutations with {len(np.unique(idx_array))} sessions is: {max_permutations}")
+    
     # Get input shape information
     n_T, _, n_p, n_q, D_data, R_data = get_input_shape(D_data, R_data, verbose)
     
@@ -629,7 +637,7 @@ def test_across_visits(input_data, vpath_data, n_states, method="regression", Np
     
     # Identify categorical columns
     if category_columns["t_test_cols"]!=[] or category_columns["f_test_cols"]!=[]:
-        if FWER_correction and (len(category_columns.get('t_test_cols')) != vpath_data.shape[-1] or len(category_columns.get('f_test_cols')) != R_data.shape[-1]):
+        if FWER_correction and (len(category_columns.get('t_test_cols')) != vpath_data.shape[-1] or len(category_columns.get('f_test_cols')) != vpath_data.shape[-1]):
             print("Warning: Cannot perform FWER_correction with different test statisticss.\nConsider to set identify_categories=False")
             raise ValueError("Cannot perform FWER_correction")    
    
@@ -1109,14 +1117,16 @@ def initialize_permutation_matrices(method, Nperm, n_p, n_q, D_data, test_combin
         else:
             # Regression got a N by q matrix 
             test_statistics = np.zeros((Nperm, n_q))
+        # Include intercept
+        D_data_with_intercept = np.hstack((np.ones((D_data.shape[0], 1)), D_data))
         # Define regularization parameter
         regularization = 0.001
         # Regularized parameter estimation
-        regularization_matrix = regularization * np.eye(D_data.shape[1])  # Regularization term for Ridge regression
+        regularization_matrix = regularization * np.eye(D_data_with_intercept.shape[1])  # Regularization term for Ridge regression
         
         # Fit the Ridge regression model
         # The projection matrix is then used to project permuted D-matrix (Din) to obtain the regression coefficients (beta)
-        proj = np.linalg.inv(D_data.T @ D_data + regularization_matrix) @ D_data.T  # Projection matrix for Ridge regression
+        proj = np.linalg.inv(D_data_with_intercept.T @ D_data_with_intercept + regularization_matrix) @ D_data_with_intercept.T  # Projection matrix for Ridge regression
     return test_statistics, proj
 
 def permutation_matrix_across_subjects(Nperm, D_t):
@@ -1606,6 +1616,7 @@ def test_statistics_calculations(Din, Rin, perm, test_statistics, proj, method, 
             else:
                 # Fit the original model 
                 beta = proj @ Rin  # Calculate regression_coefficients (beta)
+                Din = np.hstack((np.ones((Din.shape[0], 1)), Din))
                 # Calculate the predicted values
                 predicted_values = Din @ beta
                 # Calculate the residual sum of squares (rss)
@@ -1674,6 +1685,8 @@ def test_statistics_calculations(Din, Rin, perm, test_statistics, proj, method, 
                         else:
                             # Fit the original model 
                             beta = proj @ Rin[:, col]  # Calculate regression_coefficients (beta)
+                            # Include intercept
+                            Din = np.hstack((np.ones((Din.shape[0], 1)), Din))
                             # Calculate the predicted values
                             predicted_values = Din @ beta
                             # Calculate the residual sum of squares (rss)
@@ -2429,6 +2442,8 @@ def calculate_nan_regression(Din, Rin, proj):
         Array of R-squared values for each regression.
     """
     Rin = np.expand_dims(Rin, axis=1) if Rin.ndim==1 else Rin
+    # Include intercepts
+    Din = np.hstack((np.ones((Din.shape[0], 1)), Din))
     q = Rin.shape[-1]
     R2_test = np.zeros(q)
     # Calculate t-statistic for each pair of columns (D_column, R_data)
@@ -2472,6 +2487,8 @@ def calculate_nan_regression_f_test(Din, Rin, proj, nan_values=False):
     if nan_values:
         # Calculate F-statistics if there are Nan_values
         Rin = np.expand_dims(Rin, axis=1) if Rin.ndim==1 else Rin
+        # Include intercepts
+        Din = np.hstack((np.ones((Din.shape[0], 1)), Din))
         q = Rin.shape[-1]
         f_test = np.zeros(q)
         # Calculate t-statistic for each pair of columns (D_column, R_data)
@@ -2504,6 +2521,8 @@ def calculate_nan_regression_f_test(Din, Rin, proj, nan_values=False):
         # Calculate f-statistics
         # Fit the original model 
         beta = proj @ Rin  # Calculate regression_coefficients (beta)
+        # Include intercept
+        Din = np.hstack((np.ones((Din.shape[0], 1)), Din))
         # Calculate the predicted values
         predicted_values = Din @ beta
         # Calculate the residual sum of squares (rss)

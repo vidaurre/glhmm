@@ -1,3 +1,5 @@
+![Overview Image](../logo2_full.png)
+
 ```{include} ../README.md
 ```
 
