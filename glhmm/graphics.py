@@ -527,7 +527,10 @@ def interpolate_colormap(cmap_list):
         modified_cmap [:,channel_idx]=con_values
     return modified_cmap
 
-def plot_p_value_matrix(pval, alpha = 0.05, normalize_vals=True, figsize=(9, 5), steps=11, title_text="Heatmap (p-values)", annot=True, cmap_type='default', cmap_reverse=True, xlabel="", ylabel="", xticklabels=None, none_diagonal = False, num_colors = 259):
+def plot_p_value_matrix(pval, alpha = 0.05, normalize_vals=True, figsize=(9, 5), 
+                         title_text="Heatmap (p-values)", annot=False, 
+                        cmap_type='default', cmap_reverse=True, xlabel="", ylabel="", 
+                        xticklabels=None, none_diagonal = False, num_colors = 259, xlabel_rotation=0):
     from matplotlib import cm, colors
     import seaborn as sb
     from mpl_toolkits.axes_grid1 import make_axes_locatable
@@ -561,10 +564,17 @@ def plot_p_value_matrix(pval, alpha = 0.05, normalize_vals=True, figsize=(9, 5),
         If you want to turn the diagonal into NaN numbers.
     num_colors (numpy.ndarray), default=259:
         Define the number of different shades of color.
+    xlabel_rotation (numpy-mdarray), default=0
+        The degree of rotation for the labels in the x-axis
     """
     if pval.ndim==0:
         pval = np.reshape(pval, (1, 1))
-        
+    if xlabel_rotation==45:
+        ha ="right"
+    else:
+        ha = "center"    
+
+
     fig, axes = plt.subplots(figsize=figsize)
     if len(pval.shape)==1:
         pval =np.expand_dims(pval,axis=0)
@@ -633,19 +643,21 @@ def plot_p_value_matrix(pval, alpha = 0.05, normalize_vals=True, figsize=(9, 5),
     axes.set_xlabel(xlabel, fontsize=12)
     axes.set_ylabel(ylabel, fontsize=12)
     axes.set_title(title_text, fontsize=14)
+    # Number of x-tick steps
+    steps=len(pval)
     # Set the x-axis ticks
     if xticklabels is not None:
         axes.set_xticks(np.arange(len(xticklabels)) + 0.5)
-        axes.set_xticklabels(xticklabels, rotation="horizontal", fontsize=10)
+        axes.set_xticklabels(xticklabels, rotation=xlabel_rotation, fontsize=10, ha=ha)
     elif pval.shape[1]>1:
         axes.set_xticks(np.linspace(0, pval.shape[1]-1, steps).astype(int)+0.5)
-        axes.set_xticklabels(np.linspace(1, pval.shape[1], steps).astype(int), rotation="horizontal", fontsize=10)
+        axes.set_xticklabels(np.linspace(1, pval.shape[1], steps).astype(int), rotation=xlabel_rotation, fontsize=10, ha=ha)
     else:
         axes.set_xticklabels([])
     # Set the y-axis ticks
     if pval.shape[0]>1:
         axes.set_yticks(np.linspace(0, pval.shape[0]-1, steps).astype(int)+0.5)
-        axes.set_yticklabels(np.linspace(1, pval.shape[0], steps).astype(int), rotation="horizontal", fontsize=10)
+        axes.set_yticklabels(np.linspace(1, pval.shape[0], steps).astype(int), rotation=xlabel_rotation, fontsize=10, ha=ha)
     else:
         axes.set_yticklabels([])
     # Create an axes on the right side of ax. The width of cax will be 5%
@@ -697,7 +709,10 @@ def plot_p_value_matrix(pval, alpha = 0.05, normalize_vals=True, figsize=(9, 5),
     # Show the plot
     plt.show()
     
-def plot_correlation_matrix(corr_vals, performed_tests, normalize_vals=False, figsize=(9, 5), steps=11, title_text="Correlation Coefficients Heatmap", annot=True, cmap_type='default', cmap_reverse=True, xlabel="", ylabel="", xticklabels=None, none_diagonal = False, num_colors = 256):
+def plot_correlation_matrix(corr_vals, performed_tests, normalize_vals=False, 
+                            figsize=(9, 5), title_text="Correlation Coefficients Heatmap", 
+                            annot=False, cmap_type='default', cmap_reverse=True, xlabel="", ylabel="", 
+                            xticklabels=None,xlabel_rotation=45, none_diagonal = False, num_colors = 256):
     from matplotlib import cm, colors
     from mpl_toolkits.axes_grid1 import make_axes_locatable
     """
@@ -713,8 +728,6 @@ def plot_correlation_matrix(corr_vals, performed_tests, normalize_vals=False, fi
         If True, the data range will be normalized from 0 to 1 (default is False).
     figsize (tuple, optional), default=(9, 5):
         Figure size in inches (width, height).
-    steps (int, optional), default=11:
-        Number of steps for x and y-axis ticks).
     title_text (str, optional), default="Correlation Coefficients Heatmap"
         Title text for the heatmap.
     annot (bool, optional), default=True:
@@ -740,7 +753,12 @@ def plot_correlation_matrix(corr_vals, performed_tests, normalize_vals=False, fi
     
     if corr_vals.ndim==0:
         corr_vals = np.reshape(corr_vals, (1, 1))
-        
+    if xlabel_rotation==45:
+        ha ="right"
+    else:
+        ha = "center"    
+    # Number of x-tick steps
+    steps=len(corr_vals)
     fig, axes = plt.subplots(figsize=figsize)
     if len(corr_vals.shape)==1:
         corr_vals =np.expand_dims(corr_vals,axis=0)
@@ -773,35 +791,36 @@ def plot_correlation_matrix(corr_vals, performed_tests, normalize_vals=False, fi
     # Set the x-axis ticks
     if xticklabels is not None:
         axes.set_xticks(np.arange(len(xticklabels)) + 0.5)
-        axes.set_xticklabels(xticklabels, rotation="horizontal", fontsize=10)
+        axes.set_xticklabels(xticklabels, rotation=xlabel_rotation, ha=ha,fontsize=10)
     elif corr_vals.shape[1]>1:
         axes.set_xticks(np.linspace(0, corr_vals.shape[1]-1, steps).astype(int)+0.5)
-        axes.set_xticklabels(np.linspace(1, corr_vals.shape[1], steps).astype(int), rotation="horizontal", fontsize=10)
+        axes.set_xticklabels(np.linspace(1, corr_vals.shape[1], steps).astype(int), rotation=xlabel_rotation, ha=ha, fontsize=10)
     else:
         axes.set_xticklabels([])
     # Set the y-axis ticks
     if corr_vals.shape[0]>1:
         axes.set_yticks(np.linspace(0, corr_vals.shape[0]-1, steps).astype(int)+0.5)
-        axes.set_yticklabels(np.linspace(1, corr_vals.shape[0], steps).astype(int), rotation="horizontal", fontsize=10)
+        axes.set_yticklabels(np.linspace(1, corr_vals.shape[0], steps).astype(int), rotation=xlabel_rotation, ha=ha, fontsize=10)
     else:
         axes.set_yticklabels([])
     # Create an axes on the right side of ax. The width of cax will be 5%
     # of ax and the padding between cax and ax will be fixed at 0.05 inch.
     
     divider = make_axes_locatable(axes)
-    cax = divider.append_axes("right", size="5%", pad=0.05)
+    cax = divider.append_axes("right", size="5%", pad=0.01)
     # Create a custom colorbar
     colorbar = plt.colorbar(heatmap.get_children()[0], cax=cax)
     # Set the ticks to range from the bottom to the top of the colorbar
     # Get the minimum and maximum values from your data
-    min_value = np.nanmin(corr_vals)
-    max_value = np.nanmax(corr_vals)
+    min_value = np.nanmin(corr_vals).round(2)
+    max_value = np.floor(np.nanmax(corr_vals) * 100) / 100 
 
     if normalize_vals:
-        colorbar.set_ticks(np.linspace(-1, 1, 9).round(2))
+        colorbar.set_ticks(np.linspace(-1, 1, 7).round(2))
     else:
         # Set ticks with at least 5 values evenly spaced between min and max
         colorbar.set_ticks(np.linspace(min_value, max_value, 7).round(2))
+        
 
         
     # Show the plot
@@ -1604,7 +1623,8 @@ def plot_p_values_over_time(pval, figsize=(8, 4), total_time_seconds=None, xlabe
     
 def plot_p_values_bar(pval,xticklabels=[],  figsize=(9, 4), num_colors=256, xlabel="",
                         ylabel="P-values (Log Scale)", title_text="Bar Plot",
-                        tick_positions=[0, 0.001, 0.01, 0.05, 0.1, 0.3, 1], top_adjustment=0.9, alpha = 0.05, pad_title=20):
+                        tick_positions=[0, 0.001, 0.01, 0.05, 0.1, 0.3, 1], top_adjustment=0.9, 
+                        alpha = 0.05, pad_title=20, xlabel_rotation=45, pval_text_hight_same=False):
     """
     Visualize a bar plot with LogNorm and a colorbar.
 
@@ -1694,9 +1714,19 @@ def plot_p_values_bar(pval,xticklabels=[],  figsize=(9, 4), num_colors=256, xlab
     #plt.legend().set_visible(False)
 
     # Add data labels on top of the bars
-    for bar in bars:
-        yval = bar.get_height()
-        plt.text(bar.get_x() + bar.get_width()/2, yval + 0.5, round(yval, 3), ha='center', va='bottom', color='black', fontweight='bold')
+    if pval_text_hight_same:
+        yval_hight_list=[]
+        for bar in bars:
+            # Get the yval_heights
+            yval_hight_list.append(bar.get_height())
+        yval_height =np.max(np.array(yval_hight_list))
+        for bar in bars:
+            yval = bar.get_height()
+            plt.text(bar.get_x() + bar.get_width()/2, yval_height + 0.5, round(yval, 3), ha='center', va='bottom', color='black', fontweight='bold')
+    else:
+        for bar in bars:
+            yval = bar.get_height()
+            plt.text(bar.get_x() + bar.get_width()/2, yval + 0.5, round(yval, 3), ha='center', va='bottom', color='black', fontweight='bold')
 
 
     # Set y-axis to log scale
@@ -1708,6 +1738,14 @@ def plot_p_values_bar(pval,xticklabels=[],  figsize=(9, 4), num_colors=256, xlab
     axes.set_ylabel(ylabel, fontsize=12)
     axes.set_title(title_text, fontsize=14, pad=pad_title)
 
+    # Set xticks and rotate xtick labels
+    axes.set_xticks(np.arange(len(xticklabels)))
+    if xlabel_rotation==45:
+        ha ='right'
+        axes.set_xticklabels(xticklabels, rotation=xlabel_rotation, ha=ha)
+    else:
+        ha ='center'
+        axes.set_xticklabels(xticklabels, rotation=xlabel_rotation, ha=ha)
     # Mark specific values on the y-axis
     plt.yticks([0.001, 0.01, 0.05, 0.1, 0.3, 1], ['0.001', '0.01', '0.05', '0.1', '0.3', '1'])
 
@@ -1734,7 +1772,6 @@ def plot_p_values_bar(pval,xticklabels=[],  figsize=(9, 4), num_colors=256, xlab
 
     # Add extra space between title and plot
     plt.subplots_adjust(top=top_adjustment)
-    plt.xticks(rotation=45, ha='right')  # Rotate x-axis labels for better readability
     axes.spines['right'].set_visible(False)
     axes.spines['top'].set_visible(False)
     plt.tight_layout()
