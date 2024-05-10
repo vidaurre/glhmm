@@ -1057,8 +1057,25 @@ def deconfound_values(D_data, R_data, confounds=None):
         D_t = D_data - confounds @ np.linalg.pinv(confounds) @ D_data
         # Check if D_data is provided
         if R_data is not None:
-                    # Regressing out confounds from D_data
-            R_t = R_data - confounds @ np.linalg.pinv(confounds) @ R_data
+            # Create an NaN-matrix
+            R_t= np.empty((R_data.shape))
+            R_t[:] = np.nan
+            # Regressing out confounds from D_data
+            R_data = R_data - np.nanmean(R_data, axis=0)
+            q = R_data.shape[-1]
+
+            # Detect if there are ny nan values
+            if np.isnan(R_data).any():
+                for i in range(q):
+                    R_column = np.expand_dims(R_data[:, i],axis=1)
+                    valid_indices = np.all(~np.isnan(R_column), axis=1)
+                    true_indices = np.where(valid_indices)[0]
+                    # detect nan values per column
+                    # Set the elements at true_indices to one
+                    R_t[true_indices,i] = np.squeeze(R_column[valid_indices] - confounds[valid_indices] @ np.linalg.pinv(confounds[valid_indices]) @ R_column[valid_indices])
+            else:
+                # Perform matrix operation if there are no nan values
+                R_t = R_data - confounds @ np.linalg.pinv(confounds) @ R_data
         else:
             R_t = None # Centering D_data
             R_data = R_data - np.nanmean(R_data, axis=0)
