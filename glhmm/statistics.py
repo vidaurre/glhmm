@@ -1057,8 +1057,25 @@ def deconfound_values(D_data, R_data, confounds=None):
         D_t = D_data - confounds @ np.linalg.pinv(confounds) @ D_data
         # Check if D_data is provided
         if R_data is not None:
-                    # Regressing out confounds from D_data
-            R_t = R_data - confounds @ np.linalg.pinv(confounds) @ R_data
+            # Create an NaN-matrix
+            R_t= np.empty((R_data.shape))
+            R_t[:] = np.nan
+            # Regressing out confounds from D_data
+            R_data = R_data - np.nanmean(R_data, axis=0)
+            q = R_data.shape[-1]
+
+            # Detect if there are ny nan values
+            if np.isnan(R_data).any():
+                for i in range(q):
+                    R_column = np.expand_dims(R_data[:, i],axis=1)
+                    valid_indices = np.all(~np.isnan(R_column), axis=1)
+                    true_indices = np.where(valid_indices)[0]
+                    # detect nan values per column
+                    # Set the elements at true_indices to one
+                    R_t[true_indices,i] = np.squeeze(R_column[valid_indices] - confounds[valid_indices] @ np.linalg.pinv(confounds[valid_indices]) @ R_column[valid_indices])
+            else:
+                # Perform matrix operation if there are no nan values
+                R_t = R_data - confounds @ np.linalg.pinv(confounds) @ R_data
         else:
             R_t = None # Centering D_data
             R_data = R_data - np.nanmean(R_data, axis=0)
@@ -1117,16 +1134,15 @@ def initialize_permutation_matrices(method, Nperm, n_p, n_q, D_data, test_combin
         else:
             # Regression got a N by q matrix 
             test_statistics = np.zeros((Nperm, n_q))
-        # Include intercept
-        D_data_with_intercept = np.hstack((np.ones((D_data.shape[0], 1)), D_data))
+            
         # Define regularization parameter
         regularization = 0.001
         # Regularized parameter estimation
-        regularization_matrix = regularization * np.eye(D_data_with_intercept.shape[1])  # Regularization term for Ridge regression
+        regularization_matrix = regularization * np.eye(D_data.shape[1])  # Regularization term for Ridge regression
         
         # Fit the Ridge regression model
         # The projection matrix is then used to project permuted D-matrix (Din) to obtain the regression coefficients (beta)
-        proj = np.linalg.inv(D_data_with_intercept.T @ D_data_with_intercept + regularization_matrix) @ D_data_with_intercept.T  # Projection matrix for Ridge regression
+        proj = np.linalg.inv(D_data.T @ D_data + regularization_matrix) @ D_data.T  # Projection matrix for Ridge regression
     return test_statistics, proj
 
 def permutation_matrix_across_subjects(Nperm, D_t):
@@ -1603,7 +1619,7 @@ def test_statistics_calculations(Din, Rin, perm, test_statistics, proj, method, 
                     # Calculate F-statitics with no NaN values.
                     F_statistic =calculate_nan_regression_f_test(Din, Rin, proj, nan_values=True)
                      # Calculate the degrees of freedom for the model and residuals
-                    df_model = Din.shape[1]  # Number of predictors including intercept
+                    df_model = Din.shape[1]  # Number of predictors
                     df_resid = Din.shape[0] - df_model
                     p_value = 1 - f.cdf(F_statistic, df_model, df_resid)
                     # Get the base statistics and store p-values as z-scores to the test statistic
@@ -1616,7 +1632,6 @@ def test_statistics_calculations(Din, Rin, perm, test_statistics, proj, method, 
             else:
                 # Fit the original model 
                 beta = proj @ Rin  # Calculate regression_coefficients (beta)
-                Din = np.hstack((np.ones((Din.shape[0], 1)), Din))
                 # Calculate the predicted values
                 predicted_values = Din @ beta
                 # Calculate the residual sum of squares (rss)
@@ -1629,7 +1644,7 @@ def test_statistics_calculations(Din, Rin, perm, test_statistics, proj, method, 
                     # Calculate the explained sum of squares (ESS)
                     ess = tss - rss
                     # Calculate the degrees of freedom for the model and residuals
-                    df_model = Din.shape[1]  # Number of predictors including intercept
+                    df_model = Din.shape[1]  # Number of predictors
                     df_resid = Din.shape[0] - df_model
                     # Calculate the mean squared error (MSE) for the model and residuals
                     MSE_model = ess / df_model
@@ -1655,7 +1670,7 @@ def test_statistics_calculations(Din, Rin, perm, test_statistics, proj, method, 
                     # Calculate F-statitics with no NaN values.
                     F_statistic =calculate_nan_regression_f_test(Din, Rin, proj, nan_values=False)
                      # Calculate the degrees of freedom for the model and residuals
-                df_model = Din.shape[1]  # Number of predictors including intercept
+                df_model = Din.shape[1]  # Number of predictors
                 df_resid = Din.shape[0] - df_model
                 p_value = 1 - f.cdf(F_statistic, df_model, df_resid)
                 # Get the base statistics and store p-values as z-scores to the test statistic
@@ -1685,8 +1700,6 @@ def test_statistics_calculations(Din, Rin, perm, test_statistics, proj, method, 
                         else:
                             # Fit the original model 
                             beta = proj @ Rin[:, col]  # Calculate regression_coefficients (beta)
-                            # Include intercept
-                            Din = np.hstack((np.ones((Din.shape[0], 1)), Din))
                             # Calculate the predicted values
                             predicted_values = Din @ beta
                             # Calculate the residual sum of squares (rss)
@@ -2442,8 +2455,6 @@ def calculate_nan_regression(Din, Rin, proj):
         Array of R-squared values for each regression.
     """
     Rin = np.expand_dims(Rin, axis=1) if Rin.ndim==1 else Rin
-    # Include intercepts
-    Din = np.hstack((np.ones((Din.shape[0], 1)), Din))
     q = Rin.shape[-1]
     R2_test = np.zeros(q)
     # Calculate t-statistic for each pair of columns (D_column, R_data)
@@ -2487,8 +2498,6 @@ def calculate_nan_regression_f_test(Din, Rin, proj, nan_values=False):
     if nan_values:
         # Calculate F-statistics if there are Nan_values
         Rin = np.expand_dims(Rin, axis=1) if Rin.ndim==1 else Rin
-        # Include intercepts
-        Din = np.hstack((np.ones((Din.shape[0], 1)), Din))
         q = Rin.shape[-1]
         f_test = np.zeros(q)
         # Calculate t-statistic for each pair of columns (D_column, R_data)
@@ -2508,7 +2517,7 @@ def calculate_nan_regression_f_test(Din, Rin, proj, nan_values=False):
             # Calculate the explained sum of squares (ESS)
             ess = tss - rss
             # Calculate the degrees of freedom for the model and residuals
-            df_model = Din.shape[1]  # Number of predictors including intercept
+            df_model = Din.shape[1]  # Number of predictors
             df_resid = Din.shape[0] - df_model
             # Calculate the mean squared error (MSE) for the model and residuals
             MSE_model = ess / df_model
@@ -2521,8 +2530,6 @@ def calculate_nan_regression_f_test(Din, Rin, proj, nan_values=False):
         # Calculate f-statistics
         # Fit the original model 
         beta = proj @ Rin  # Calculate regression_coefficients (beta)
-        # Include intercept
-        Din = np.hstack((np.ones((Din.shape[0], 1)), Din))
         # Calculate the predicted values
         predicted_values = Din @ beta
         # Calculate the residual sum of squares (rss)
@@ -2533,7 +2540,7 @@ def calculate_nan_regression_f_test(Din, Rin, proj, nan_values=False):
         # Calculate the explained sum of squares (ESS)
         ess = tss - rss
         # Calculate the degrees of freedom for the model and residuals
-        df_model = Din.shape[1]  # Number of predictors including intercept
+        df_model = Din.shape[1]  # Number of predictors
         df_resid = Din.shape[0] - df_model
         # Calculate the mean squared error (MSE) for the model and residuals
         MSE_model = ess / df_model
