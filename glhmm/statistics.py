@@ -14,6 +14,7 @@ from sklearn.cross_decomposition import CCA
 from collections import Counter
 from skimage.measure import label, regionprops
 from scipy.stats import ttest_ind, f_oneway, pearsonr, f, norm
+from itertools import combinations
 
 
 def test_across_subjects(D_data, R_data, method="regression", Nperm=0, confounds = None, dict_family = None, verbose = True, test_statistics_option=False, FWER_correction=False, identify_categories=False, category_lim=10, test_combination=False):
@@ -560,7 +561,6 @@ def test_across_sessions_within_subject(D_data, R_data, idx_data, method="regres
     return result
 
 def test_across_visits(input_data, vpath_data, n_states, method="regression", Nperm=0, verbose = True, confounds=None, test_statistics_option=False, pairwise_statistic ="mean",FWER_correction=False, category_lim=None, identify_categories = False):
-    from itertools import combinations
     """
     Perform permutation testing across Viterbi path for continuous data.
     
@@ -745,14 +745,15 @@ def remove_nan_values(D_data, R_data, method):
     """
     Remove rows with NaN values from input data arrays.
 
-    Parameters
-    ----------
+    Parameters:
+    -----------
     D_data : numpy.ndarray
         Input data array containing features.
     R_data : numpy.ndarray
         Input data array containing response values.
-    Returns
-    -------
+    
+    Returns:
+    ---------
     D_data : numpy.ndarray
         Cleaned feature data (D_data) with NaN values removed.  
     R_data : numpy.ndarray
@@ -1367,11 +1368,13 @@ def generate_vpath_1D(vpath):
     into a 1D array where each element is the column index of the non-zero element.
 
     Parameters:
+    ------------
     vpath(numpy.ndarray):       
         A 2D array where each row has only one non-zero element. 
         Or a 1D array where each row represents a sate number
 
     Returns:
+    ------------
     vpath_array(numpy.ndarray): 
         A 1D array containing the column indices of the non-zero elements.
         If the input array is already 1D, it returns a copy of the input array.
@@ -1966,8 +1969,8 @@ def pval_cluster_based_correction(test_statistics, pval, alpha=0.05):
     It converts the test statistics into z-based statistics, allowing to threshold and identify cluster sizes.
     The p-value map from permutation testing results is then thresholded using the cluster size derived from z-based statistics.
         
-    Parameters
-    ----------
+    Parameters:
+    ------------
     test_statistics : (numpy.ndarray)
         2D or 3D array of test statistics. 2D if you have applied permutation testing using "regression".
     pval : (numpy.ndarray)
@@ -1975,7 +1978,7 @@ def pval_cluster_based_correction(test_statistics, pval, alpha=0.05):
     alpha : (float, optional), default=0.05
         Significance level for cluster-based correction.
 
-    Returns
+    Returns:
     ----------
     p_values : (numpy.ndarray)
         Corrected p-values after cluster-based correction.
@@ -2700,8 +2703,8 @@ def detect_significant_intervals(pval, alpha):
     """
     Detect intervals of consecutive True values in a boolean array.
 
-    Parameters
-    ----------
+    Parameters:
+    ------------
     p_values : numpy.ndarray
         An array of p-values. 
     alpha : float, optional
@@ -2714,6 +2717,7 @@ def detect_significant_intervals(pval, alpha):
         (inclusive) of each interval of consecutive True values.
 
     Example:
+    ----------
         array = [False, False, False, True, True, True, False, False, True, True, False]
         detect_intervals(array)
         output: [(3, 5), (8, 9)]
