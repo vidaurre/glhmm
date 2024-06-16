@@ -273,8 +273,6 @@ class glhmm():
 
                 vpath[tt,:] = qstar[tt_ind,j,:]
 
-
-
         return vpath   
     
 
@@ -363,12 +361,11 @@ class glhmm():
                     norm_wish_trace_W -= 0.5 * C[j] * np.sum(((X[:,jj] @ Cb)) * X[:,jj], axis=1)
             else:
                 ind = np.arange(p) * q
+                tmp = np.repeat(X,q,axis=1) @ (np.tile(C,(p,p)) * self.beta[k_beta]['Sigma'])
                 for j1 in range(q):
                     ind1 = ind + j1
-                    tmp = X @ self.beta[k_beta]['Sigma'][ind1,:]
-                    for j2 in range(q):
-                        ind2 = ind + j2
-                        norm_wish_trace_W -= 0.5 * C[j1,j2] * np.sum(tmp[:,ind2] * X, axis=1)
+                    norm_wish_trace_W = norm_wish_trace_W + (-0.5 * np.sum(tmp[:,ind1] * X, axis=1))
+
 
         # cov trace for mean
         norm_wish_trace_mean = np.zeros(T)
