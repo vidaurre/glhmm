@@ -13,6 +13,11 @@ import math
 
 from numba import njit
 
+try:
+    import cupy as cp
+except:
+    pass
+
 
 def slice_matrix(M,indices):
     """Slices rows of input matrix M based on indices array along axis 0.
@@ -132,7 +137,7 @@ def approximate_Xi(Gamma,indices):
 
 
 @njit
-def compute_alpha_beta(L,Pi,P):
+def compute_alpha_beta_serial(L,Pi,P):
     """Computes alpha and beta values and scaling factors.
 
     Parameters:
@@ -182,8 +187,87 @@ def compute_alpha_beta(L,Pi,P):
     return a,b,sc
 
 
-@njit
-def compute_qstar(L,Pi,P):
+def compute_alpha_beta_parallel(L,Pi,P,indices_individual,gpu_acceleration):
+    """Computes alpha and beta values and scaling factors.
+
+    Parameters:
+    -----------
+    L : array-like of shape (n_samples, n_timeseries, n_states)
+        The L matrix.
+    Pi : array-like with shape (n_states,)
+        The initial state probabilities.
+    P : array-like of shape (n_states, n_states)
+        The transition probabilities across states.
+    indices_individual : array-like of shape (n_timeseries,2)
+        The first and last index of the subject-specific time series
+    gpu_acceleration : int
+        GPU acceleration setting.
+
+    Returns:
+    --------
+    a : GPU array-like of shape (n_samples, n_states)
+        The alpha values.
+    b : GPU array-like of shape (n_samples, n_states)
+        The beta values.
+    sc : GPU array-like of shape (n_samples,)
+        The scaling factors.
+
+    """
+    gpu = gpu_acceleration > 0
+    xp = cp if gpu else np
+
+    T,N,K = L.shape
+    #minreal = sys.float_info.min
+    #maxreal = sys.float_info.max
+    Pi = xp.asarray(Pi)
+    if gpu_acceleration == 1:
+        L = cp.asarray(L)
+        P = cp.asarray(P)
+
+    a = xp.zeros((T,N,K))
+    sc = xp.zeros((T,N))
+
+    ## Compute alpha per time point for all subjects simultaneously.
+    a[0,:,:] = Pi * L[0,:,:]
+    del Pi
+
+    sc[0,:] = xp.sum(a[0,:,:],axis=1)
+    a[0,:,:] = a[0,:,:] / xp.expand_dims(sc[0,:],axis=1)
+
+    for t in range(1,T):
+        a[t,:,:] = xp.einsum('ij,jk,ik->ik',a[t-1,:,:],P,L[t,:,:])
+        sc[t,:] = xp.einsum('ij->i',a[t,:,:])
+        #if sc[t]<minreal: sc[t] = minreal
+        a[t,:,:] = a[t,:,:] / xp.expand_dims(sc[t,:],axis=1)
+
+    ## bottom-align L and the scaling matrix to estiamte beta.
+    L_ = roll_by_vector(L,T-indices_individual[:,1],axis=0,gpu_enabled=gpu)
+    del L
+
+    sc_ = roll_by_vector(sc,T-indices_individual[:,1],axis=0,gpu_enabled=gpu)
+    b_ = xp.zeros((T,N,K))
+
+    b_[T-1,:,:] = xp.ones((1,N,K)) / xp.expand_dims(sc_[T-1,:],axis=1)
+    for t in range(T-2,-1,-1):
+        b_[t,:,:] = xp.einsum('ij,ij,kj->ik',b_[t+1,:,:],L_[t+1,:,:],P) / xp.expand_dims(sc_[t,:],axis=1)
+        #bad = b[t,:]>maxreal
+        #if bad.sum()>0: b[t,bad] = maxreal
+    del P, sc_, L_
+
+    ## top-align beta for output.
+    b = roll_by_vector(b_,indices_individual[:,1],axis=0,gpu_enabled=gpu)
+    del b_
+
+    if gpu:
+        sc = cp.asnumpy(sc)
+        if gpu_acceleration == 1:
+            a = cp.asnumpy(a)
+            b = cp.asnumpy(b)
+
+    return a,b,sc
+
+
+def compute_qstar_serial(L,Pi,P):
     """Compute the most probable state sequence.
 
     Parameters:
@@ -211,12 +295,18 @@ def compute_qstar(L,Pi,P):
     delta[0,:] = delta[0,:] / np.sum(delta[0,:])
 
     for t in range(1,T):
+        v = delta[t-1,:] * P.T
+        psi[t,:] = np.argmax(v,axis=1)
+        delta[t,:] = v[range(K),psi[t,:]] * L[t,:]
+        delta[t,:] = delta[t,:] / np.sum(delta[t,:])
+
+    """for t in range(1,T):
         for k in range(K):
             v = delta[t-1,:] * P[:,k]
             mv = np.amax(v)
             delta[t,k] = mv * L[t,k]
             psi[t,k] = np.where(mv==v)[0][0]
-        delta[t,:] = delta[t,:] / np.sum(delta[t,:])
+        delta[t,:] = delta[t,:] / np.sum(delta[t,:]) """
 
     id = np.where(delta[-1,:]==np.amax(delta[-1,:]))[0][0]
     qstar[T-1,id] = 1
@@ -225,6 +315,52 @@ def compute_qstar(L,Pi,P):
         id0 = np.where(qstar[t+1,:]==1)[0][0]
         id = psi[t+1,id0]
         qstar[t,id] = 1
+
+    return qstar
+
+def compute_qstar_parallel(L,Pi,P,indices_individual):
+    """Compute the most probable state sequence.
+
+    Parameters:
+    -----------
+    L : array-like of shape (n_samples, n_states)
+        The L matrix.
+    Pi : array-like with shape (n_states,)
+        The initial state probabilities.
+    P : array-like of shape (n_states, n_states)
+        The transition probabilities across states.
+
+    Returns:
+    --------
+    qstar : array-like of shape (n_samples, n_states)
+        The most probable state sequence.
+
+    """
+    T,N,K = L.shape
+
+    delta = np.zeros((T,N,K))
+    psi = np.zeros((T,N,K)).astype(np.int64)
+    qstar = np.zeros((T,N,K))
+
+    delta[0,:,:] = Pi * L[0,:,:]
+    delta[0,:,:] = delta[0,:,:] / np.expand_dims(np.sum(delta[0,:,:],axis=1),axis=1)
+
+    for t in range(1,T):
+        v = np.expand_dims(delta[t-1,:,:],axis=1) * P.T
+        psi[t,:,:] = np.argmax(v,axis=2)
+        delta[t,:,:] = v[np.expand_dims(range(N),axis=1),np.expand_dims(range(K),axis=0),psi[t,:,:]] * L[t,:,:]
+        delta[t,:,:] = delta[t,:,:] / np.expand_dims(np.sum(delta[t,:,:],axis=1),axis=1)
+
+    delta_ = roll_by_vector(delta,T-indices_individual[:,1],axis=0)
+
+    id = np.argmax(delta_[-1,:,:],axis=1)
+
+    qstar[T-1,range(N),id] = 1
+
+    for t in range(T-2,-1,-1):
+        id0 = np.argmax(qstar[t+1,:,:]==1,axis=1)
+        id = psi[t+1,range(N),id0]
+        qstar[t,range(N),id] = 1
 
     return qstar
 
@@ -511,3 +647,33 @@ def padGamma(Gamma, T, options):
 
     return Gamma  # Return the adjusted Gamma
 
+def roll_by_vector(arr, shifts, axis=1,gpu_enabled=False):
+    """Apply an independent roll for each dimensions of a single axis.
+
+    Parameters
+    ----------
+    arr : np.ndarray
+        Array of any shape.
+
+    shifts : np.ndarray
+        How many shifting to use for each dimension. Shape: `(arr.shape[axis],)`.
+
+    axis : int
+        Axis along which elements are shifted. 
+
+    gpu_enabled : bool
+        Whether input arrays are loaded in the GPU or not.
+    """
+    xp = cp if gpu_enabled else np
+
+    shifts = xp.asarray(shifts)
+
+    arr = xp.swapaxes(arr,axis,-1)
+    all_idcs = xp.ogrid[[slice(0,n) for n in arr.shape]]
+
+    # Convert to a positive shift
+    all_idcs[-1] = all_idcs[-1] - xp.expand_dims(shifts,axis=1)
+
+    result = arr[tuple(all_idcs)]
+    arr = xp.swapaxes(result,-1,axis)
+    return arr

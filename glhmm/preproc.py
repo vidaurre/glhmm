@@ -9,12 +9,13 @@ import math
 import numpy as np
 import warnings
 from sklearn.decomposition import PCA
+from sklearn.decomposition import FastICA
 from scipy import signal
 
 from . import auxiliary
 # import auxiliary
 
-def apply_pca(X,d,whitening=False,exact=True):
+def apply_pca(X,d,exact=True):
     """Applies PCA to the input data X.
 
     Parameters:
@@ -25,8 +26,6 @@ def apply_pca(X,d,whitening=False,exact=True):
         If int, the number of components to keep.
         If float, the percentage of explained variance to keep.
         If array-like of shape (n_parcels, n_components), the transformation matrix.
-    whitening : bool, default=False
-        Whether to whiten the transformed data.
     exact : bool, default=True
         Whether to use full SVD solver for PCA.
 
@@ -38,16 +37,16 @@ def apply_pca(X,d,whitening=False,exact=True):
     if type(d) is np.ndarray:
         X -= np.mean(X,axis=0)
         X = X @ d
-        if whitening: X /= np.std(X,axis=0)
+        # if whitening: X /= np.std(X,axis=0)
         return X
 
     svd_solver = 'full' if exact else 'auto'
     if d >= 1: 
-        pcamodel = PCA(n_components=d,whiten=whitening,svd_solver=svd_solver)
+        pcamodel = PCA(n_components=d,svd_solver=svd_solver)
         pcamodel.fit(X)
         X = pcamodel.transform(X)
     else: 
-        pcamodel = PCA(whiten=whitening,svd_solver=svd_solver)
+        pcamodel = PCA(svd_solver=svd_solver)
         pcamodel.fit(X)
         ncomp = np.where(np.cumsum(pcamodel.explained_variance_ratio_)>=d)[0][0] + 1
         X = pcamodel.transform(X)
@@ -62,15 +61,56 @@ def apply_pca(X,d,whitening=False,exact=True):
     return X
 
 
+def apply_ica(X,d,algorithm='parallel'):
+    """Applies ICA to the input data X.
+
+    Parameters:
+    -----------
+    X : array-like of shape (n_samples, n_parcels)
+        The input data to be transformed.
+    d : int or float
+        If int, the number of components to keep.
+        If float, the percentage of explained variance to keep (according to a PCA decomposition)
+    algorithm : {"parallel", "deflation"}, default="parallel"
+        Specify which algorithm to use for FastICA.
+
+    Returns:
+    --------
+    X_transformed : array-like of shape (n_samples, n_components)
+        The transformed data after applying ICA.
+    """
+
+    if d < 1:
+        pcamodel = PCA()
+        pcamodel.fit(X)
+        ncomp = np.where(np.cumsum(pcamodel.explained_variance_ratio_)>=d)[0][0] + 1
+    else: 
+        ncomp = d
+
+    icamodel = FastICA(n_components=ncomp,whiten='unit-variance',algorithm=algorithm)
+    icamodel.fit(X)
+    X = icamodel.transform(X)
+
+    # sign convention equal to Matlab's
+    for j in range(ncomp):
+        jj = np.where(np.abs(X[:,j]) == np.abs(np.max(X[:,j])) )[0][0]
+        if X[jj,j] < 0: X[:,j] *= -1
+
+    return X
+
+
 def preprocess_data(data,indices,
         fs = 1, # frequency of the data
         standardise=True, # True / False
         filter=None, # Tuple with low-pass high-pass thresholds, or None
         detrend=False, # True / False
         onpower=False, # True / False
-        pca=None, # Number of components, % explained variance, or None
-        whitening=False, # True / False
-        exact_pca=True,
+        onphase=False, # True / False
+        pca=None, # Number of principal components, % explained variance, or None
+        exact_pca=True, # related to how to run PCA
+        ica=None, # Number of independent components, % explained variance, or None (if specified, pca is not used)
+        ica_algorithm='parallel', # related to how to run PCA
+        post_standardise=None, # True / False, standardise the ICA/PCA components?
         downsample=None # new frequency, or None
         ):
     
@@ -101,16 +141,29 @@ def preprocess_data(data,indices,
     onpower : bool, default=False
         Whether to calculate the power of the input data using the Hilbert transform.
 
+    onphase : bool, default=False
+        Whether to calculate the phase of the input data using the Hilbert transform.
+        If both onpower and onphase are set to True, power and phase will be included as separate columns in the output array
+
     pca : int or float or None, default=None
         If int, the number of components to keep after applying PCA.
-        If float, the percentage of explained variance to keep after applying PCA.
+        If float, the percentage of explained variance to keep after applying PCA (must be >=0 and >=1)
         If None, no PCA will be applied.
-
-    whitening : bool, default=False
-        Whether to whiten the input data after applying PCA.
 
     exact_pca : bool, default=True
         Whether to use full SVD solver for PCA.
+        
+    ica : int or float or None, default=None
+        determines whether to apply ICA (if pca is also specified, it is overridden, and only ica is used)
+        If int, the number of independent components to estimate
+        If float, the number of components is given by the percentage of explained variance from PCA.
+        If None, no PCA will be applied.       
+
+    ica_algorithm : {"parallel", "deflation"}, default="parallel"
+        Specify which algorithm to use for ICA (based on FastICA).     
+
+    post_standardise : bool, default=False if pca is used; =True if ica is used
+        Whether to standardize after applying PCA/ICA (recommended when using the TDE-HMM)
 
     downsample : int or float or None, default=None
         The new frequency of the input data after downsampling.
@@ -153,14 +206,42 @@ def preprocess_data(data,indices,
             t = np.arange(indices[j,0],indices[j,1]) 
             data[t,:] = signal.detrend(data[t,:], axis=0)       
 
-    if onpower:
+    if onpower and not onphase:
         for j in range(N):
             t = np.arange(indices[j,0],indices[j,1]) 
             data[t,:] = np.abs(signal.hilbert(data[t,:], axis=0))
 
-    if pca != None:
-        data = apply_pca(data,pca,whitening,exact_pca)
+    if onphase and not onpower:
+        for j in range(N):
+            t = np.arange(indices[j,0],indices[j,1]) 
+            data[t,:] = np.unwrap(np.angle(signal.hilbert(data[t,:], axis=0)))
+
+    if onpower and onphase:
+        data = np.concatenate((data,data),1)
+        for j in range(N):
+            t = np.arange(indices[j,0],indices[j,1]) 
+            analytical_signal = signal.hilbert(data[t,:p], axis=0)
+            data[t,:p] = np.abs(analytical_signal)
+            data[t,p:] = np.unwrap(np.angle(analytical_signal))
         p = data.shape[1]
+
+    if (pca != None) and (ica is None):
+        data = apply_pca(data,pca,exact_pca)
+        p = data.shape[1]
+
+    if ica != None:
+        data = apply_ica(data,ica,ica_algorithm)
+        p = data.shape[1]       
+
+    if post_standardise is None:
+        if ica: post_standardise = True
+        else: post_standardise = False
+
+    if (pca or ica) and post_standardise:
+        for j in range(N):
+            t = np.arange(indices[j,0],indices[j,1]) 
+            data[t,:] -= np.mean(data[t,:],axis=0)
+            data[t,:] /= np.std(data[t,:],axis=0)          
         
     if downsample != None:
         factor = downsample / fs

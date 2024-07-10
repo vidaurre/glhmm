@@ -14,6 +14,7 @@ import os
 import sys
 sys.path.insert(0, os.path.abspath('..'))
 
+
 # -- Project information -----------------------------------------------------
 
 project = 'GLHMM'
@@ -56,4 +57,13 @@ html_theme = 'furo'
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
-html_static_path = ['_static']
+#html_static_path = ['_static']
+
+
+# Set the required version of Sphinx
+needs_sphinx = '5.0'
+
+
+# Add nbsphinx_kernel_name option
+nbsphinx_kernel_name = 'python3'
+
