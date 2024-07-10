@@ -7,10 +7,7 @@ import numpy as np
 import pandas as pd
 import random
 import math
-<<<<<<< HEAD
 import warnings
-=======
->>>>>>> cc5d59436c4f1d6de732df290698c9c0c01ee873
 from tqdm import tqdm
 from glhmm.palm_functions import *
 from statsmodels.stats import multitest as smt
@@ -19,7 +16,6 @@ from collections import Counter
 from skimage.measure import label, regionprops
 from scipy.stats import ttest_ind, f_oneway, pearsonr, f, norm
 from itertools import combinations
-<<<<<<< HEAD
 from sklearn.model_selection import train_test_split
 
 
@@ -27,11 +23,6 @@ def test_across_subjects(D_data, R_data, method="regression", Nperm=0, confounds
                          dict_family = None, verbose = True, test_statistics_option=False, 
                          FWER_correction=False, identify_categories=False, category_lim=10, 
                          test_combination=False):
-=======
-
-
-def test_across_subjects(D_data, R_data, method="regression", Nperm=0, confounds = None, dict_family = None, verbose = True, test_statistics_option=False, FWER_correction=False, identify_categories=False, category_lim=10, test_combination=False):
->>>>>>> cc5d59436c4f1d6de732df290698c9c0c01ee873
     """
     Perform permutation testing across subjects. Family structure can be taken into account by inputting "dict_family".
     Three options are available to customize the statistical analysis to a particular research questions:
@@ -45,11 +36,7 @@ def test_across_subjects(D_data, R_data, method="regression", Nperm=0, confounds
         Input data array of shape that can be either a 2D array or a 3D array.
         For 2D, the data is represented as a (n, p) matrix, where n represents 
         the number of subjects, and p represents the number of predictors.
-<<<<<<< HEAD
         For 3D array, it has a shape (T, n, p), where the first dimension 
-=======
-        For 3D array, it has a shape (T, n, q), where the first dimension 
->>>>>>> cc5d59436c4f1d6de732df290698c9c0c01ee873
         represents timepoints, the second dimension represents the number of subjects, 
         and the third dimension represents features. 
         For 3D, permutation testing is performed per timepoint for each subject.              
@@ -85,16 +72,11 @@ def test_across_subjects(D_data, R_data, method="regression", Nperm=0, confounds
     FWER_correction (bool, optional), default=False: 
         Specify whether to perform family-wise error rate (FWER) correction using the MaxT method.
         Note: FWER_correction is not necessary if pval_correction is applied later for multiple comparison p-value correction.                  
-<<<<<<< HEAD
     identify_categories: bool or list or numpy.ndarray, optional, default=False
-=======
-    identify_categories : bool or list or numpy.ndarray, optional, default=True
->>>>>>> cc5d59436c4f1d6de732df290698c9c0c01ee873
         If True, automatically identify categorical columns. If list or ndarray, use the provided list of column indices.    
     category_lim : int or None, optional, default=10
         Maximum allowed number of categories for F-test. Acts as a safety measure for columns 
         with integer values, like age, which may be mistakenly identified as multiple categories.        
-<<<<<<< HEAD
     test_combination (bool or str, optional), default=False:
             Calculates geometric means of p-values using permutation testing.
             This is useful for summarizing statistical significance across multiple tests in experimental conditions.
@@ -105,17 +87,6 @@ def test_across_subjects(D_data, R_data, method="regression", Nperm=0, confounds
                 - True (bool): Returns a single geometric mean value (1 by 1).
                 - "across_rows" (str): Calculates geometric means aggregated along each row, returns mean value for each column (1 by p).
                 - "across_columns" (str): Calculates geometric means aggregated along each column, returns mean value for each row (1 by q).   
-=======
-    test_combination, default=False:       
-        Calculates geometric means of p-values using permutation testing.
-        In the context of p-values from permutation testing, calculating geometric means
-        can be useful for summarizing results across multiple tests to get insights into the overall
-        statistical significance across experimental conditions.
-        Valid options are:
-            - True (bool): Return a single geometric mean value.
-            - "across_rows" (str): Calculates geometric means aggregated across rows.
-            - "across_columns" (str): Calculates geometric means aggregated across columns. 
->>>>>>> cc5d59436c4f1d6de732df290698c9c0c01ee873
                                           
     Returns:
     ----------  
@@ -132,11 +103,7 @@ def test_across_subjects(D_data, R_data, method="regression", Nperm=0, confounds
             - method=="cca": (T, Nperm, 1)
         'base_statistics': base statistics values of a giving test
         'test_type': the type of test, which is the name of the function
-<<<<<<< HEAD
         'method': the method used for analysis Valid options are "regression", "univariate", or "cca".
-=======
-        'method': the method used for analysis Valid options are "regression", "univariate", or "cca", "one_vs_rest" and "state_pairs".
->>>>>>> cc5d59436c4f1d6de732df290698c9c0c01ee873
         'max_correction': Specifies if FWER has been applied using MaxT, can either output True or False.  
         'performed_tests': A dictionary that marks the columns in the test_statistics or p-value matrix corresponding to the (q dimension) where t-tests or F-tests have been performed.
         'Nperm' :The number of permutations that has been performed.   
@@ -247,14 +214,10 @@ def test_across_subjects(D_data, R_data, method="regression", Nperm=0, confounds
 
 
 
-<<<<<<< HEAD
 def test_across_trials_within_session(D_data, R_data, idx_data, method="regression", Nperm=0, confounds=None, 
                                       trial_timepoints=None,verbose=True, test_statistics_option=False, 
                                       FWER_correction=False, identify_categories=False, category_lim=10, 
                                       test_combination=False):
-=======
-def test_across_trials_within_session(D_data, R_data, idx_data, method="regression", Nperm=0, confounds=None, trial_timepoints=None,verbose=True, test_statistics_option=False, FWER_correction=False, identify_categories=False, category_lim=10, test_combination=False):
->>>>>>> cc5d59436c4f1d6de732df290698c9c0c01ee873
     """
     Perform permutation testing across different trials within a session. 
     An example could be if we want to test if any learning is happening during a session that might speed up times.
@@ -282,14 +245,9 @@ def test_across_trials_within_session(D_data, R_data, idx_data, method="regressi
         represents timepoints, the second dimension represents the number of trials, 
         and the third dimension represents a dependent variable                    
     idx_data (numpy.ndarray): 
-<<<<<<< HEAD
         An array containing the indices for each session. The array can be either 1D or 2D:
         For a 1D array, a sequence of integers where each integer labels the session number. For example, [1, 1, 1, 1, 2, 2, 2, ..., N, N, N, N, N, N, N, N].
         For a 2D array, each row represents the start and end indices for the trials in a given session, with the format [[start1, end1], [start2, end2], ..., [startN, endN]].  
-=======
-        The indices for each trial within the session. It should be a 2D array where each row
-        represents the start and end index for a trial.    
->>>>>>> cc5d59436c4f1d6de732df290698c9c0c01ee873
     method (str, optional), default="regression": 
         The statistical method to be used for the permutation test. Valid options are
         "regression", "univariate", or "cca".
@@ -308,17 +266,12 @@ def test_across_trials_within_session(D_data, R_data, idx_data, method="regressi
     FWER_correction (bool, optional), default= False: 
         Specify whether to perform family-wise error rate (FWER) correction for multiple comparisons using the MaxT method.
         Note: FWER_correction is not necessary if pval_correction is applied later for multiple comparison p-value correction.                        
-<<<<<<< HEAD
     identify_categories, default=False: 
-=======
-    identify_categories, default=True: 
->>>>>>> cc5d59436c4f1d6de732df290698c9c0c01ee873
         bool or list or numpy.ndarray, optional.
         If True, automatically identify categorical columns. If list or ndarray, use the provided list of column indices.    
     category_lim : int or None, optional, default=None
         Maximum allowed number of categories for F-test. Acts as a safety measure for columns 
         with integer values, like age, which may be mistakenly identified as multiple categories.     
-<<<<<<< HEAD
     test_combination (bool or str, optional), default=False:
             Calculates geometric means of p-values using permutation testing.
             This is useful for summarizing statistical significance across multiple tests in experimental conditions.
@@ -330,13 +283,6 @@ def test_across_trials_within_session(D_data, R_data, idx_data, method="regressi
                 - "across_rows" (str): Calculates geometric means aggregated along each row, returns mean value for each column (1 by p).
                 - "across_columns" (str): Calculates geometric means aggregated along each column, returns mean value for each row (1 by q).                                         
     
-=======
-    test_combination, default=False:      
-        Calculates geometric means of p-values using permutation testing. Valid options are:
-        - True (bool): Return a single geometric mean per time point.
-        - "across_rows" (str): Calculate geometric means for each row.
-        - "across_columns" (str): Calculate geometric means for each column.                                                
->>>>>>> cc5d59436c4f1d6de732df290698c9c0c01ee873
     Returns:
     ----------  
     result (dict): A dictionary containing the following keys. Depending on the `test_statistics_option` and `method`, it can return the p-values, 
@@ -352,11 +298,7 @@ def test_across_trials_within_session(D_data, R_data, idx_data, method="regressi
         'base_statistics': base statistics of a given test
         'test_type': the type of test, which is the name of the function
         'method': the method used for analysis Valid options are:
-<<<<<<< HEAD
                 "regression", "univariate", or "cca".
-=======
-                "regression", "univariate", or "cca", "one_vs_rest" and "state_pairs".
->>>>>>> cc5d59436c4f1d6de732df290698c9c0c01ee873
         'max_correction': Specifies if FWER has been applied using MaxT, can either output True or False.
         'Nperm' :The number of permutations that has been performed.   
     """
@@ -380,10 +322,7 @@ def test_across_trials_within_session(D_data, R_data, idx_data, method="regressi
             raise ValueError("method is set to 'regression' and 'test_combination' is set to 'across_columns' or 'across_rows"
                          "If you want to perform 'test_combination' while doing 'regression' then please set 'test_combination' to 'True'.")
 
-<<<<<<< HEAD
 
-=======
->>>>>>> cc5d59436c4f1d6de732df290698c9c0c01ee873
     if FWER_correction and test_combination in [True, "across_columns", "across_rows"]:
        # Raise an exception and stop function execution
         raise ValueError("'FWER_correction' is set to True and 'test_combination' is either True, 'columns', or 'rows'. "
@@ -421,13 +360,8 @@ def test_across_trials_within_session(D_data, R_data, idx_data, method="regressi
                 idx_array = idx_array.copy()[~nan_mask]
                 idx_data_in=get_indices_update_nan(idx_data_in,~nan_mask)
                 
-<<<<<<< HEAD
         # Create test_statistics and the regularized pseudo-inverse of D_data
         test_statistics, reg_pinv = initialize_permutation_matrices(method, Nperm, n_p, n_q, D_t, test_combination)
-=======
-        # Create test_statistics and pval_perms based on method
-        test_statistics, proj = initialize_permutation_matrices(method, Nperm, n_p, n_q, D_t, test_combination)
->>>>>>> cc5d59436c4f1d6de732df290698c9c0c01ee873
     
 
         # Calculate permutation matrix of D_t 
@@ -468,14 +402,10 @@ def test_across_trials_within_session(D_data, R_data, idx_data, method="regressi
     
     return result
 
-<<<<<<< HEAD
 def test_across_sessions_within_subject(D_data, R_data, idx_data, method="regression", Nperm=0, confounds=None, 
                                         verbose = True, test_statistics_option=False, FWER_correction=False, 
                                         test_combination=False, identify_categories=False, 
                                         category_lim=10):
-=======
-def test_across_sessions_within_subject(D_data, R_data, idx_data, method="regression", Nperm=0, confounds=None, verbose = True, test_statistics_option=False,FWER_correction=False, identify_categories=False, category_lim=10, test_combination=False):
->>>>>>> cc5d59436c4f1d6de732df290698c9c0c01ee873
     """
     Perform permutation testing across sessions within the same subject, while keeping the trial order the same.
     This procedure is particularly valuable for investigating the effects of long-term treatments or monitoring changes in brain responses across sessions over time.
@@ -501,14 +431,9 @@ def test_across_sessions_within_subject(D_data, R_data, idx_data, method="regres
         represents timepoints, the second dimension represents the number of trials, 
         and the third dimension represents a dependent variable                   
     idx_data (numpy.ndarray): 
-<<<<<<< HEAD
         An array containing the indices for each session. The array can be either 1D or 2D:
         For a 1D array, a sequence of integers where each integer labels the session number. For example, [1, 1, 1, 1, 2, 2, 2, ..., N, N, N, N, N, N, N, N].
         For a 2D array, each row represents the start and end indices for the trials in a given session, with the format [[start1, end1], [start2, end2], ..., [startN, endN]].  
-=======
-        The indices for each trial within the session. It should be a 2D array where each row
-        represents the start and end index for a trial.    
->>>>>>> cc5d59436c4f1d6de732df290698c9c0c01ee873
     method (str, optional), default="regression": 
         The statistical method to be used for the permutation test. Valid options are
         "regression", "univariate", or "cca".
@@ -525,7 +450,6 @@ def test_across_sessions_within_subject(D_data, R_data, idx_data, method="regres
     FWER_correction (bool, optional), default=False: 
         Specify whether to perform family-wise error rate (FWER) correction for multiple comparisons using the MaxT method.
         Note: FWER_correction is not necessary if pval_correction is applied later for multiple comparison p-value correction.
-<<<<<<< HEAD
     test_combination (bool or str, optional), default=False:
             Calculates geometric means of p-values using permutation testing.
             This is useful for summarizing statistical significance across multiple tests in experimental conditions.
@@ -540,18 +464,6 @@ def test_across_sessions_within_subject(D_data, R_data, idx_data, method="regres
         Maximum allowed number of categories for F-test. Acts as a safety measure for columns 
         with integer values, like age, which may be mistakenly identified as multiple categories.                              
     
-=======
-    identify_categories : bool or list or numpy.ndarray, optional, default=True.
-        If True, automatically identify categorical columns. If list or ndarray, use the provided list of column indices.    
-    category_lim : int or None, optional, default=None.
-        Maximum allowed number of categories for F-test. Acts as a safety measure for columns 
-        with integer values, like age, which may be mistakenly identified as multiple categories.
-    test_combination, default=False:       
-        Calculates geometric means of p-values using permutation testing. Valid options are:
-        - True (bool): Return a single geometric mean per time point.
-        - "across_rows" (str): Calculate geometric means for each row.
-        - "across_columns" (str): Calculate geometric means for each column.                         
->>>>>>> cc5d59436c4f1d6de732df290698c9c0c01ee873
     Returns:
     ----------  
     result (dict): 
@@ -565,28 +477,14 @@ def test_across_sessions_within_subject(D_data, R_data, idx_data, method="regres
             - method=="Regression": (T, Nperm, p)
             - method=="univariate": (T, Nperm, p, q)
             - method=="cca": (T, Nperm, 1)
-<<<<<<< HEAD
         'base_statistics': base statistics of a given test
         'test_type': the type of test, which is the name of the function
         'method': the method used for analysis Valid options are
                 "regression", "univariate", or "cca" (default: "regression").
-=======
-        'base_statistics': Correlation coefficients for the test with shape (T, p, q) if method=="univariate", else None.
-        'test_type': the type of test, which is the name of the function
-        'method': the method used for analysis Valid options are
-                "regression", "univariate", or "cca", "one_vs_rest" and "state_pairs" (default: "regression").
->>>>>>> cc5d59436c4f1d6de732df290698c9c0c01ee873
         'max_correction': Specifies if FWER has been applied using MaxT, can either output True or False.
         'Nperm' :The number of permutations that has been performed.
                   
     """ 
-    # Check if differences between consecutive elements of idx_session are equal
-    if not np.all(np.diff(idx_data) == np.diff(idx_data)[0]):
-        raise ValueError("""
-            The number of trials within a session are different across sessions. 
-            Update your data so that the number of trials is the same within each session; 
-            otherwise, you cannot run the function 'test_across_sessions_within_subject'.
-            """)
     # Initialize variable
     category_columns = []  
     test_type = 'test_across_sessions'  
@@ -618,7 +516,6 @@ def test_across_sessions_within_subject(D_data, R_data, idx_data, method="regres
 
     # Calculate the maximum number of permutations
     max_permutations = math.factorial(len(np.unique(idx_array)))
-<<<<<<< HEAD
     # Using scientific notation format with string formatting
     exp_notation = "{:.2e}".format(max_permutations)
     if Nperm > max_permutations:
@@ -626,13 +523,6 @@ def test_across_sessions_within_subject(D_data, R_data, idx_data, method="regres
                     "Reduce the number of permutations to the maximum number of permutations to run the test properly.")
     if verbose:
         print(f"Maximum number of permutations with {len(np.unique(idx_array))} sessions is: {exp_notation}")
-=======
-    if Nperm > max_permutations:
-        raise ValueError(f"Maximum number of permutations with {len(np.unique(idx_array))} sessions is: {max_permutations}."
-                         "Reduce the number of permutations to the maximum number of permutations to run the test probably.")
-    if verbose:
-        print(f"Maximum number of permutations with {len(np.unique(idx_array))} sessions is: {max_permutations}")
->>>>>>> cc5d59436c4f1d6de732df290698c9c0c01ee873
     
     # Get input shape information
     n_T, _, n_p, n_q, D_data, R_data = get_input_shape(D_data, R_data, verbose)
@@ -642,21 +532,14 @@ def test_across_sessions_within_subject(D_data, R_data, idx_data, method="regres
 
     # Initialize arrays based on shape of data shape and defined options
     pval, base_statistics, test_statistics_list = initialize_arrays(R_data, n_p, n_q, n_T, method, Nperm, test_statistics_option, test_combination)
-<<<<<<< HEAD
 
-=======
->>>>>>> cc5d59436c4f1d6de732df290698c9c0c01ee873
     for t in tqdm(range(n_T)) if n_T > 1 & verbose==True else range(n_T):
         # If confounds exist, perform confound regression on the dependent variables
         D_t, R_t = deconfound_values(D_data[t, :],R_data[t, :], confounds)
         
         # Removing rows that contain nan-values
         if method == "regression" or method == "cca":
-<<<<<<< HEAD
             D_t, R_t,_ = remove_nan_values(D_t, R_t, method)
-=======
-            D_t, R_t, _ = remove_nan_values(D_t, R_t, method)
->>>>>>> cc5d59436c4f1d6de732df290698c9c0c01ee873
 
         # Create test_statistics and pval_perms based on method
         test_statistics, reg_pinv = initialize_permutation_matrices(method, Nperm, n_p, n_q, D_t, test_combination, permute_beta)
@@ -682,13 +565,9 @@ def test_across_sessions_within_subject(D_data, R_data, idx_data, method="regres
     base_statistics =np.squeeze(base_statistics) if base_statistics is not None  else []
     test_statistics_list =np.squeeze(test_statistics_list) if test_statistics_list is not None  else []
     Nperm = 0 if Nperm==1 else Nperm    
-<<<<<<< HEAD
     if np.isscalar(pval) is True:
         print("Exporting the base statistics only")
     elif np.sum(np.isnan(pval))>0 & verbose:
-=======
-    if np.sum(np.isnan(pval))>0 & verbose:
->>>>>>> cc5d59436c4f1d6de732df290698c9c0c01ee873
         print("Warning: Permutation testing resulted in p-values equal to NaN.")
         print("This may indicate an issue with the input data. Please review your data.")
               
@@ -705,14 +584,10 @@ def test_across_sessions_within_subject(D_data, R_data, idx_data, method="regres
         'Nperm': Nperm}
     return result
 
-<<<<<<< HEAD
 def test_across_visits(input_data, vpath_data, n_states, method="regression", Nperm=0, verbose = True, 
                        confounds=None, test_statistics_option=False, pairwise_statistic ="mean",
                        FWER_correction=False, category_lim=None, identify_categories = False, 
                        vpath_surrogates=None):
-=======
-def test_across_visits(input_data, vpath_data, n_states, method="regression", Nperm=0, verbose = True, confounds=None, test_statistics_option=False, pairwise_statistic ="mean",FWER_correction=False, category_lim=None, identify_categories = False):
->>>>>>> cc5d59436c4f1d6de732df290698c9c0c01ee873
     """
     Perform permutation testing across Viterbi path for continuous data.
     
@@ -743,14 +618,10 @@ def test_across_visits(input_data, vpath_data, n_states, method="regression", Np
     FWER_correction (bool, optional), default=False: 
         Specify whether to perform family-wise error rate (FWER) correction for multiple comparisons using the MaxT method.
         Note: FWER_correction is not necessary if pval_correction is applied later for multiple comparison p-value correction.
-<<<<<<< HEAD
     category_lim : int or None, optional, default=None
         Maximum allowed number of categories for F-test. Acts as a safety measure for columns 
         with integer values, like age, which may be mistakenly identified as multiple categories.                   
     
-=======
-                    
->>>>>>> cc5d59436c4f1d6de732df290698c9c0c01ee873
     Returns:
     ----------  
     result (dict): A dictionary containing the following keys. Depending on the `test_statistics_option` and `method`, it can return the p-values, 
@@ -763,11 +634,7 @@ def test_across_visits(input_data, vpath_data, n_states, method="regression", Np
             - method=="Regression": (T, Nperm, p)
             - method=="univariate": (T, Nperm, p, q)
             - method=="cca": (T, Nperm, 1)
-<<<<<<< HEAD
         'base_statistics': base statistics of a given test
-=======
-        'base_statistics': Correlation coefficients for the test with shape (T, p, q) if method=="univariate", else None.
->>>>>>> cc5d59436c4f1d6de732df290698c9c0c01ee873
         'test_type': the type of test, which is the name of the function
         'method': the method used for analysis Valid options are
                 "regression", "univariate", or "cca", "one_vs_rest" and "state_pairs" (default: "regression").
@@ -794,18 +661,9 @@ def test_across_visits(input_data, vpath_data, n_states, method="regression", Np
         vpath_bin[np.arange(len(vpath_data)), vpath_data - 1] = 1
         vpath_data = vpath_bin.copy()
 
-<<<<<<< HEAD
 
     # Get input shape information
     n_T, _, n_p, n_q, input_data, vpath_data= get_input_shape(input_data, vpath_data, verbose)  
-=======
-    if method == 'regression':
-        # Get input shape information
-        n_T, _, n_p, n_q, input_data, vpath_data= get_input_shape(input_data, vpath_array, verbose)
-    else:
-        # Get input shape information
-        n_T, _, n_p, n_q, input_data, vpath_data= get_input_shape(input_data, vpath_data, verbose)  
->>>>>>> cc5d59436c4f1d6de732df290698c9c0c01ee873
 
     # Identify categorical columns in R_data
     category_columns = identify_coloumns_for_t_and_f_tests(vpath_data, method, identify_categories, category_lim) if method=="univariate" or method =="regression" else {'t_test_cols': [], 'f_test_cols': []}
@@ -934,15 +792,10 @@ def remove_nan_values(D_data, R_data, method):
 
     Parameters:
     -----------
-<<<<<<< HEAD
     D_data (numpy.ndarray)
-=======
-    D_data : numpy.ndarray
->>>>>>> cc5d59436c4f1d6de732df290698c9c0c01ee873
         Input data array containing features.
     R_data (numpy.ndarray): 
         Input data array containing response values.
-<<<<<<< HEAD
     method (str, optional), default="regression":     
         Statistical method for the permutation test. Valid options are 
         "regression", "univariate", "cca", "one_vs_rest" or "state_pairs". 
@@ -951,12 +804,6 @@ def remove_nan_values(D_data, R_data, method):
     Returns:
     ---------
     D_data (numpy.ndarray): 
-=======
-    
-    Returns:
-    ---------
-    D_data : numpy.ndarray
->>>>>>> cc5d59436c4f1d6de732df290698c9c0c01ee873
         Cleaned feature data (D_data) with NaN values removed.  
     R_data (numpy.ndarray): 
         Cleaned response data (R_data) with NaN values removed.
@@ -1154,23 +1001,16 @@ def initialize_arrays(R_data, n_p, n_q, n_T, method, Nperm, test_statistics_opti
         Number of permutations.
     test_statistics_option (bool): 
         If True, return the test statistics values.
-<<<<<<< HEAD
     test_combination (str), default=False:       
         Specifies the combination method.
         Valid options: "True", "across_columns", "across_rows".
-=======
->>>>>>> cc5d59436c4f1d6de732df290698c9c0c01ee873
 
     Returns:
     ----------  
     pval (numpy array): 
         p-values for the test (n_T, n_p) if test_statistics_option is False, else None.
     base_statistics (numpy array): 
-<<<<<<< HEAD
         base statistics of a given test
-=======
-        Correlation coefficient for the test (n_T, n_p, n_q) if method="univariate", else None.
->>>>>>> cc5d59436c4f1d6de732df290698c9c0c01ee873
     test_statistics_list (numpy array): 
         test statistics values (n_T, Nperm, n_p) or (n_T, Nperm, n_p, n_q) if method="univariate" , else None.
     """
@@ -1298,10 +1138,7 @@ def deconfound_values(D_data, R_data, confounds=None):
         If R_data is None, assumes we are working across visits
     """
     
-<<<<<<< HEAD
     
-=======
->>>>>>> cc5d59436c4f1d6de732df290698c9c0c01ee873
     # Calculate the centered D-matrix based on confounds (if provided)
     if confounds is not None:
          # Centering confounds
@@ -1358,16 +1195,12 @@ def initialize_permutation_matrices(method, Nperm, n_p, n_q, D_data, test_combin
         The number of predictions.
     D_data (numpy.ndarray): 
         The independent variable.
-<<<<<<< HEAD
     test_combination (str), default=False:       
         Specifies the combination method.
         Valid options: "True", "across_columns", "across_rows".
     permute_beta (bool, optional), default=False: 
         A flag indicating whether to permute beta coefficients.
 
-=======
-        
->>>>>>> cc5d59436c4f1d6de732df290698c9c0c01ee873
 
     Returns:
     ----------  
@@ -1375,13 +1208,8 @@ def initialize_permutation_matrices(method, Nperm, n_p, n_q, D_data, test_combin
         The permutation array.
     pval_perms (numpy.ndarray): 
         The p-value permutation array.
-<<<<<<< HEAD
     reg_pinv (numpy.ndarray or None): 
         The regularized pseudo-inverse of D_data.
-=======
-    proj (numpy.ndarray or None): 
-        The projection matrix (None for correlation methods).
->>>>>>> cc5d59436c4f1d6de732df290698c9c0c01ee873
     """
     # Define regularized pseudo-inverse
     reg_pinv = None
@@ -1409,11 +1237,7 @@ def initialize_permutation_matrices(method, Nperm, n_p, n_q, D_data, test_combin
         else:
             # Regression got a N by q matrix 
             test_statistics = np.zeros((Nperm, n_q))
-<<<<<<< HEAD
 
-=======
-            
->>>>>>> cc5d59436c4f1d6de732df290698c9c0c01ee873
         # Define regularization parameter
         regularization_parameter = 0.001
         # Create a regularization matrix (identity matrix scaled by the regularization parameter)
@@ -1421,14 +1245,7 @@ def initialize_permutation_matrices(method, Nperm, n_p, n_q, D_data, test_combin
         # Compute the regularized pseudo-inverse
         reg_pinv = np.linalg.inv(D_data.T @ D_data + regularization_matrix) @ D_data.T  
         
-<<<<<<< HEAD
     return test_statistics, np.array(reg_pinv)
-=======
-        # Fit the Ridge regression model
-        # The projection matrix is then used to project permuted D-matrix (Din) to obtain the regression coefficients (beta)
-        proj = np.linalg.inv(D_data.T @ D_data + regularization_matrix) @ D_data.T  # Projection matrix for Ridge regression
-    return test_statistics, proj
->>>>>>> cc5d59436c4f1d6de732df290698c9c0c01ee873
 
 def permutation_matrix_across_subjects(Nperm, D_t):
     """
@@ -1456,11 +1273,7 @@ def permutation_matrix_across_subjects(Nperm, D_t):
 
 def get_pval(test_statistics, Nperm, method, t, pval, FWER_correction=False):
     """
-<<<<<<< HEAD
     Computes p-values from the test statistics.
-=======
-    Computes p-values and correlation matrix for permutation testing.
->>>>>>> cc5d59436c4f1d6de732df290698c9c0c01ee873
     # Ref: https://github.com/OHBA-analysis/HMM-MAR/blob/master/utils/testing/permtest_aux.m
 
     Parameters:
@@ -1477,10 +1290,7 @@ def get_pval(test_statistics, Nperm, method, t, pval, FWER_correction=False):
         The timepoint index.
     pval (numpy.ndarray): 
         The p-value array.
-<<<<<<< HEAD
 
-=======
->>>>>>> cc5d59436c4f1d6de732df290698c9c0c01ee873
 
     Returns:
     ----------  
@@ -1913,7 +1723,6 @@ def test_statistics_calculations(Din, Rin, perm, test_statistics, reg_pinv, meth
         The p-value permutation array.
     test_statistics (numpy.ndarray): 
         The permutation array.
-<<<<<<< HEAD
     reg_pinv (numpy.ndarray or None):  
         The regularized pseudo-inverse of D_data
     method (str): 
@@ -1936,12 +1745,6 @@ def test_statistics_calculations(Din, Rin, perm, test_statistics, reg_pinv, meth
         and the third dimension represent dependent variables. 
     test_indices (numpy.ndarray), default=None:
         Indices for data points that belongs to the test-set for each session.
-=======
-    proj (numpy.ndarray or None):  
-        The projection matrix (None for correlation methods).
-    method (str): 
-        The method used for permutation testing.
->>>>>>> cc5d59436c4f1d6de732df290698c9c0c01ee873
 
     Returns:
     ----------  
@@ -1952,13 +1755,9 @@ def test_statistics_calculations(Din, Rin, perm, test_statistics, reg_pinv, meth
     """
     if method == 'regression':
         if category_columns["t_test_cols"]==[] and category_columns["f_test_cols"]==[]:
-<<<<<<< HEAD
             nan_values = np.sum(np.isnan(Rin))>0
             if nan_values:
                 # NaN values are detected
-=======
-            if np.sum(np.isnan(Rin))>0:
->>>>>>> cc5d59436c4f1d6de732df290698c9c0c01ee873
                 if test_combination in [True, "across_columns"]:
                     # Calculate F-statitics with no NaN values.
                     F_statistic =calculate_nan_regression_f_test(Din, Rin, reg_pinv, idx_data, permute_beta, perm, nan_values)
@@ -1994,17 +1793,13 @@ def test_statistics_calculations(Din, Rin, perm, test_statistics, reg_pinv, meth
                 rss = np.sum((Rin-predicted_values)**2, axis=0)
                 # Calculate the total sum of squares (tss)
                 tss = np.sum((Rin - np.nanmean(Rin, axis=0))**2, axis=0)
-<<<<<<< HEAD
             
-=======
-                
->>>>>>> cc5d59436c4f1d6de732df290698c9c0c01ee873
                 if test_combination in [True, "across_columns"]:
                     # Calculate the parametric p-values using F-statistics
                     # Calculate the explained sum of squares (ESS)
                     ess = tss - rss
                     # Calculate the degrees of freedom for the model and residuals
-                    df_model = Din.shape[1]  # Number of predictors
+                    df_model = Din.shape[1]  # Number of predictors including intercept
                     df_resid = Din.shape[0] - df_model
                     # Calculate the mean squared error (MSE) for the model and residuals
                     MSE_model = ess / df_model
@@ -2023,22 +1818,11 @@ def test_statistics_calculations(Din, Rin, perm, test_statistics, reg_pinv, meth
         else:
             # If we are doing test_combinations, we need to calculate f-statistics on every column
             if test_combination in [True, "across_columns"]:
-<<<<<<< HEAD
                 nan_values = np.sum(np.isnan(Rin))>0
                 # Calculate the explained variance if R got NaN values.
                 F_statistic =calculate_nan_regression_f_test(Din, Rin, reg_pinv, idx_data, permute_beta, perm, nan_values, beta)
                 # Calculate the degrees of freedom for the model and residuals
                 df_model = Din.shape[1]  # Number of predictors including intercept
-=======
-                if np.sum(np.isnan(Rin))>0:
-                    # Calculate the explained variance if R got NaN values.
-                    F_statistic =calculate_nan_regression_f_test(Din, Rin, proj, nan_values=True)
-                else:
-                    # Calculate F-statitics with no NaN values.
-                    F_statistic =calculate_nan_regression_f_test(Din, Rin, proj, nan_values=False)
-                     # Calculate the degrees of freedom for the model and residuals
-                df_model = Din.shape[1]  # Number of predictors
->>>>>>> cc5d59436c4f1d6de732df290698c9c0c01ee873
                 df_resid = Din.shape[0] - df_model
                 p_value = 1 - f.cdf(F_statistic, df_model, df_resid)
                 # Get the base statistics and store p-values as z-scores to the test statistic
@@ -2105,7 +1889,6 @@ def test_statistics_calculations(Din, Rin, perm, test_statistics, reg_pinv, meth
             if np.sum(np.isnan(Din))>0 or np.sum(np.isnan(Rin))>0:
                 # Calculate the correlation matrix while handling NaN values 
                 # column by column without removing entire rows.
-<<<<<<< HEAD
                 if test_combination in [True, "across_columns", "across_rows"] and permute_beta==False: 
                     if permute_beta:
                         _ , p_value =calculate_r2_univariate(Din, Rin, idx_data, beta, perm, reg_pinv, permute_beta, test_combination=test_combination, test_indices=test_indices)
@@ -2118,19 +1901,12 @@ def test_statistics_calculations(Din, Rin, perm, test_statistics, reg_pinv, meth
                 elif permute_beta:
                     base_statistics, _ =calculate_r2_univariate(Din, Rin, idx_data, beta, perm, reg_pinv, permute_beta, test_indices=test_indices)
                     test_statistics[perm, :, :] = base_statistics
-=======
-                if test_combination in [True, "across_columns", "across_rows"]: 
-                    # Return parametric p-values
-                    _,base_statistics =calculate_nan_correlation_matrix(Din, Rin, test_combination, reduce_pval_dims=True)
-                    test_statistics[perm, :] = base_statistics # Notice that shape of test_statistics are different
->>>>>>> cc5d59436c4f1d6de732df290698c9c0c01ee873
                 else:
                     # Return correlation coefficients instead of p-values
                     base_statistics,_ =calculate_nan_correlation_matrix(Din, Rin)
                     test_statistics[perm, :, :] = np.abs(base_statistics)
             else:
                 if test_combination in [True, "across_columns", "across_rows"]: 
-<<<<<<< HEAD
                     if permute_beta:
                         # Calculate geometric mean of p-values
                         _, p_value =calculate_r2_univariate(Din, Rin, idx_data, beta, perm, reg_pinv, permute_beta, test_combination=test_combination, test_indices=test_indices)
@@ -2147,15 +1923,6 @@ def test_statistics_calculations(Din, Rin, perm, test_statistics, reg_pinv, meth
                 elif permute_beta:
                     base_statistics, _ =calculate_r2_univariate(Din, Rin, idx_data, beta, perm, reg_pinv, permute_beta, test_indices=test_indices)
                     test_statistics[perm, :, :] = np.abs(base_statistics)
-=======
-                    # Return parametric p-values
-                    pval_matrix = np.zeros((Din.shape[1],Rin.shape[1]))
-                    for i in range(Din.shape[1]):
-                        for j in range(Rin.shape[1]):
-                            _, pval_matrix[i, j] = pearsonr(Din[:, i], Rin[:, j])
-                    base_statistics =calculate_geometric_pval(pval_matrix, test_combination) 
-                    test_statistics[perm,:]=abs(base_statistics)         
->>>>>>> cc5d59436c4f1d6de732df290698c9c0c01ee873
                 else:
                     # Calculate correlation coeffcients without NaN values
                     corr_coef = np.corrcoef(Din, Rin, rowvar=False)
@@ -2476,7 +2243,6 @@ def pval_cluster_based_correction(test_statistics, pval, alpha=0.05, individual_
         
     Parameters:
     ------------
-<<<<<<< HEAD
     test_statistics (numpy.ndarray): 
         2D or 3D array of test statistics.
         For a 2D array, it should have a shape of (timepoints, permutations).
@@ -2496,18 +2262,6 @@ def pval_cluster_based_correction(test_statistics, pval, alpha=0.05, individual_
     Returns:
     ----------
     p_values (numpy.ndarray): 
-=======
-    test_statistics : (numpy.ndarray)
-        2D or 3D array of test statistics. 2D if you have applied permutation testing using "regression".
-    pval : (numpy.ndarray)
-        2D or 1D array of p-values obtained from permutation testing. 1D if you have applied permutation testing using "regression".
-    alpha : (float, optional), default=0.05
-        Significance level for cluster-based correction.
-
-    Returns:
-    ----------
-    p_values : (numpy.ndarray)
->>>>>>> cc5d59436c4f1d6de732df290698c9c0c01ee873
         Corrected p-values after cluster-based correction.
     """
     if test_statistics is []:
@@ -2668,7 +2422,6 @@ def get_indices_array(idx_data):
     ----------  
     idx_array (numpy.ndarray): 
         The generated indices array.
-<<<<<<< HEAD
         
     Example:
     ----------      
@@ -2676,13 +2429,10 @@ def get_indices_array(idx_data):
     >>> get_indices_array(idx_data)
     array([0, 0, 0, 1, 1, 1, 2, 2, 2])
 
-=======
->>>>>>> cc5d59436c4f1d6de732df290698c9c0c01ee873
     """
     # Create a copy of idx_data to avoid modifying the original outside the function
     idx_data_copy = np.copy(idx_data)
     
-<<<<<<< HEAD
     # # # Check if any values in column 1 are equal to any values in column 2
     # # # If equal remove one value from the second column
     # # # if np.any(np.isin(idx_data_copy[:, 0], idx_data_copy[:, 1])):
@@ -2693,18 +2443,6 @@ def get_indices_array(idx_data):
     idx_array = np.zeros(max_value, dtype=int)
     for count, (start, end) in enumerate(idx_data_copy):
         idx_array[start:end] = count
-=======
-    # Check if any values in column 1 are equal to any values in column 2
-    # If equal remove one value from the second column
-    if np.any(np.isin(idx_data_copy[:, 0], idx_data_copy[:, 1])):
-        idx_data_copy[:, 1] -= 1
-    
-    # Get an array of indices based on the given idx_data ranges
-    max_value = np.max(idx_data_copy[:, 1])
-    idx_array = np.zeros(max_value + 1, dtype=int)
-    for count, (start, end) in enumerate(idx_data_copy):
-        idx_array[start:end + 1] = count
->>>>>>> cc5d59436c4f1d6de732df290698c9c0c01ee873
     return idx_array
 
 def get_indices_timestamp(n_timestamps, n_subjects):
@@ -2724,7 +2462,6 @@ def get_indices_timestamp(n_timestamps, n_subjects):
         Array representing the indices of the timestamps for each subject.
 
     Example:
-<<<<<<< HEAD
     ----------
     >>> n_timestamps = 3
     >>> n_subjects = 4
@@ -2733,12 +2470,6 @@ def get_indices_timestamp(n_timestamps, n_subjects):
            [ 3,  6],
            [ 6,  9],
            [ 9, 12]])
-=======
-    get_indices_timestamp(5, 3)
-    array([[ 0,  5],
-           [ 5, 10],
-           [10, 15]])
->>>>>>> cc5d59436c4f1d6de732df290698c9c0c01ee873
     """
     indices = np.column_stack([np.arange(0, n_timestamps * n_subjects, n_timestamps),
                                np.arange(0 + n_timestamps, n_timestamps * n_subjects + n_timestamps, n_timestamps)])
@@ -2763,7 +2494,6 @@ def get_indices_session(data_label):
         where each row represents the start and end index for a trial. 
 
     Example:
-<<<<<<< HEAD
     ----------
     >>> data_label = np.array([0, 0, 0, 1, 1, 2])
     >>> get_indices_session(data_label)
@@ -2771,12 +2501,6 @@ def get_indices_session(data_label):
            [3, 5],
            [5, 6]])
 
-=======
-    get_indices_session(np.array([1, 1, 2, 2, 2, 3, 3, 3, 3]))
-    array([[0, 2],
-           [2, 5],
-           [5, 9]])
->>>>>>> cc5d59436c4f1d6de732df290698c9c0c01ee873
     """
     # Get unique labels from the data_label array
     unique_labels = np.unique(data_label)
@@ -2814,7 +2538,6 @@ def get_indices_from_list(data_list, count_timestamps = True):
     ----------  
     indices (ndarray): 
         Array with start and end indices for each subject's timestamps.
-<<<<<<< HEAD
     
     Example:
     ----------
@@ -2829,9 +2552,6 @@ def get_indices_from_list(data_list, count_timestamps = True):
     array([[0, 3],
            [3, 5],
            [5, 6]])
-=======
-
->>>>>>> cc5d59436c4f1d6de732df290698c9c0c01ee873
     """
     # Initialize an empty NumPy array to store start and end indices for each subject
     indices = np.zeros((len(data_list), 2), dtype=int)
@@ -2906,11 +2626,7 @@ def get_indices_update_nan(idx_data, nan_mask):
 
 def get_concatenate_subjects(D_sessions):
     """
-<<<<<<< HEAD
     Converts a 3D matrix into a 2D matrix by concatenating timepoints of every subject into a new D-matrix.
-=======
-    Converts a  3D matrix into a 2D matrix by concatenating timepoints of every subject into a new D-matrix.
->>>>>>> cc5d59436c4f1d6de732df290698c9c0c01ee873
 
     Parameters:
     --------------
@@ -3040,13 +2756,8 @@ def identify_coloumns_for_t_and_f_tests(R_data, method, identify_categories=Fals
     
     Returns:
     -----------
-<<<<<<< HEAD
     category_columns (dict):
         A dictionary marking the columns where t-test ("t_test_cols") and F-test ("f_test_cols") have been applied.
-=======
-    dict
-        A dictionary containing the columns for t-test ("t_test_cols") and F-test ("f_test_cols").
->>>>>>> cc5d59436c4f1d6de732df290698c9c0c01ee873
     """
     # Initialize variable
     category_columns = {'t_test_cols': [], 'f_test_cols': []} 
@@ -3106,7 +2817,6 @@ def calculate_nan_regression(Din, Rin, reg_pinv, idx_data, permute_beta, perm, b
     Parameters:
     --------------
     Din (numpy.ndarray): 
-<<<<<<< HEAD
         Input data matrix for the independent variables.
     Rin (numpy.ndarray): 
         Input data matrix for the dependent variables.
@@ -3124,18 +2834,10 @@ def calculate_nan_regression(Din, Rin, reg_pinv, idx_data, permute_beta, perm, b
         and the third dimension represent dependent variables. 
     test_indices (numpy.ndarray):
         Indices for data points that belongs to the test-set for each session.
-=======
-        Input D-matrix for the independent variables.
-    Rin (numpy.ndarray): 
-        Input D-matrix for the dependent variables.
-    proj (numpy.ndarray): 
-        Projection matrix.
->>>>>>> cc5d59436c4f1d6de732df290698c9c0c01ee873
 
     Returns:
     ----------  
-    R2_test (numpy.ndarray): 
-        Array of R-squared values for each regression.
+        R2_test (numpy.ndarray): Array of R-squared values for each regression.
     """
     
     Rin = np.expand_dims(Rin, axis=1) if Rin.ndim==1 else Rin
@@ -3191,7 +2893,6 @@ def calculate_nan_regression_f_test(Din, Rin, reg_pinv, idx_data, permute_beta, 
     Parameters:
     --------------
     Din (numpy.ndarray): 
-<<<<<<< HEAD
         Input data matrix for the independent variables.
     Rin (numpy.ndarray): 
         Input data matrix for the dependent variables.
@@ -3208,18 +2909,9 @@ def calculate_nan_regression_f_test(Din, Rin, reg_pinv, idx_data, permute_beta, 
         A flag indicating whether there are NaN values.
     beta (numpy.ndarray):
     
-=======
-        Input D-matrix for the independent variables.
-    Rin (numpy.ndarray): 
-        Input D-matrix for the dependent variables.
-    proj (numpy.ndarray): 
-        Projection matrix.
-
->>>>>>> cc5d59436c4f1d6de732df290698c9c0c01ee873
     Returns:
     ----------  
-    R2_test (numpy.ndarray): 
-        Array of f-test values for each regression.
+        R2_test (numpy.ndarray): Array of f-test values for each regression.
     """
     if nan_values:
         # Calculate F-statistics if there are Nan_values
@@ -3253,7 +2945,7 @@ def calculate_nan_regression_f_test(Din, Rin, reg_pinv, idx_data, permute_beta, 
             # Calculate the explained sum of squares (ESS)
             ess = tss - rss
             # Calculate the degrees of freedom for the model and residuals
-            df_model = Din.shape[1]  # Number of predictors
+            df_model = Din.shape[1]  # Number of predictors including intercept
             df_resid = Din.shape[0] - df_model
             # Calculate the mean squared error (MSE) for the model and residuals
             MSE_model = ess / df_model
@@ -3284,7 +2976,7 @@ def calculate_nan_regression_f_test(Din, Rin, reg_pinv, idx_data, permute_beta, 
         # Calculate the explained sum of squares (ESS)
         ess = tss - rss
         # Calculate the degrees of freedom for the model and residuals
-        df_model = Din.shape[1]  # Number of predictors
+        df_model = Din.shape[1]  # Number of predictors including intercept
         df_resid = Din.shape[0] - df_model
         # Calculate the mean squared error (MSE) for the model and residuals
         MSE_model = ess / df_model
@@ -3557,12 +3249,8 @@ def calculate_nan_correlation_matrix(D_data, R_data, test_combination=False):
 
     Returns:
     ----------  
-<<<<<<< HEAD
     correlation_matrix (numpy.ndarray): 
         correlation matrix between columns in D_data and R_data.
-=======
-    correlation_matrix (numpy.ndarray): Correlation matrix between columns in D_data and R_data.
->>>>>>> cc5d59436c4f1d6de732df290698c9c0c01ee873
     """
     # Initialize a matrix to store correlation coefficients
     p = D_data.shape[1]
@@ -3702,33 +3390,19 @@ def detect_significant_intervals(pval, alpha):
 
     Parameters:
     ------------
-<<<<<<< HEAD
     p_values (numpy.ndarray): 
         An array of p-values. 
     alpha (float, optional): 
-=======
-    p_values : numpy.ndarray
-        An array of p-values. 
-    alpha : float, optional
->>>>>>> cc5d59436c4f1d6de732df290698c9c0c01ee873
         Threshold for significance.
 
     Returns:
     ----------  
-<<<<<<< HEAD
     intervals (list of tuple): 
-=======
-    list of tuple: 
->>>>>>> cc5d59436c4f1d6de732df290698c9c0c01ee873
         A list of tuples representing the start and end indices
         (inclusive) of each interval of consecutive True values.
 
     Example:
-<<<<<<< HEAD
     ----------  
-=======
-    ----------
->>>>>>> cc5d59436c4f1d6de732df290698c9c0c01ee873
         array = [False, False, False, True, True, True, False, False, True, True, False]
         detect_intervals(array)
         output: [(3, 5), (8, 9)]
