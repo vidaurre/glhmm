@@ -16,7 +16,6 @@ from matplotlib.colors import LogNorm, LinearSegmentedColormap, to_rgba_array
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 from . import utils
-# import utils
 
 
 
@@ -530,11 +529,7 @@ def interpolate_colormap(cmap_list):
 def plot_p_value_matrix(pval, alpha = 0.05, normalize_vals=True, figsize=(9, 5), 
                          title_text="Heatmap (p-values)", annot=False, 
                         cmap_type='default', cmap_reverse=True, xlabel="", ylabel="", 
-<<<<<<< HEAD
                         xticklabels=None, x_tick_min=None, x_tick_max=None, num_x_ticks=5, none_diagonal = False, num_colors = 259, xlabel_rotation=0):
-=======
-                        xticklabels=None, none_diagonal = False, num_colors = 259, xlabel_rotation=0):
->>>>>>> cc5d59436c4f1d6de732df290698c9c0c01ee873
     from matplotlib import cm, colors
     import seaborn as sb
     from mpl_toolkits.axes_grid1 import make_axes_locatable
@@ -649,7 +644,6 @@ def plot_p_value_matrix(pval, alpha = 0.05, normalize_vals=True, figsize=(9, 5),
     axes.set_title(title_text, fontsize=14)
     # Number of x-tick steps
     steps=len(pval)
-<<<<<<< HEAD
     
     # define x_ticks
     x_tick_positions = np.linspace(0, len(pval), num_x_ticks).astype(int)
@@ -661,8 +655,6 @@ def plot_p_value_matrix(pval, alpha = 0.05, normalize_vals=True, figsize=(9, 5),
         x_tick_labels = x_tick_positions
 
 
-=======
->>>>>>> cc5d59436c4f1d6de732df290698c9c0c01ee873
     # Set the x-axis ticks
     if xticklabels is not None:
         axes.set_xticks(np.arange(len(xticklabels)) + 0.5)
@@ -996,41 +988,6 @@ def plot_vpath(viterbi_path, signal=None, idx_data=None, figsize=(7, 4), fontsiz
         colors.extend(extra_colors)
 
     fig, axes = plt.subplots(figsize=figsize)
-<<<<<<< HEAD
-=======
-
-    # Plot Viterbi path
-    if time_conversion_rate is not None:
-        time_seconds = np.arange(viterbi_path.shape[0]) / time_conversion_rate
-        axes.stackplot(time_seconds, viterbi_path.T, colors=colors, labels=[f'State {i + 1}' for i in range(num_states)])
-        if xlabel == "Timepoints":
-            xlabel = "Time (seconds)"
-        axes.set_xlabel(xlabel, fontsize=fontsize_labels)
-    else:
-        axes.stackplot(np.arange(viterbi_path.shape[0]), viterbi_path.T, colors=colors, labels=[f'State {i + 1}' for i in range(num_states)])
-        axes.set_xlabel(xlabel, fontsize=fontsize_labels)
-
-    axes.set_ylabel(ylabel, fontsize=fontsize_labels)
-    axes.set_title(title, fontsize=fontsize_title)
-
-    # Plot signal overlay
-    if signal is not None:
-        if time_conversion_rate is not None:
-            time_seconds = np.arange(len(signal)) / time_conversion_rate
-            axes.plot(time_seconds, signal, color='black', label=signal_label)
-            axes.set_xlabel(xlabel, fontsize=fontsize_labels)
-        else:
-            axes.plot(signal, color='black', label=signal_label)
-
-    # Draw vertical gray lines for T_t intervals
-    if idx_data is not None:
-        for idx in idx_data[:-1, 1]:
-            axes.axvline(x=idx, color='gray', linestyle='--', linewidth=vertical_linewidth)
-
-    # Show legend
-    if show_legend:
-        axes.legend(title='States', loc='upper left', bbox_to_anchor=(1, 1))
->>>>>>> cc5d59436c4f1d6de732df290698c9c0c01ee873
 
     # Plot Viterbi path
     if time_conversion_rate is not None:
@@ -1092,15 +1049,9 @@ def plot_average_probability(Gamma_data, title='Average probability for each sta
 
     Parameters:
     -----------
-<<<<<<< HEAD
     Gamma_data (numpy.ndarray)
         Can be a 2D or 3D array representing gamma values.
         Shape: (num_timepoints, num_states) or (num_timepoints, num_trials, num_states)
-=======
-    Gamma_reconstruct (numpy.ndarray)
-        3D array representing reconstructed gamma values.
-        Shape: (num_timepoints, num_trials, num_states)
->>>>>>> cc5d59436c4f1d6de732df290698c9c0c01ee873
     title (str, optional), default='Average probability for each state':
         Title for the plot.
     fontsize (int, optional), default=16:
@@ -1458,30 +1409,18 @@ def plot_state_prob_and_covariance(init_stateP, TP, state_means, state_FC, cmap=
     plt.subplots_adjust(hspace=0.5, wspace=0.5)
     plt.show()
     
-<<<<<<< HEAD
 def plot_condition_difference(Gamma_epoch, R_trials, title='Average Probability and Difference', fontsize=16, figsize=(9, 2), vertical_lines=None, line_colors=None, highlight_boxes=False, 
                               stimulus_onset=None, x_tick_min=None, x_tick_max=None, num_x_ticks=5):
-=======
-def plot_condition_difference(Gamma_reconstruct, R_trials, title='Average Probability and Difference', fontsize=16, figsize=(9, 2), vertical_lines=None, line_colors=None, highlight_boxes=False):
->>>>>>> cc5d59436c4f1d6de732df290698c9c0c01ee873
     """
     Plots the average probability for each state over time for two conditions and their difference.
 
     Parameters:
     -----------
-<<<<<<< HEAD
     Gamma_epoch (numpy.ndarray)
         3D array representing reconstructed gamma values. Shape: (num_timepoints, num_trials, num_states)
     R_trials (numpy.ndarray)
         1D array representing the condition for each trial.
         Should have the same length as the second dimension of Gamma_epoch.
-=======
-    Gamma_reconstruct (numpy.ndarray)
-        3D array representing reconstructed gamma values. Shape: (num_timepoints, num_trials, num_states)
-    R_trials (numpy.ndarray)
-        1D array representing the condition for each trial.
-        Should have the same length as the second dimension of Gamma_reconstruct.
->>>>>>> cc5d59436c4f1d6de732df290698c9c0c01ee873
     title (str, optional), default='Average Probability and Difference':
         Title for the plot.
     fontsize (int, optional), default=16:
@@ -1495,7 +1434,6 @@ def plot_condition_difference(Gamma_reconstruct, R_trials, title='Average Probab
         (unless a list is provided).
     highlight_boxes (bool, optional), default=False:
         Whether to include highlighted boxes for each pair of vertical lines.
-<<<<<<< HEAD
     stimulus_onset (int, optional), default=None:
         Index of the data where the stimulus onset should be positioned.
     x_tick_min (float, optional), default=None:
@@ -1504,9 +1442,6 @@ def plot_condition_difference(Gamma_reconstruct, R_trials, title='Average Probab
         Maximum value for the x-tick labels.
     num_x_ticks (int, optional), default=5:
         Number of x-ticks.
-=======
-
->>>>>>> cc5d59436c4f1d6de732df290698c9c0c01ee873
     Example usage:
     --------------
     plot_condition_difference(Gamma_epoch, R_trials, vertical_lines=[(10, 100)], highlight_boxes=True)
@@ -1601,13 +1536,8 @@ def plot_condition_difference(Gamma_reconstruct, R_trials, title='Average Probab
     plt.show()
     
     
-<<<<<<< HEAD
 def plot_p_values_over_time(pval, figsize=(8, 4), xlabel="Timepoints", ylabel="P-values (Log Scale)",
                             title_text="P-values over time", stimulus_onset=None, x_tick_min=None, x_tick_max=None, num_x_ticks=5, 
-=======
-def plot_p_values_over_time(pval, figsize=(8, 4), total_time_seconds=None, xlabel="Timepoints", 
-                            ylabel="P-values (Log Scale)",title_text="P-values over time", xlim_start=0, 
->>>>>>> cc5d59436c4f1d6de732df290698c9c0c01ee873
                             tick_positions=[0, 0.001, 0.01, 0.05, 0.1, 0.3, 1], num_colors=259, 
                             alpha=0.05,plot_style = "line", linewidth=2.5,
                             ):
@@ -1628,7 +1558,6 @@ def plot_p_values_over_time(pval, figsize=(8, 4), total_time_seconds=None, xlabe
         Label for the y-axis.
     title_text (str, optional), default="P-values over time":
         Title for the plot.
-<<<<<<< HEAD
     stimulus_onset (int, optional), default=None:
         Index of the data where the stimulus onset should be positioned.
     x_tick_min (float, optional), default=None
@@ -1637,10 +1566,6 @@ def plot_p_values_over_time(pval, figsize=(8, 4), total_time_seconds=None, xlabe
         Maximum value for x-axis ticks.
     num_x_ticks (int, optional), default=5
         Number of x-axis ticks.
-=======
-    xlim_start (int, optional), default=0:
-        Starting point for the x-axis limit.
->>>>>>> cc5d59436c4f1d6de732df290698c9c0c01ee873
     tick_positions (list, optional), default=[0, 0.001, 0.01, 0.05, 0.1, 0.3, 1]:
         Specific values to mark on the y-axis.
     num_colors (int, optional), default=259:
@@ -1662,18 +1587,11 @@ def plot_p_values_over_time(pval, figsize=(8, 4), total_time_seconds=None, xlabe
         raise ValueError("To use the function 'plot_p_values_over_time', the variable for p-values must be one-dimensional.")
 
     # Generate Timepoints based on total_time_seconds
-<<<<<<< HEAD
     # if total_time_seconds:
     #     time_points = np.linspace(0, total_time_seconds, len(pval))
     # else:
     #     time_points = np.arange(len(pval))
     time_points = np.arange(len(pval))
-=======
-    if total_time_seconds:
-        time_points = np.linspace(0, total_time_seconds, len(pval))
-    else:
-        time_points = np.arange(len(pval))
->>>>>>> cc5d59436c4f1d6de732df290698c9c0c01ee873
 
     # Convert to log scale
     color_array = np.logspace(-3, 0, num_colors).reshape(1, -1)
@@ -1754,13 +1672,9 @@ def plot_p_values_over_time(pval, figsize=(8, 4), total_time_seconds=None, xlabe
         x_tick_labels = x_tick_positions
 
     # Set axis limits to focus on the relevant data range
-<<<<<<< HEAD
     axes.set_xticks(x_tick_positions)
     axes.set_xticklabels(x_tick_labels)
     axes.set_xlim(x_tick_positions[0], x_tick_positions[-1])  # Set x-axis limits without white space
-=======
-    axes.set_xlim(xlim_start, len(pval) + 1)
->>>>>>> cc5d59436c4f1d6de732df290698c9c0c01ee873
     axes.set_ylim([0.0008, 1.5])
     # Set y-axis to log scale
     axes.set_yscale('log')
