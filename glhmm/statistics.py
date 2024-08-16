@@ -94,7 +94,12 @@ def test_across_subjects(D_data, R_data, idx_data=None, method="multivariate", N
             When method="univariate":
                 - True (bool): Returns a single geometric mean value (1 by 1).
                 - "across_rows" (str): Calculates geometric means aggregated along each row, returns mean value for each column (1 by p).
+<<<<<<< HEAD
                 - "across_columns" (str): Calculates geometric means aggregated along each column, returns mean value for each row (1 by q).                           
+=======
+                - "across_columns" (str): Calculates geometric means aggregated along each column, returns mean value for each row (1 by q).   
+                                          
+>>>>>>> 1f986e9ae57f6fa683cbb8519c78e2c4d5ceff23
     Returns:
     ----------  
     result (dict): 
@@ -110,7 +115,11 @@ def test_across_subjects(D_data, R_data, idx_data=None, method="multivariate", N
             - method=="cca": (T, Nperm, 1)
         'base_statistics': base statistics values of a giving test
         'test_type': the type of test, which is the name of the function
+<<<<<<< HEAD
         'method': the method used for analysis Valid options are "multivariate", "univariate", or "cca".
+=======
+        'method': the method used for analysis Valid options are "regression", "univariate", or "cca".
+>>>>>>> 1f986e9ae57f6fa683cbb8519c78e2c4d5ceff23
         'max_correction': Specifies if FWER has been applied using MaxT, can either output True or False.  
         'performed_tests': A dictionary that marks the columns in the test_statistics or p-value matrix corresponding to the (q dimension) where t-tests or F-tests have been performed.
         'Nperm' :The number of permutations that has been performed.   
@@ -272,7 +281,11 @@ def test_across_subjects(D_data, R_data, idx_data=None, method="multivariate", N
 
 
 
+<<<<<<< HEAD
 def test_across_trials_within_session(D_data, R_data, idx_data, method="multivariate", Nperm=0, confounds=None, 
+=======
+def test_across_trials_within_session(D_data, R_data, idx_data, method="regression", Nperm=0, confounds=None, 
+>>>>>>> 1f986e9ae57f6fa683cbb8519c78e2c4d5ceff23
                                       trial_timepoints=None,verbose=True, test_statistics_option=False, 
                                       FWER_correction=False, identify_categories=False, category_lim=10, 
                                       test_combination=False):
@@ -306,7 +319,11 @@ def test_across_trials_within_session(D_data, R_data, idx_data, method="multivar
         An array containing the indices for each session. The array can be either 1D or 2D:
         For a 1D array, a sequence of integers where each integer labels the session number. For example, [1, 1, 1, 1, 2, 2, 2, ..., N, N, N, N, N, N, N, N].
         For a 2D array, each row represents the start and end indices for the trials in a given session, with the format [[start1, end1], [start2, end2], ..., [startN, endN]].  
+<<<<<<< HEAD
     method (str, optional), default="multivariate": 
+=======
+    method (str, optional), default="regression": 
+>>>>>>> 1f986e9ae57f6fa683cbb8519c78e2c4d5ceff23
         The statistical method to be used for the permutation test. Valid options are
         "multivariate", "univariate", or "cca".
         Note: "cca" stands for Canonical Correlation Analysis    
@@ -341,8 +358,11 @@ def test_across_trials_within_session(D_data, R_data, idx_data, method="multivar
                 - "across_rows" (str): Calculates geometric means aggregated along each row, returns mean value for each column (1 by p).
                 - "across_columns" (str): Calculates geometric means aggregated along each column, returns mean value for each row (1 by q).                                         
     
+<<<<<<< HEAD
     multivariate
     
+=======
+>>>>>>> 1f986e9ae57f6fa683cbb8519c78e2c4d5ceff23
     Returns:
     ----------  
     result (dict): A dictionary containing the following keys. Depending on the `test_statistics_option` and `method`, it can return the p-values, 
@@ -358,7 +378,11 @@ def test_across_trials_within_session(D_data, R_data, idx_data, method="multivar
         'base_statistics': base statistics of a given test
         'test_type': the type of test, which is the name of the function
         'method': the method used for analysis Valid options are:
+<<<<<<< HEAD
                 "multivariate", "univariate", or "cca".
+=======
+                "regression", "univariate", or "cca".
+>>>>>>> 1f986e9ae57f6fa683cbb8519c78e2c4d5ceff23
         'max_correction': Specifies if FWER has been applied using MaxT, can either output True or False.
         'Nperm' :The number of permutations that has been performed.   
     """
@@ -426,7 +450,11 @@ def test_across_trials_within_session(D_data, R_data, idx_data, method="multivar
                 idx_data_in=get_indices_update_nan(idx_data_in,~nan_mask)
                 
         # Create test_statistics and the regularized pseudo-inverse of D_data
+<<<<<<< HEAD
         test_statistics, reg_pinv = initialize_permutation_matrices(method, Nperm, n_p, n_q, D_t, test_combination, category_columns=category_columns)
+=======
+        test_statistics, reg_pinv = initialize_permutation_matrices(method, Nperm, n_p, n_q, D_t, test_combination)
+>>>>>>> 1f986e9ae57f6fa683cbb8519c78e2c4d5ceff23
     
 
         # Calculate permutation matrix of D_t 
@@ -471,7 +499,11 @@ def test_across_trials_within_session(D_data, R_data, idx_data, method="multivar
     
     return result
 
+<<<<<<< HEAD
 def test_across_sessions_within_subject(D_data, R_data, idx_data, method="multivariate", Nperm=0, confounds=None, 
+=======
+def test_across_sessions_within_subject(D_data, R_data, idx_data, method="regression", Nperm=0, confounds=None, 
+>>>>>>> 1f986e9ae57f6fa683cbb8519c78e2c4d5ceff23
                                         verbose = True, test_statistics_option=False, FWER_correction=False, 
                                         test_combination=False, identify_categories=False, 
                                         category_lim=10):
@@ -503,7 +535,11 @@ def test_across_sessions_within_subject(D_data, R_data, idx_data, method="multiv
         An array containing the indices for each session. The array can be either 1D or 2D:
         For a 1D array, a sequence of integers where each integer labels the session number. For example, [1, 1, 1, 1, 2, 2, 2, ..., N, N, N, N, N, N, N, N].
         For a 2D array, each row represents the start and end indices for the trials in a given session, with the format [[start1, end1], [start2, end2], ..., [startN, endN]].  
+<<<<<<< HEAD
     method (str, optional), default="multivariate": 
+=======
+    method (str, optional), default="regression": 
+>>>>>>> 1f986e9ae57f6fa683cbb8519c78e2c4d5ceff23
         The statistical method to be used for the permutation test. Valid options are
         "multivariate", "univariate", or "cca".
         Note: "cca" stands for Canonical Correlation Analysis    
@@ -549,7 +585,11 @@ def test_across_sessions_within_subject(D_data, R_data, idx_data, method="multiv
         'base_statistics': base statistics of a given test
         'test_type': the type of test, which is the name of the function
         'method': the method used for analysis Valid options are
+<<<<<<< HEAD
                 "multivariate", "univariate", or "cca" (default: "multivariate").
+=======
+                "regression", "univariate", or "cca" (default: "regression").
+>>>>>>> 1f986e9ae57f6fa683cbb8519c78e2c4d5ceff23
         'max_correction': Specifies if FWER has been applied using MaxT, can either output True or False.
         'Nperm' :The number of permutations that has been performed.
                   
@@ -613,7 +653,11 @@ def test_across_sessions_within_subject(D_data, R_data, idx_data, method="multiv
         D_t, R_t = deconfound_values(D_data[t, :],R_data[t, :], confounds)
         
         # Removing rows that contain nan-values
+<<<<<<< HEAD
         if method == "multivariate" or method == "cca":
+=======
+        if method == "regression" or method == "cca":
+>>>>>>> 1f986e9ae57f6fa683cbb8519c78e2c4d5ceff23
             D_t, R_t,_ = remove_nan_values(D_t, R_t, method)
 
         # Create test_statistics and pval_perms based on method
@@ -662,7 +706,11 @@ def test_across_sessions_within_subject(D_data, R_data, idx_data, method="multiv
         'Nperm': Nperm}
     return result
 
+<<<<<<< HEAD
 def test_across_visits(input_data, vpath_data, n_states, method="multivariate", Nperm=0, verbose = True, 
+=======
+def test_across_visits(input_data, vpath_data, n_states, method="regression", Nperm=0, verbose = True, 
+>>>>>>> 1f986e9ae57f6fa683cbb8519c78e2c4d5ceff23
                        confounds=None, test_statistics_option=False, pairwise_statistic ="mean",
                        FWER_correction=False, category_lim=10, identify_categories = False, 
                        vpath_surrogates=None):
@@ -714,8 +762,11 @@ def test_across_visits(input_data, vpath_data, n_states, method="multivariate", 
             - method=="multivariate": (T, Nperm, p)
             - method=="univariate": (T, Nperm, p, q)
             - method=="cca": (T, Nperm, 1)
+<<<<<<< HEAD
             - method=="one_vs_rest": (T, Nperm, p)
             - method=="state_pairs": (T, Nperm, 1)
+=======
+>>>>>>> 1f986e9ae57f6fa683cbb8519c78e2c4d5ceff23
         'base_statistics': base statistics of a given test
         'test_type': the type of test, which is the name of the function
         'method': the method used for analysis Valid options are
@@ -900,7 +951,11 @@ def remove_nan_values(D_data, R_data, method):
         Input data array containing features.
     R_data (numpy.ndarray): 
         Input data array containing response values.
+<<<<<<< HEAD
     method (str, optional), default="multivariate":     
+=======
+    method (str, optional), default="regression":     
+>>>>>>> 1f986e9ae57f6fa683cbb8519c78e2c4d5ceff23
         Statistical method for the permutation test. Valid options are 
         "multivariate", "univariate", "cca", "one_vs_rest" or "state_pairs". 
         Note: "cca" stands for Canonical Correlation Analysis.   
@@ -1913,12 +1968,17 @@ def test_statistics_calculations(Din, Rin, perm, test_statistics, reg_pinv, meth
     pval_matrix (numpy.ndarray): 
         P-values derived from t and f statistics using General linear models.
     """
+<<<<<<< HEAD
     pval_matrix= None
     if method == 'multivariate':
 
         if category_columns["t_test_cols"]==[] and category_columns["f_anova_cols"]==[] and category_columns["f_reg_cols"]==[]:
             # We wont have a p-value matrix since we are not doing GLM inference here
 
+=======
+    if method == 'regression':
+        if category_columns["t_test_cols"]==[] and category_columns["f_test_cols"]==[]:
+>>>>>>> 1f986e9ae57f6fa683cbb8519c78e2c4d5ceff23
             nan_values = np.sum(np.isnan(Rin))>0
             if nan_values:
                 # NaN values are detected
@@ -1982,7 +2042,15 @@ def test_statistics_calculations(Din, Rin, perm, test_statistics, reg_pinv, meth
             if test_combination in [True, "across_columns"]:
                 nan_values = np.sum(np.isnan(Rin))>0
                 # Calculate the explained variance if R got NaN values.
+<<<<<<< HEAD
                 F_statistic, pval_matrix =calculate_nan_regression_f_test(Din, Rin, reg_pinv, idx_data, permute_beta, perm, nan_values, beta)
+=======
+                F_statistic =calculate_nan_regression_f_test(Din, Rin, reg_pinv, idx_data, permute_beta, perm, nan_values, beta)
+                # Calculate the degrees of freedom for the model and residuals
+                df_model = Din.shape[1]  # Number of predictors including intercept
+                df_resid = Din.shape[0] - df_model
+                p_value = 1 - f.cdf(F_statistic, df_model, df_resid)
+>>>>>>> 1f986e9ae57f6fa683cbb8519c78e2c4d5ceff23
                 # Get the base statistics and store p-values as z-scores to the test statistic
                 base_statistics = calculate_combined_z_scores(pval_matrix, test_combination)
                 test_statistics[perm] =abs(base_statistics) 
@@ -2939,7 +3007,11 @@ def identify_coloumns_for_t_and_f_tests(R_data, method, Nperm, identify_categori
     Returns:
     -----------
     category_columns (dict):
+<<<<<<< HEAD
         A dictionary marking the columns where t-test ("t_test_cols") and F-test ("f_anova_cols") have been applied.
+=======
+        A dictionary marking the columns where t-test ("t_test_cols") and F-test ("f_test_cols") have been applied.
+>>>>>>> 1f986e9ae57f6fa683cbb8519c78e2c4d5ceff23
     """
     # Initialize variable
     category_columns = {'t_test_cols': [], 'f_anova_cols': [], 'f_reg_cols': []} 
@@ -3293,7 +3365,11 @@ def calculate_nan_regression_f_test(Din, Rin, reg_pinv, idx_data, permute_beta, 
         ess = tss - rss
         # Calculate the degrees of freedom for the model and residuals
         df_model = Din.shape[1]  # Number of predictors including intercept
+<<<<<<< HEAD
         df_resid = Din.shape[0] - df_model # Degrees of freedom for the residuals
+=======
+        df_resid = Din.shape[0] - df_model
+>>>>>>> 1f986e9ae57f6fa683cbb8519c78e2c4d5ceff23
         # Calculate the mean squared error (MSE) for the model and residuals
         MSE_model = ess / df_model
         MSE_resid = rss / df_resid
