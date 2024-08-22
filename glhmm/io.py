@@ -79,7 +79,7 @@ def load_files(files,I=None,do_only_indices=False):
 
 def read_flattened_hmm_mat(file):
     """
-    Reads a MATLAB file containing hidden Markov model (HMM) parameters, 
+    Reads a MATLAB file containing hidden Markov model (HMM) parameters from the HMM-MAR toolbox, 
     and initializes a Gaussian linear hidden Markov model (GLHMM) using those parameters.
     """
     
@@ -103,8 +103,7 @@ def read_flattened_hmm_mat(file):
     connectivity = hmm_mat["train"]["S"][0][0]
     Pstructure = np.array(hmm_mat["train"]["Pstructure"][0][0], dtype=bool)
     Pistructure = np.squeeze(np.array(hmm_mat["train"]["Pistructure"][0][0], dtype=bool))
-
-    shared_covmat = (covtype == 'shareddiag') or (covtype == 'sharedfull')
+    shared_covmat = (covtype == 'shareddiag') or (covtype == 'sharedfull') 
     diagonal_covmat = (covtype == 'shareddiag') or (covtype == 'diag') 
 
     if "prior_Omega_Gam_rate" in hmm_mat:
