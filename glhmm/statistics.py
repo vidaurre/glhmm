@@ -17,6 +17,7 @@ from skimage.measure import label, regionprops
 from scipy.stats import ttest_ind, f_oneway, pearsonr, f, norm
 from itertools import combinations
 from sklearn.model_selection import train_test_split
+import os
 
 
 def test_across_subjects(D_data, R_data, idx_data=None, method="multivariate", Nperm=0, confounds = None, 
@@ -127,7 +128,6 @@ def test_across_subjects(D_data, R_data, idx_data=None, method="multivariate", N
             raise ValueError("CCA does not support parametric statistics. The number of permutations ('Nperm') cannot be set to 1. "
                             "Please increase the number of permutations to perform a valid analysis.")
 
-            
     
     # Check validity of method and data_type
     valid_methods = ["multivariate", "univariate", "cca"]
@@ -786,10 +786,13 @@ def test_across_visits(input_data, vpath_data, n_states, method="multivariate", 
     for t in tqdm(range(n_T)) if n_T > 1 & verbose==True else range(n_T):
         # Correct for confounds and center data_t
         data_t, _ = deconfound_values(input_data[t, :],None, confounds)
-        
+
         # Removing rows that contain nan-values
         if method == "multivariate" or method == "cca":
-            data_t, vpath_array, _ = remove_nan_values(data_t, vpath_array, method)
+            if vpath_surrogates is None:
+                data_t, vpath_array, _ = remove_nan_values(data_t, vpath_array, method)
+            else:
+                data_t, vpath_surrogates, _ = remove_nan_values(data_t, vpath_surrogates, method)
         
         if method != "state_pairs":
             ###################### Permutation testing for other tests beside state pairs #################################
@@ -1431,6 +1434,7 @@ def get_pval(test_statistics, Nperm, method, t, pval, FWER_correction=False):
 
 
             # Calculate the MaxT statistics for each permutation (excluding the observed)
+            # The empirical distribution of the maximum test statistics in the MaxT method does not include the observed statistics.
             maxT_statistics = np.max(np.abs(test_statistics[1:, :, :]), axis=(1, 2))
 
             # Calculate the observed test statistics
@@ -1441,7 +1445,8 @@ def get_pval(test_statistics, Nperm, method, t, pval, FWER_correction=False):
             maxT_expanded = maxT_statistics[:, np.newaxis, np.newaxis]  
 
             # Count how many times maxT_statistics exceed or equal each observed statistic
-            pval[t, :] = np.sum(maxT_expanded >= observed_expanded, axis=0)  / (Nperm)
+            # Adding 1 to account for the oberserved statistic
+            pval[t, :] = (np.sum(maxT_expanded >= observed_expanded, axis=0)+1)  / (Nperm +1)
 
             #pval[t, :] = np.nansum(max_test_statistics>= test_statistics[0,:], axis=0) / (Nperm + 1)
         else:    
@@ -2535,11 +2540,12 @@ def pval_cluster_based_correction(test_statistics, pval, alpha=0.05, individual_
                 # Find clusters using connected components labeling
                 cluster_label = label(thresh_nperm > 0)
                 regions = regionprops(cluster_label, intensity_image=thresh_nperm)
-
                 if regions:
                     # Sum values inside each cluster
                     temp_cluster_sums = [np.sum(region.intensity_image) for region in regions]
-                    max_cluster_sums[perm] = max(temp_cluster_sums)
+                    if temp_cluster_sums:
+                        # Store the sum of values for the biggest cluster
+                        max_cluster_sums[perm] = max(temp_cluster_sums)
             # Otherwise it is a 2D matrix
             else: 
                 # Take each permutation map and transform to Z
@@ -2556,9 +2562,9 @@ def pval_cluster_based_correction(test_statistics, pval, alpha=0.05, individual_
                     if len(np.unique(cluster_label)>0) or np.sum(cluster_label)==0:
                         # Sum values inside each cluster
                         temp_cluster_sums = [np.sum(thresh_nperm[cluster_label == label]) for label in range(1, len(np.unique(cluster_label)))]
-
-                        # Store the sum of values for the biggest cluster
-                        max_cluster_sums[perm] = max(temp_cluster_sums)
+                        if temp_cluster_sums:
+                            # Store the sum of values for the biggest cluster
+                            max_cluster_sums[perm] = max(temp_cluster_sums)
         # Calculate cluster threshold
         cluster_thresh = np.percentile(max_cluster_sums, 100 - (100 * alpha))
 
@@ -2927,7 +2933,55 @@ def reconstruct_session_matrices(D_con, D_sessions=None, n_timepoints=None, n_tr
         D_reconstruct[:, i, :] = D_con[start_idx:end_idx, :]
     return D_reconstruct
 
-def extract_epochs_from_events(input_data, index_data, event_files, events_directory, filtered_R_data, sampling_rate=1000, target_rate=250, ms_before_stimulus=0):
+
+
+def pad_vpath(vpath, lag_val):
+    """
+    Pad the Viterbi path with repeated first and last rows.
+
+    This function adds padding to the beginning and end of a given Viterbi path (vpath) from a Hidden Markov Model 
+    by repeating the first and last rows a specified number of times (lag_val). This is useful for maintaining 
+    boundary conditions in scenarios such as sequence alignment or signal processing where the state 
+    transitions need to be preserved.
+
+    Parameters:
+    ------------
+    vpath (numpy.ndarray): 
+        A 2D array representing the Viterbi path, where each row corresponds to a specific state in the HMM 
+        and each column represents different features or observations.
+
+    lag_val (int): 
+        The number of times to repeat the first and last rows for padding.
+
+    Returns:
+    ---------
+    numpy.ndarray: 
+        A new 2D array containing the padded Viterbi path, with shape ((lag_val + n_rows + lag_val), n_features), 
+        where n_rows is the original number of rows in vpath and n_features is the number of features.
+
+    Raises:
+    --------
+    ValueError: 
+        If `lag_val` is not a positive integer, or if `vpath` is not a 2D numpy array.
+    """
+    # Input validation
+    if not isinstance(vpath, np.ndarray) or vpath.ndim != 2:
+        raise ValueError("Invalid input: vpath must be a 2D numpy array.")
+    if not isinstance(lag_val, int) or lag_val <= 0:
+        raise ValueError("Invalid input: lag_val must be a positive integer.")
+
+    # Get the first and last rows
+    first_row = vpath[0]
+    last_row = vpath[-1]
+
+    # Create padding for the beginning and the end
+    beginning_padding = np.tile(first_row, (lag_val, 1))
+    end_padding = np.tile(last_row, (lag_val, 1))
+
+    # Concatenate the padding with the original vpath
+    vpath_pad = np.vstack((beginning_padding, vpath, end_padding))
+    return vpath_pad
+def extract_epochs_from_events(input_data, index_data, filtered_R_data, event_files, events_directory, fs=1000, fs_target=250, ms_before_stimulus=0):
     """
     Extract time-locked data epochs based on stimulus events.
 
@@ -2941,15 +2995,15 @@ def extract_epochs_from_events(input_data, index_data, event_files, events_direc
         2D array containing gamma values for the session, structured as ((number of timepoints * number of trials), number of states).
     index_data (numpy.ndarray): 
         2D array containing preprocessed indices for the session.
+    filtered_R_data (list): 
+        List of filtered R data arrays for each session based on the events.
     event_files (list): 
         List of event files corresponding to the session.
     events_directory (str): 
         Path to the directory containing the event files.
-    filtered_R_data (list): 
-        List of filtered R data arrays for each session.
-    sampling_rate (int, optional): 
+    fs (int, optional): 
         The original sampling frequency in Hz. Defaults to 1000 Hz.
-    target_rate (int, optional): 
+    fs_target (int, optional): 
         The target sampling frequency in Hz after resampling. Defaults to 250 Hz.
     ms_pre_stimulus (int, optional): 
         Time in milliseconds to offset the start of the epoch before the stimulus onset. Defaults to 0 ms.
@@ -2965,7 +3019,7 @@ def extract_epochs_from_events(input_data, index_data, event_files, events_direc
     """
 
     # Calculate the downsampling factor
-    downsampling_factor = sampling_rate / target_rate
+    downsampling_factor = fs / fs_target
 
     # Calculate the shift for the stimulus onset
     stimulus_shift = ms_before_stimulus / downsampling_factor if ms_before_stimulus != 0 else 0
@@ -2990,14 +3044,14 @@ def extract_epochs_from_events(input_data, index_data, event_files, events_direc
         event_differences = np.diff(downsampled_events, axis=0)
 
         # Identify valid events that are sufficiently spaced apart
-        valid_event_indices = (event_differences >= target_rate)
+        valid_event_indices = (event_differences >= fs_target)
 
         # Ensure the first event is included if it meets the downsample condition
-        if event_differences[0] >= target_rate:
+        if event_differences[0] >= fs_target:
             valid_event_indices = np.concatenate(([True], valid_event_indices))
 
         # Filter events that meet the downsample condition
-        valid_event_indices &= (len(data_session) - downsampled_events >= target_rate)
+        valid_event_indices &= (len(data_session) - downsampled_events >= fs_target)
 
         # Select filtered event indices based on the downsample condition
         filtered_event_indices = downsampled_events[valid_event_indices]
@@ -3008,7 +3062,7 @@ def extract_epochs_from_events(input_data, index_data, event_files, events_direc
         # Iterate over each filtered event
         for event_index in filtered_event_indices:
             start_index = event_index + stimulus_shift  # Adjust start index to include time before stimulus
-            end_index = start_index + target_rate  # Define end index for the epoch
+            end_index = start_index + fs_target  # Define end index for the epoch
 
             # Append the data for this epoch to the data_epochs_list
             data_epochs_list.append(data_session[start_index:end_index, :])
@@ -3028,7 +3082,7 @@ def extract_epochs_from_events(input_data, index_data, event_files, events_direc
     epoch_R_data = np.concatenate(filtered_R_data_list, axis=0)
 
     # Calculate the indices for the epoch data using a custom function
-    epoch_indices = statistics.get_indices_from_list(valid_epoch_counts, count_timestamps=False)
+    epoch_indices = get_indices_from_list(valid_epoch_counts, count_timestamps=False)
 
     # Return the processed data
     return epoch_data, epoch_indices, epoch_R_data
