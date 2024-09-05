@@ -1567,7 +1567,7 @@ def test_pred(hmm, Y, indices, model_tuned, scaler_x, scaler_y=None, behav=None,
                 behav_scaled = behav_scaled_tmp.flatten()
                 score = model_tuned.score(Xin_scaled, behav_scaled)
             if deconfounding:
-                score = model_tuned.score(Xin_scaled, behav_scaled)
+                score = model_tuned.score(Xin_scaled, behav)
                 score_deconf = model_tuned.score(Xin_scaled, behavD)        
 
     if return_corr:
