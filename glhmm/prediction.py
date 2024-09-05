@@ -1363,10 +1363,11 @@ def test_pred(hmm, Y, indices, model_tuned, scaler_x, scaler_y=None, behav=None,
     hmm : HMM object
         An instance of the HMM class, estimated on the group-level
     Y : array-like of shape (n_samples, n_variables_2)
-        (group-level) timeseries data of test set
+        (group-level) timeseries data of test set (when using summary metrics)
+        or of train and test set (when using kernel)
     indices : array-like of shape (n_test_sessions, 2) or (n_sessions, 2)
-        The start and end indices of each trial/session in the test data (when using features)
-        or in the train and test data (when using kernel). 
+        The start and end indices of each trial/session from the test data (when using summary metrics)
+        or from the train and test data (when using kernel). 
         Note that this function does not work if indices=None  
     model_tuned : estimator
         the trained and (if applicable) hyperparameter-optimised scikit-learn estimator
@@ -1566,6 +1567,7 @@ def test_pred(hmm, Y, indices, model_tuned, scaler_x, scaler_y=None, behav=None,
                 behav_scaled = behav_scaled_tmp.flatten()
                 score = model_tuned.score(Xin_scaled, behav_scaled)
             if deconfounding:
+                score = model_tuned.score(Xin_scaled, behav_scaled)
                 score_deconf = model_tuned.score(Xin_scaled, behavD)        
 
     if return_corr:
