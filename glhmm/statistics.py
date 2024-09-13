@@ -138,7 +138,7 @@ def test_across_subjects(D_data, R_data, idx_data=None, method="multivariate", N
     valid_test_combination = [False, True, "across_columns", "across_rows"]
     validate_condition(test_combination in valid_test_combination, "Invalid option specified for 'test_combination'. Must be one of: " + ', '.join(map(str, valid_test_combination)))
     
-    if method=="multivariate" and test_combination in valid_test_combination[2]:
+    if method=="multivariate" and test_combination is valid_test_combination[2]:
             raise ValueError("method is set to 'multivariate' and 'test_combination' is set to 'across_rows.\n"
                             "The multivariate test will return (1-by-q) p-values, so the test combination can only be across_columns and return a single p-value.\n "
                          "If you want to perform 'test_combination' while doing 'multivariate' then please set 'test_combination' to 'True' or 'across_columns.")
@@ -388,7 +388,7 @@ def test_across_trials_within_session(D_data, R_data, idx_data, method="multivar
     valid_test_combination = [False, True, "across_columns", "across_rows"]
     validate_condition(test_combination in valid_test_combination, "Invalid option specified for 'test_combination'. Must be one of: " + ', '.join(map(str, valid_test_combination)))
     
-    if method=="multivariate" and test_combination in valid_test_combination[-1:]:
+    if method=="multivariate" and test_combination is valid_test_combination[2]:
             raise ValueError("method is set to 'multivariate' and 'test_combination' is set to 'across_rows.\n"
                             "The multivariate test will return (1-by-q) p-values, so the test combination can only be across_rows which is one in this case to single p-value.\n"
                          "If you want to perform 'test_combination' while doing 'multivariate' then please set 'test_combination' to 'True' or 'across_columns.")
@@ -592,7 +592,7 @@ def test_across_sessions_within_subject(D_data, R_data, idx_data, method="multiv
     valid_test_combination = [False, True, "across_columns", "across_rows"]
     validate_condition(test_combination in valid_test_combination, "Invalid option specified for 'test_combination'. Must be one of: " + ', '.join(map(str, valid_test_combination)))
     
-    if method=="multivariate" and test_combination in valid_test_combination[-1:]:
+    if method=="multivariate" and test_combination is valid_test_combination[2]:
             raise ValueError("method is set to 'multivariate' and 'test_combination' is set to 'across_rows.\n"
                             "The multivariate test will return (1-by-q) p-values, so the test combination can only be across_columns and return a single p-value.\n "
                          "If you want to perform 'test_combination' while doing 'multivariate' then please set 'test_combination' to 'True' or 'across_columns.")
