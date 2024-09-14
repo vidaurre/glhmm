@@ -26,11 +26,11 @@ def show_trans_prob_mat(hmm,only_active_states=False,show_diag=True,show_colorba
     -----------
     hmm: HMM object
         An instance of the HMM class containing the transition probability matrix to be visualized.
-    only_active_states : bool, optional, default=False
+    only_active_states (bool), optional, default=False
         Whether to display only active states or all states in the matrix.
-    show_diag : bool, optional, defatult=True
+    show_diag (bool), optional, defatult=True
         Whether to display the diagonal elements of the matrix or not.
-    show_colorbar : bool, optional, default=True
+    show_colorbar (bool), optional, default=True
         Whether to display the colorbar next to the matrix or not.
     """
     
@@ -191,9 +191,9 @@ def show_beta(hmm,only_active_states=True,recompute_states=False,
     -----------
     hmm: HMM object
         An instance of the HMM class containing the beta coefficients to be visualized.
-    only_active_states: bool, optional, default=False
+    only_active_states(bool), optional, default=False
         If True, only the beta coefficients of active states are shown.
-    recompute_states: bool, optional, default=False
+    recompute_states(bool), optional, default=False
         If True, the betas will be recomputed from the data and the state time courses
     X: numpy.ndarray, optional, default=None
         The timeseries of set of variables 1.
@@ -201,7 +201,7 @@ def show_beta(hmm,only_active_states=True,recompute_states=False,
         The timeseries of set of variables 2.
     Gamma: numpy.ndarray, optional, default=None
         The state time courses
-    show_average: bool, optional, default=None
+    show_average(bool), optional, default=None
         If True, an additional row of the average beta coefficients is shown.
     alpha: float, optional, default=0.1
         The regularisation parameter to be applied if the betas are to be recomputed.
@@ -526,10 +526,11 @@ def interpolate_colormap(cmap_list):
         modified_cmap [:,channel_idx]=con_values
     return modified_cmap
 
-def plot_p_value_matrix(pval, alpha = 0.05, normalize_vals=True, figsize=(9, 5), 
+def plot_p_value_matrix(pval_in, alpha = 0.05, normalize_vals=True, figsize=(9, 5), 
                          title_text="Heatmap (p-values)", annot=False, 
                         cmap_type='default', cmap_reverse=True, xlabel="", ylabel="", 
-                        xticklabels=None, x_tick_min=None, x_tick_max=None, num_x_ticks=5, none_diagonal = False, num_colors = 259, xlabel_rotation=0):
+                        xticklabels=None, x_tick_min=None, x_tick_max=None, num_x_ticks=5, 
+                        none_diagonal = False, num_colors = 259, xlabel_rotation=0, save_path=None):
     from matplotlib import cm, colors
     import seaborn as sb
     from mpl_toolkits.axes_grid1 import make_axes_locatable
@@ -565,21 +566,29 @@ def plot_p_value_matrix(pval, alpha = 0.05, normalize_vals=True, figsize=(9, 5),
         Define the number of different shades of color.
     xlabel_rotation (numpy-mdarray), default=0
         The degree of rotation for the labels in the x-axis
+    save_path (str, optional), default=None
+        If a string is provided, it saves the figure to that specified path
     """
+    pval = pval_in.copy()
     if pval.ndim==0:
         pval = np.reshape(pval, (1, 1))
     if xlabel_rotation==45:
         ha ="right"
     else:
         ha = "center"    
+    num_x_ticks = pval.shape[1] if pval.shape[1] < 5 else num_x_ticks
 
+    pval_min = -3
+    color_array = np.logspace(pval_min, 0, num_colors).reshape(1, -1)
+    
+    pval[pval<10**pval_min] =10**pval_min 
 
     fig, axes = plt.subplots(figsize=figsize)
     if len(pval.shape)==1:
         pval =np.expand_dims(pval,axis=0)
     if cmap_type=='default':
         if normalize_vals:
-            color_array = np.logspace(-3, 0, num_colors).reshape(1, -1)
+            color_array = np.logspace(pval_min, 0, num_colors).reshape(1, -1)
 
         if alpha == None and normalize_vals==False:
             cmap = cm.coolwarm.reversed()
@@ -592,7 +601,7 @@ def plot_p_value_matrix(pval, alpha = 0.05, normalize_vals=True, figsize=(9, 5),
             # Create a LinearSegmentedColormap
             cmap = LinearSegmentedColormap.from_list('custom_colormap', modified_cmap)
         else:
-            color_array = np.logspace(-3, 0, num_colors).reshape(1, -1)
+            color_array = np.logspace(pval_min, 0, num_colors).reshape(1, -1)
             # Make a jump in color after alpha
             # Get blue colormap
             cmap_blue = blue_colormap()
@@ -646,22 +655,31 @@ def plot_p_value_matrix(pval, alpha = 0.05, normalize_vals=True, figsize=(9, 5),
     steps=len(pval)
     
     # define x_ticks
-    x_tick_positions = np.linspace(0, len(pval), num_x_ticks).astype(int)
+    x_tick_positions = np.linspace(0, pval.shape[1]-1, num_x_ticks).astype(int)
 
     # Generate x-tick labels based on user input or default to time points
     if x_tick_min is not None and x_tick_max is not None:
         x_tick_labels = np.linspace(x_tick_min, x_tick_max, num_x_ticks).round(2)
+        if np.all(x_tick_labels == x_tick_labels.astype(int)):
+            x_tick_labels = x_tick_labels.astype(int)
+    elif x_tick_min is not None:
+        x_tick_labels = np.linspace(x_tick_min, pval.shape[1], num_x_ticks).round(2)
+        if np.all(x_tick_labels == x_tick_labels.astype(int)):
+            x_tick_labels = x_tick_labels.astype(int)
+    elif x_tick_max is not None:
+        x_tick_labels = np.linspace(0, x_tick_max, num_x_ticks).round(2)
+        if np.all(x_tick_labels == x_tick_labels.astype(int)):
+            x_tick_labels = x_tick_labels.astype(int) 
     else:
         x_tick_labels = x_tick_positions
 
-
     # Set the x-axis ticks
     if xticklabels is not None:
-        axes.set_xticks(np.arange(len(xticklabels)) + 0.5)
-        axes.set_xticklabels(xticklabels, rotation=xlabel_rotation, fontsize=10, ha=ha)
+        axes.set_xticks(x_tick_positions+0.5)
+        axes.set_xticklabels(x_tick_labels, rotation=xlabel_rotation, fontsize=10, ha=ha)
     elif pval.shape[1]>1:
-        axes.set_xticks(np.linspace(0, pval.shape[1]-1, steps).astype(int)+0.5)
-        axes.set_xticklabels(np.linspace(1, pval.shape[1], steps).astype(int), rotation=xlabel_rotation, fontsize=10, ha=ha)
+        axes.set_xticks(x_tick_positions+0.5)
+        axes.set_xticklabels(x_tick_labels, rotation=xlabel_rotation, fontsize=10, ha=ha)
     else:
         axes.set_xticklabels([])
     # Set the y-axis ticks
@@ -715,14 +733,18 @@ def plot_p_value_matrix(pval, alpha = 0.05, normalize_vals=True, figsize=(9, 5),
         colorbar.set_ticks(np.linspace(min_value, max_value, 5).round(2))
         #colorbar.set_ticks([0, 0.25, 0.5, 1])  # Adjust ticks as needed
         
+    # Save the figure if save_path is provided
+    if save_path is not None:
+        plt.savefig(save_path, bbox_inches='tight')
 
     # Show the plot
     plt.show()
     
-def plot_correlation_matrix(corr_vals, performed_tests, normalize_vals=False, 
+def plot_correlation_matrix(corr_vals, statistical_measures, normalize_vals=False, 
                             figsize=(9, 5), title_text="Correlation Coefficients Heatmap", 
                             annot=False, cmap_type='default', cmap_reverse=True, xlabel="", ylabel="", 
-                            xticklabels=None,xlabel_rotation=45, none_diagonal = False, num_colors = 256):
+                            xticklabels=None, x_tick_min=None, x_tick_max=None, num_x_ticks=5,
+                            xlabel_rotation=0, none_diagonal = False, num_colors = 256, save_path=None):
     from matplotlib import cm, colors
     from mpl_toolkits.axes_grid1 import make_axes_locatable
     """
@@ -732,7 +754,7 @@ def plot_correlation_matrix(corr_vals, performed_tests, normalize_vals=False,
     -----------
     corr_vals (numpy.ndarray)
         Base statistics of correlation coefficients.
-    performed_tests (dict)
+    statistical_measures (dict)
         Holds information about the different test statistics that have been applied.
     normalize_vals (bool, optional)
         If True, the data range will be normalized from 0 to 1 (default is False).
@@ -757,8 +779,10 @@ def plot_correlation_matrix(corr_vals, performed_tests, normalize_vals=False,
         If True, turn the diagonal into NaN numbers.
     num_colors (int, optional), default=256:
         Number of colors to use in the colormap.
+    save_path (str, optional), default=None
+        If a string is provided, it saves the figure to that specified path
     """
-    if performed_tests["t_test_cols"]!=[] or performed_tests["f_test_cols"]!=[]:
+    if statistical_measures!={'corr_coef_cols': 'all_columns'}:
         raise ValueError("Cannot plot the base statistics for the correlation coefficients because different test statistics have been used.")
     
     if corr_vals.ndim==0:
@@ -769,6 +793,7 @@ def plot_correlation_matrix(corr_vals, performed_tests, normalize_vals=False,
         ha = "center"    
     # Number of x-tick steps
     steps=len(corr_vals)
+    num_x_ticks = corr_vals.shape[1] if corr_vals.shape[1] < 5 else num_x_ticks
     fig, axes = plt.subplots(figsize=figsize)
     if len(corr_vals.shape)==1:
         corr_vals =np.expand_dims(corr_vals,axis=0)
@@ -798,19 +823,40 @@ def plot_correlation_matrix(corr_vals, performed_tests, normalize_vals=False,
     axes.set_xlabel(xlabel, fontsize=12)
     axes.set_ylabel(ylabel, fontsize=12)
     axes.set_title(title_text, fontsize=14)
+
+    # define x_ticks
+    #x_tick_positions = np.linspace(0, corr_vals.shape[1], num_x_ticks).astype(int)
+    x_tick_positions = np.linspace(0, corr_vals.shape[1]-1, num_x_ticks).astype(int)
+    # Generate x-tick labels based on user input or default to time points
+    if x_tick_min is not None and x_tick_max is not None:
+        x_tick_labels = np.linspace(x_tick_min, x_tick_max, num_x_ticks).round(2)
+        if np.all(x_tick_labels == x_tick_labels.astype(int)):
+            x_tick_labels = x_tick_labels.astype(int)
+    elif x_tick_min is not None:
+        x_tick_labels = np.linspace(x_tick_min, pval.shape[1], num_x_ticks).round(2)
+        if np.all(x_tick_labels == x_tick_labels.astype(int)):
+            x_tick_labels = x_tick_labels.astype(int)
+    elif x_tick_max is not None:
+        x_tick_labels = np.linspace(0, x_tick_max, num_x_ticks).round(2)
+        if np.all(x_tick_labels == x_tick_labels.astype(int)):
+            x_tick_labels = x_tick_labels.astype(int) 
+    else:
+        x_tick_labels = x_tick_positions
+
     # Set the x-axis ticks
     if xticklabels is not None:
-        axes.set_xticks(np.arange(len(xticklabels)) + 0.5)
-        axes.set_xticklabels(xticklabels, rotation=xlabel_rotation, ha=ha,fontsize=10)
+        axes.set_xticks(x_tick_positions+0.5)
+        axes.set_xticklabels(x_tick_labels, rotation=xlabel_rotation, fontsize=10, ha=ha)
     elif corr_vals.shape[1]>1:
-        axes.set_xticks(np.linspace(0, corr_vals.shape[1]-1, steps).astype(int)+0.5)
-        axes.set_xticklabels(np.linspace(1, corr_vals.shape[1], steps).astype(int), rotation=xlabel_rotation, ha=ha, fontsize=10)
+        axes.set_xticks(x_tick_positions+0.5)
+        axes.set_xticklabels(x_tick_labels, rotation=xlabel_rotation, fontsize=10, ha=ha)
     else:
         axes.set_xticklabels([])
+
     # Set the y-axis ticks
     if corr_vals.shape[0]>1:
         axes.set_yticks(np.linspace(0, corr_vals.shape[0]-1, steps).astype(int)+0.5)
-        axes.set_yticklabels(np.linspace(1, corr_vals.shape[0], steps).astype(int), rotation=xlabel_rotation, ha=ha, fontsize=10)
+        axes.set_yticklabels(np.linspace(1, corr_vals.shape[0], steps).astype(int), rotation=xlabel_rotation, fontsize=10, ha=ha)
     else:
         axes.set_yticklabels([])
     # Create an axes on the right side of ax. The width of cax will be 5%
@@ -822,22 +868,29 @@ def plot_correlation_matrix(corr_vals, performed_tests, normalize_vals=False,
     colorbar = plt.colorbar(heatmap.get_children()[0], cax=cax)
     # Set the ticks to range from the bottom to the top of the colorbar
     # Get the minimum and maximum values from your data
-    min_value = np.nanmin(corr_vals).round(2)
-    max_value = np.floor(np.nanmax(corr_vals) * 100) / 100 
-
+    # Determine the precision needed to avoid zero for min_value
+    min_digit = 2 - int(np.floor(np.log10(abs(np.nanmin(corr_vals))))) - 1
+    min_val = np.round(np.nanmin(corr_vals), min_digit) # -1 => second digit number beside the first int val 
+    max_digit = 2 - int(np.floor(np.log10(abs(np.nanmax(corr_vals))))) - 1
+    factor_max =10**(max_digit)
+    max_val = np.floor(np.nanmax(corr_vals)*factor_max)/factor_max # -1 => second digit number beside the first int val
     if normalize_vals:
         colorbar.set_ticks(np.linspace(-1, 1, 7).round(2))
     else:
         # Set ticks with at least 5 values evenly spaced between min and max
-        colorbar.set_ticks(np.linspace(min_value, max_value, 7).round(2))
+        colorbar.set_ticks(np.linspace(min_val, max_val, 7))
+        precision = np.min([min_digit,max_digit])
+        colorbar.set_ticklabels(np.linspace(min_val, max_val, 7).round(precision))
         
 
-        
+    # Save the figure if save_path is provided
+    if save_path is not None:
+        plt.savefig(save_path, bbox_inches='tight') 
     # Show the plot
     plt.show()
 
   
-def plot_permutation_distribution(test_statistic, title_text="Permutation Distribution",xlabel="Test Statistic Values",ylabel="Density"):
+def plot_permutation_distribution(test_statistic, title_text="Permutation Distribution",xlabel="Test Statistic Values",ylabel="Density", save_path=None):
     """
     Plot the histogram of the permutation with the observed statistic marked.
 
@@ -851,6 +904,8 @@ def plot_permutation_distribution(test_statistic, title_text="Permutation Distri
         Text of the xlabel.
     ylabel (str, optional), default="Density"
         Text of the ylabel.
+    save_path (str, optional), default=None
+        If a string is provided, it saves the figure to that specified path
     """
     plt.figure()
     sb.histplot(test_statistic, kde=True)
@@ -860,11 +915,15 @@ def plot_permutation_distribution(test_statistic, title_text="Permutation Distri
     plt.title(title_text, fontsize=14)
         
     plt.legend()
+
+    # Save the figure if save_path is provided
+    if save_path is not None:
+        plt.savefig(save_path, bbox_inches='tight') 
     plt.show()
 
 
 
-def plot_scatter_with_labels(p_values, alpha=0.05, title_text="", xlabel=None, ylabel=None, xlim_start=0.9, ylim_start=0):
+def plot_scatter_with_labels(p_values, alpha=0.05, title_text="", xlabel=None, ylabel=None, xlim_start=0.9, ylim_start=0, save_path=None):
     """
     Create a scatter plot to visualize p-values with labels indicating significant points.
 
@@ -884,6 +943,8 @@ def plot_scatter_with_labels(p_values, alpha=0.05, title_text="", xlabel=None, y
         Start position of x-axis limits.
     ylim_start (float, optional), default=-0.1
         Start position of y-axis limits.
+    save_path (str, optional), default=None
+        If a string is provided, it saves the figure to that specified path
 
     Notes:
     ------
@@ -942,44 +1003,52 @@ def plot_scatter_with_labels(p_values, alpha=0.05, title_text="", xlabel=None, y
 
     # Show the plot
     plt.tight_layout()
+    # Save the figure if save_path is provided
+    if save_path is not None:
+        plt.savefig(save_path, bbox_inches='tight') 
+
     plt.show()
     
 import seaborn as sns
 
-def plot_vpath(viterbi_path, signal=None, idx_data=None, figsize=(7, 4), fontsize_labels=13, fontsize_title=16, yticks=None, time_conversion_rate=None, xlabel="Timepoints", ylabel="", title="Viterbi Path", signal_label="Signal", show_legend=True, vertical_linewidth=1.5):
+def plot_vpath(viterbi_path, signal=None, idx_data=None, figsize=(7, 4), fontsize_labels=13, fontsize_title=16, 
+               yticks=None, time_conversion_rate=None, xlabel="Timepoints", ylabel="", title="Viterbi Path", 
+               signal_label="Signal", show_legend=True, vertical_linewidth=1.5, save_path=None):
     """
     Plot Viterbi path with optional signal overlay.
 
     Parameters:
     -----------
-    viterbi_path
+    viterbi_path 
         The Viterbi path data matrix.
-    signal : array-like, optional
+    signal (numpy.ndarray), optional 
         Signal data to overlay on the plot. Default is None.
-    idx_data : array-like, optional
+    idx_data (numpy.ndarray), optional  
         Array representing time intervals. Default is None.
-    figsize : tuple, optional
+    figsize (tuple), optional 
         Figure size. Default is (7, 4).
-    fontsize_labels : int, optional
+    fontsize_labels (int), optional
         Font size for axis labels. Default is 13.
-    fontsize_title : int, optional
+    fontsize_title (int), optional 
         Font size for plot title. Default is 16.
-    yticks : bool, optional
+    yticks (bool), optional 
         Whether to show y-axis ticks. Default is None.
-    time_conversion_rate : float, optional
+    time_conversion_rate (float), optional
         Conversion rate from time steps to seconds. Default is None.
-    xlabel : str, optional
+    xlabel (str), optional
         Label for the x-axis. Default is "Timepoints".
-    ylabel : str, optional
+    ylabel (str), optional
         Label for the y-axis. Default is "".
-    title : str, optional
+    title (str), optional 
         Title for the plot. Default is "Viterbi Path".
-    signal_label : str, optional
+    signal_label (str, optional
         Label for the signal plot. Default is "Signal".
-    show_legend : bool, optional
+    show_legend (bool), optional
         Whether to show the legend. Default is True.
-    vertical_linewidth : float, optional
+    vertical_linewidth (float), optional
         Line width for vertical gray lines. Default is 1.5.
+    save_path (str, optional), default=None
+        If a string is provided, it saves the figure to that specified path
     """
     num_states = viterbi_path.shape[1]
     colors = sns.color_palette("Set3", n_colors=num_states)
@@ -1039,10 +1108,14 @@ def plot_vpath(viterbi_path, signal=None, idx_data=None, figsize=(7, 4), fontsiz
     axes.tick_params(axis='both', labelsize=fontsize_labels)
 
     plt.tight_layout() 
+    # Save the figure if save_path is provided
+    if save_path is not None:
+        plt.savefig(save_path, bbox_inches='tight') 
     plt.show()
 
     
-def plot_average_probability(Gamma_data, title='Average probability for each state', fontsize=16, figsize=(7, 5), vertical_lines=None, line_colors=None, highlight_boxes=False):
+def plot_average_probability(Gamma_data, title='Average probability for each state', fontsize=16, figsize=(7, 5), 
+                             vertical_lines=None, line_colors=None, highlight_boxes=False, save_path=None):
 
     """
     Plots the average probability for each state over time.
@@ -1064,6 +1137,8 @@ def plot_average_probability(Gamma_data, title='Average probability for each sta
         List of colors for each pair of vertical lines. If True, generates random colors (unless a list is provided).
     highlight_boxes (bool, optional), default=False:
         Whether to include highlighted boxes for each pair of vertical lines.
+    save_path (str, optional), default=None
+        If a string is provided, it saves the figure to that specified path
     """
 
     # Initialize an array for average gamma values
@@ -1107,11 +1182,15 @@ def plot_average_probability(Gamma_data, title='Average probability for each sta
 
     # Place legend for the lines to the right of the figure
     plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
-
+    # Save the figure if save_path is provided
+    if save_path is not None:
+        plt.savefig(save_path, bbox_inches='tight') 
     # Show the plot
     plt.show()
 
-def plot_FO(FO, figsize=(8, 4), fontsize_labels=13, fontsize_title=16, width=0.8,xlabel='Subject',ylabel='Fractional occupancy',title='State Fractional Occupancies', show_legend=True, num_ticks=10):
+def plot_FO(FO, figsize=(8, 4), fontsize_labels=13, fontsize_title=16, width=0.8,xlabel='Subject',
+            ylabel='Fractional occupancy',title='State Fractional Occupancies', 
+            show_legend=True, num_ticks=10, save_path=None):
     """
     Plot fractional occupancies for different states.
 
@@ -1135,6 +1214,8 @@ def plot_FO(FO, figsize=(8, 4), fontsize_labels=13, fontsize_title=16, width=0.8
         Title for the plot.
     show_legend (bool, optional), default=True:
         Whether to show the legend.
+    save_path (str, optional), default=None
+        If a string is provided, it saves the figure to that specified path
     """
     fig, axes = plt.subplots(figsize=figsize)
     bottom = np.zeros(FO.shape[0])
@@ -1176,10 +1257,15 @@ def plot_FO(FO, figsize=(8, 4), fontsize_labels=13, fontsize_title=16, width=0.8
         legend = axes.legend(['State {}'.format(i+1) for i in range(FO.shape[1])], fontsize=fontsize_labels, loc='upper left', bbox_to_anchor=(1, 1))
 
     plt.tight_layout() 
+    # Save the figure if save_path is provided
+    if save_path is not None:
+        plt.savefig(save_path, bbox_inches='tight') 
     plt.show()
 
 
-def plot_switching_rates(SR, figsize=(8, 4), fontsize_labels=13, fontsize_title=16, width=0.18, xlabel='Subject', ylabel='Switching Rate', title='State Switching Rates', show_legend=True, num_ticks=10):
+def plot_switching_rates(SR, figsize=(8, 4), fontsize_labels=13, fontsize_title=16, width=0.18, 
+                         xlabel='Subject', ylabel='Switching Rate', title='State Switching Rates', 
+                         show_legend=True, num_ticks=10, save_path=None):
     """
     Plot switching rates for different states.
 
@@ -1203,6 +1289,8 @@ def plot_switching_rates(SR, figsize=(8, 4), fontsize_labels=13, fontsize_title=
         Title for the plot.
     show_legend (bool, optional), default=True:
         Whether to show the legend.
+    save_path (str, optional), default=None
+        If a string is provided, it saves the figure to that specified path
     """
     fig, axes = plt.subplots(figsize=figsize, constrained_layout=True)
     multiplier = 0
@@ -1242,10 +1330,14 @@ def plot_switching_rates(SR, figsize=(8, 4), fontsize_labels=13, fontsize_title=
 
     if show_legend:
         axes.legend(['State {}'.format(i+1) for i in range(num_states)], fontsize=fontsize_labels, loc='upper left', bbox_to_anchor=(1, 1))
-
+    # Save the figure if save_path is provided
+    if save_path is not None:
+        plt.savefig(save_path, bbox_inches='tight') 
     plt.show()
 
-def plot_state_lifetimes(LT, figsize=(8, 4), fontsize_labels=13, fontsize_title=16, width=0.18, xlabel='Subject', ylabel='Lifetime', title='State Lifetimes', show_legend=True, num_ticks=10):
+def plot_state_lifetimes(LT, figsize=(8, 4), fontsize_labels=13, fontsize_title=16, width=0.18, 
+                         xlabel='Subject', ylabel='Lifetime', title='State Lifetimes', 
+                         show_legend=True, num_ticks=10, save_path=None):
     """
     Plot state lifetimes for different states.
 
@@ -1269,6 +1361,8 @@ def plot_state_lifetimes(LT, figsize=(8, 4), fontsize_labels=13, fontsize_title=
         Title for the plot.
     show_legend (bool, optional), default=True:
         Whether to show the legend.
+    save_path (str, optional), default=None
+        If a string is provided, it saves the figure to that specified path
     """
     fig, axes = plt.subplots(figsize=figsize, constrained_layout=True)
     multiplier = 0
@@ -1308,9 +1402,13 @@ def plot_state_lifetimes(LT, figsize=(8, 4), fontsize_labels=13, fontsize_title=
 
     if show_legend:
         axes.legend(['State {}'.format(i+1) for i in range(num_states)], fontsize=fontsize_labels, loc='upper left', bbox_to_anchor=(1, 1))
+
+    # Save the figure if save_path is provided
+    if save_path is not None:
+        plt.savefig(save_path, bbox_inches='tight') 
     plt.show()
 
-def plot_state_prob_and_covariance(init_stateP, TP, state_means, state_FC, cmap='viridis', figsize=(9, 7), num_ticks=5):
+def plot_state_prob_and_covariance(init_stateP, TP, state_means, state_FC, cmap='viridis', figsize=(9, 7), num_ticks=5, save_path=None):
     """
     Plot HMM parameters.
 
@@ -1326,10 +1424,12 @@ def plot_state_prob_and_covariance(init_stateP, TP, state_means, state_FC, cmap=
         State covariances.
     cmap : str or Colormap, optional
         The colormap to be used for plotting. Default is 'viridis'.
-    figsize : tuple, optional
+    figsize (tuple), optional
         Figure size. Default is (9, 7).
-    num_ticks : int, optional
+    num_ticks (int), optional 
         Number of ticks for the colorbars
+    save_path (str, optional), default=None
+        If a string is provided, it saves the figure to that specified path
     """
     # Define the number of plots and their layout
     num_plots = 3 + state_FC.shape[2]  # Number of plots including initial stateP, TP, state_means, and state_FC
@@ -1407,10 +1507,13 @@ def plot_state_prob_and_covariance(init_stateP, TP, state_means, state_FC, cmap=
             axes[row_idx, col_idx].axis('off')  # Leave empty plots blank
 
     plt.subplots_adjust(hspace=0.5, wspace=0.5)
+    # Save the figure if save_path is provided
+    if save_path is not None:
+        plt.savefig(save_path, bbox_inches='tight') 
     plt.show()
     
 def plot_condition_difference(Gamma_epoch, R_trials, title='Average Probability and Difference', fontsize=16, figsize=(9, 2), vertical_lines=None, line_colors=None, highlight_boxes=False, 
-                              stimulus_onset=None, x_tick_min=None, x_tick_max=None, num_x_ticks=5):
+                              stimulus_onset=None, x_tick_min=None, x_tick_max=None, num_x_ticks=5, xlabel ='Timepoints',save_path=None):
     """
     Plots the average probability for each state over time for two conditions and their difference.
 
@@ -1442,6 +1545,8 @@ def plot_condition_difference(Gamma_epoch, R_trials, title='Average Probability 
         Maximum value for the x-tick labels.
     num_x_ticks (int, optional), default=5:
         Number of x-ticks.
+    save_path (str), optional, default=None
+        If a string is provided, it saves the figure to that specified path
     Example usage:
     --------------
     plot_condition_difference(Gamma_epoch, R_trials, vertical_lines=[(10, 100)], highlight_boxes=True)
@@ -1480,6 +1585,16 @@ def plot_condition_difference(Gamma_epoch, R_trials, title='Average Probability 
     # Generate x-tick labels based on user input or default to time points
     if x_tick_min is not None and x_tick_max is not None:
         x_tick_labels = np.linspace(x_tick_min, x_tick_max, num_x_ticks).round(2)
+        if np.all(x_tick_labels == x_tick_labels.astype(int)):
+            x_tick_labels = x_tick_labels.astype(int)
+    elif x_tick_min is not None:
+        x_tick_labels = np.linspace(x_tick_min, pval.shape[1], num_x_ticks).round(2)
+        if np.all(x_tick_labels == x_tick_labels.astype(int)):
+            x_tick_labels = x_tick_labels.astype(int)
+    elif x_tick_max is not None:
+        x_tick_labels = np.linspace(0, x_tick_max, num_x_ticks).round(2)
+        if np.all(x_tick_labels == x_tick_labels.astype(int)):
+            x_tick_labels = x_tick_labels.astype(int) 
     else:
         x_tick_labels = x_tick_positions
 
@@ -1491,6 +1606,7 @@ def plot_condition_difference(Gamma_epoch, R_trials, title='Average Probability 
         axes[condition].set_xticklabels(x_tick_labels)
         axes[condition].set_yticks(np.linspace(global_min, global_max, 5).round(2))
         axes[condition].set_ylim(global_min, global_max)  # Set standardized y-limits # Set standardized y-limits
+        axes[condition].set_xlim(x_tick_positions[0], x_tick_positions[-1])
 
         
     # Find the element-wise difference
@@ -1503,6 +1619,7 @@ def plot_condition_difference(Gamma_epoch, R_trials, title='Average Probability 
     axes[2].set_yticks(np.linspace(axes[2].get_ylim()[0], axes[2].get_ylim()[1], 5).round(2))
     axes[2].set_xticks(x_tick_positions)
     axes[2].set_xticklabels(x_tick_labels)
+    axes[2].set_xlim(x_tick_positions[0], x_tick_positions[-1])
 
     # Add stimulus onset line and label
     if stimulus_onset is not None:
@@ -1522,24 +1639,27 @@ def plot_condition_difference(Gamma_epoch, R_trials, title='Average Probability 
 
     # Set labels fontsize
     for ax in axes:
-        ax.set_xlabel('Timepoints', fontsize=12)
+        ax.set_xlabel(xlabel, fontsize=12)
         ax.set_ylabel('Average probability', fontsize=12)
 
     # Label each state on the right for the last figure (axes[2])
     state_labels = [f"State {state+1}" for state in range(Gamma_epoch.shape[2])]
-    axes[2].legend(state_labels, loc='center left', bbox_to_anchor=(1, 0.5), fontsize=12)
+    axes[2].legend(state_labels, loc='center left', bbox_to_anchor=(1.05, 0.5), fontsize=12)
 
     fig.suptitle(title, fontsize=fontsize)
 
     # Show the plot
-    plt.tight_layout(rect=[0, 0, 1, 0.96])
+    plt.tight_layout(rect=[0, 0, 1, 0.95])
+    # Save the figure if save_path is provided
+    if save_path is not None:
+        plt.savefig(save_path, bbox_inches='tight') 
     plt.show()
     
     
-def plot_p_values_over_time(pval, figsize=(8, 4), xlabel="Timepoints", ylabel="P-values (Log Scale)",
+def plot_p_values_over_time(pval_in, figsize=(8, 4), xlabel="Timepoints", ylabel="P-values (Log Scale)",
                             title_text="P-values over time", stimulus_onset=None, x_tick_min=None, x_tick_max=None, num_x_ticks=5, 
                             tick_positions=[0, 0.001, 0.01, 0.05, 0.1, 0.3, 1], num_colors=259, 
-                            alpha=0.05,plot_style = "line", linewidth=2.5,
+                            alpha=0.05,plot_style = "line", linewidth=2.5,save_path=None
                             ):
     """
     Plot a scatter plot of p-values over time with a log-scale y-axis and a colorbar.
@@ -1548,7 +1668,7 @@ def plot_p_values_over_time(pval, figsize=(8, 4), xlabel="Timepoints", ylabel="P
     -----------
     pval (numpy.ndarray):
         The p-values data to be plotted.
-    figsize : tuple, optional, default=(8, 4):
+    figsize (tuple), optional, default=(8, 4):
         Figure size in inches (width, height).
     total_time_seconds : float, optional, default=None
         Total time duration in seconds. If provided, time points will be scaled accordingly.
@@ -1576,13 +1696,15 @@ def plot_p_values_over_time(pval, figsize=(8, 4), xlabel="Timepoints", ylabel="P
         Style of plot.
     linewidth (float, optional), default=2.5:
         Width of the lines in the plot.
+    save_path (str), optional, default=None
+        If a string is provided, it saves the figure to that specified path
     """
 
     # Check if stimulus_onset is a number
     if stimulus_onset is not None and not isinstance(stimulus_onset, (int, float)):
         raise ValueError("stimulus_onset must be a number.")
     
-    if pval.ndim != 1:
+    if pval_in.ndim != 1:
         # Raise an exception and stop function execution
         raise ValueError("To use the function 'plot_p_values_over_time', the variable for p-values must be one-dimensional.")
 
@@ -1591,10 +1713,14 @@ def plot_p_values_over_time(pval, figsize=(8, 4), xlabel="Timepoints", ylabel="P
     #     time_points = np.linspace(0, total_time_seconds, len(pval))
     # else:
     #     time_points = np.arange(len(pval))
-    time_points = np.arange(len(pval))
 
+    pval_min = -3
     # Convert to log scale
-    color_array = np.logspace(-3, 0, num_colors).reshape(1, -1)
+    color_array = np.logspace(pval_min, 0, num_colors).reshape(1, -1)
+    pval = pval_in.copy()
+    pval[pval<10**pval_min] =10**pval_min 
+
+    time_points = np.arange(len(pval))
 
     if alpha is None:
         # Create custom colormap
@@ -1633,7 +1759,7 @@ def plot_p_values_over_time(pval, figsize=(8, 4), xlabel="Timepoints", ylabel="P
     _, axes = plt.subplots(figsize=figsize)
 
     # Normalize the data to [0, 1] for the colormap with logarithmic scale
-    norm = LogNorm(vmin=1e-3, vmax=1)
+    norm = LogNorm(vmin=10**pval_min , vmax=1)
 
     if plot_style == "line":
         if alpha !=None:
@@ -1646,7 +1772,7 @@ def plot_p_values_over_time(pval, figsize=(8, 4), xlabel="Timepoints", ylabel="P
                 axes.plot([time_points[i], time_points[i+1]], [pval[i], pval[i+1]], color=color, linewidth=linewidth)
         else:
             for i in range(len(time_points)-1):
-                if pval[i+1]>0.05:
+                if pval[i+1]>alpha:
                     color = cmap(norm(pval[i+1]))
                 else:
                     color = cmap(norm(pval[i]))
@@ -1668,6 +1794,16 @@ def plot_p_values_over_time(pval, figsize=(8, 4), xlabel="Timepoints", ylabel="P
     # Generate x-tick labels based on user input or default to time points
     if x_tick_min is not None and x_tick_max is not None:
         x_tick_labels = np.linspace(x_tick_min, x_tick_max, num_x_ticks).round(2)
+        if np.all(x_tick_labels == x_tick_labels.astype(int)):
+            x_tick_labels = x_tick_labels.astype(int)
+    elif x_tick_min is not None:
+        x_tick_labels = np.linspace(x_tick_min, pval.shape[1], num_x_ticks).round(2)
+        if np.all(x_tick_labels == x_tick_labels.astype(int)):
+            x_tick_labels = x_tick_labels.astype(int)
+    elif x_tick_max is not None:
+        x_tick_labels = np.linspace(0, x_tick_max, num_x_ticks).round(2)
+        if np.all(x_tick_labels == x_tick_labels.astype(int)):
+            x_tick_labels = x_tick_labels.astype(int) 
     else:
         x_tick_labels = x_tick_positions
 
@@ -1705,20 +1841,23 @@ def plot_p_values_over_time(pval, figsize=(8, 4), xlabel="Timepoints", ylabel="P
     # Add stimulus onset line and label
     if stimulus_onset is not None:
         axes.axvline(x=stimulus_onset, color='black', linestyle='--', linewidth=2)
-            
+    # Save the figure if save_path is provided
+    if save_path is not None:
+        plt.savefig(save_path, bbox_inches='tight') 
     plt.show()
     
     
-def plot_p_values_bar(pval,xticklabels=[],  figsize=(9, 4), num_colors=256, xlabel="",
+def plot_p_values_bar(pval_in,xticklabels=[],  figsize=(9, 4), num_colors=256, xlabel="",
                         ylabel="P-values (Log Scale)", title_text="Bar Plot",
                         tick_positions=[0, 0.001, 0.01, 0.05, 0.1, 0.3, 1], top_adjustment=0.9, 
-                        alpha = 0.05, pad_title=20, xlabel_rotation=45, pval_text_hight_same=False):
+                        alpha = 0.05, pad_title=20, xlabel_rotation=45, pval_text_hight_same=False, 
+                        save_path=None):
     """
     Visualize a bar plot with LogNorm and a colorbar.
 
     Parameters:
     -----------
-    pval (numpy.ndarray):
+    pval_in (numpy.ndarray):
         Array of p-values to be plotted.
     xticklabels (list, optional), default=[]:
         List of categories or variables.
@@ -1740,13 +1879,16 @@ def plot_p_values_bar(pval,xticklabels=[],  figsize=(9, 4), num_colors=256, xlab
         Alpha value is the threshold we set for the p-values when doing visualization.
     pad_title (int, optional), default=20:
         Padding for the plot title.
+    save_path (str), optional, default=None
+        If a string is provided, it saves the figure to that specified path
     """
     # Choose a colormap
     coolwarm_cmap = custom_colormap()
-
+    pval_min = -3
     # Convert to log scale
-    color_array = np.logspace(-3, 0, num_colors).reshape(1, -1)
-
+    color_array = np.logspace(pval_min, 0, num_colors).reshape(1, -1)
+    pval = pval_in.copy()
+    pval[pval<10**pval_min] =10**pval_min 
     if alpha == None:
         # Create custom colormap
         coolwarm_cmap = custom_colormap()
@@ -1797,7 +1939,7 @@ def plot_p_values_bar(pval,xticklabels=[],  figsize=(9, 4), num_colors=256, xlab
         xticklabels =[f"Var {i+1}" for i in np.arange(len(pval))] if xticklabels==[] else xticklabels
 
 
-    bars = plt.bar(xticklabels, pval, color=colormap(LogNorm(vmin=1e-3, vmax=1)(pval)))
+    bars = plt.bar(xticklabels, pval, color=colormap(LogNorm(vmin=10**pval_min, vmax=1)(pval)))
     # Remove the legend
     #plt.legend().set_visible(False)
 
@@ -1840,7 +1982,7 @@ def plot_p_values_bar(pval,xticklabels=[],  figsize=(9, 4), num_colors=256, xlab
     # Add a colorbar to show the correspondence between colors and p-values
     divider = make_axes_locatable(axes)
     cax = divider.append_axes("right", size="5%", pad=0.05)
-    colorbar = plt.colorbar(plt.cm.ScalarMappable(cmap=colormap, norm=LogNorm(vmin=1e-3, vmax=1)), cax=cax, ticks=np.logspace(-3, 0, num_colors), format="%1.0e")
+    colorbar = plt.colorbar(plt.cm.ScalarMappable(cmap=colormap, norm=LogNorm(vmin=10**pval_min, vmax=1)), cax=cax, ticks=np.logspace(-3, 0, num_colors), format="%1.0e")
     colorbar.update_ticks()
 
     # Round the tick values to three decimal places
@@ -1863,5 +2005,7 @@ def plot_p_values_bar(pval,xticklabels=[],  figsize=(9, 4), num_colors=256, xlab
     axes.spines['right'].set_visible(False)
     axes.spines['top'].set_visible(False)
     plt.tight_layout()
-
+    # Save the figure if save_path is provided
+    if save_path is not None:
+        plt.savefig(save_path, bbox_inches='tight') 
     plt.show()
