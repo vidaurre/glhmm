@@ -529,7 +529,7 @@ def interpolate_colormap(cmap_list):
 def plot_p_value_matrix(pval_in, alpha = 0.05, normalize_vals=True, figsize=(9, 5), 
                          title_text="Heatmap (p-values)", annot=False, 
                         cmap_type='default', cmap_reverse=True, xlabel="", ylabel="", 
-                        xticklabels=None, x_tick_min=None, x_tick_max=None, num_x_ticks=5, 
+                        xticklabels=None, x_tick_min=None, x_tick_max=None, num_x_ticks=None, 
                         none_diagonal = False, num_colors = 259, xlabel_rotation=0, save_path=None):
     from matplotlib import cm, colors
     import seaborn as sb
@@ -549,7 +549,7 @@ def plot_p_value_matrix(pval_in, alpha = 0.05, normalize_vals=True, figsize=(9, 
         Number of steps for x and y-axis ticks.
     title_text (str, optional), default= "Heatmap (p-values)"
         Title text for the heatmap.
-    annot (bool, optional), default=True:
+    annot (bool, optional), default=False: 
         If True, annotate each cell with the numeric value.
     cmap (str, optional), default= "default":
         Colormap to use. Default is a custom colormap based on 'coolwarm'.
@@ -576,7 +576,7 @@ def plot_p_value_matrix(pval_in, alpha = 0.05, normalize_vals=True, figsize=(9, 
         ha ="right"
     else:
         ha = "center"    
-    num_x_ticks = pval.shape[1] if pval.shape[1] < 5 else num_x_ticks
+    num_x_ticks = num_x_ticks if num_x_ticks is not None else pval.shape[1] if pval.shape[1]<20 else 5
 
     pval_min = -3
     color_array = np.logspace(pval_min, 0, num_colors).reshape(1, -1)
@@ -676,7 +676,8 @@ def plot_p_value_matrix(pval_in, alpha = 0.05, normalize_vals=True, figsize=(9, 
     # Set the x-axis ticks
     if xticklabels is not None:
         axes.set_xticks(x_tick_positions+0.5)
-        axes.set_xticklabels(x_tick_labels, rotation=xlabel_rotation, fontsize=10, ha=ha)
+        axes.set_xticklabels([xticklabels[i] for i in x_tick_labels] if len(xticklabels) != len(x_tick_labels) else xticklabels,
+        rotation=xlabel_rotation, fontsize=10, ha=ha)
     elif pval.shape[1]>1:
         axes.set_xticks(x_tick_positions+0.5)
         axes.set_xticklabels(x_tick_labels, rotation=xlabel_rotation, fontsize=10, ha=ha)
@@ -762,7 +763,7 @@ def plot_correlation_matrix(corr_vals, statistical_measures, normalize_vals=Fals
         Figure size in inches (width, height).
     title_text (str, optional), default="Correlation Coefficients Heatmap"
         Title text for the heatmap.
-    annot (bool, optional), default=True:
+    annot (bool, optional), default=False:
         If True, annotate each cell with the numeric value.
     cmap_type (str, optional), default='default':
         Colormap to use.
@@ -793,7 +794,8 @@ def plot_correlation_matrix(corr_vals, statistical_measures, normalize_vals=Fals
         ha = "center"    
     # Number of x-tick steps
     steps=len(corr_vals)
-    num_x_ticks = corr_vals.shape[1] if corr_vals.shape[1] < 5 else num_x_ticks
+    num_x_ticks = num_x_ticks if num_x_ticks is not None else corr_vals.shape[1] if corr_vals.shape[1]<20 else 5
+
     fig, axes = plt.subplots(figsize=figsize)
     if len(corr_vals.shape)==1:
         corr_vals =np.expand_dims(corr_vals,axis=0)
@@ -846,8 +848,9 @@ def plot_correlation_matrix(corr_vals, statistical_measures, normalize_vals=Fals
     # Set the x-axis ticks
     if xticklabels is not None:
         axes.set_xticks(x_tick_positions+0.5)
-        axes.set_xticklabels(x_tick_labels, rotation=xlabel_rotation, fontsize=10, ha=ha)
-    elif corr_vals.shape[1]>1:
+        axes.set_xticklabels([xticklabels[i] for i in x_tick_labels] if len(xticklabels) != len(x_tick_labels) else xticklabels,
+        rotation=xlabel_rotation, fontsize=10, ha=ha)
+    elif pval.shape[1]>1:
         axes.set_xticks(x_tick_positions+0.5)
         axes.set_xticklabels(x_tick_labels, rotation=xlabel_rotation, fontsize=10, ha=ha)
     else:
