@@ -2950,7 +2950,7 @@ def pad_vpath(vpath, lag_val):
     # Concatenate the padding with the original vpath
     vpath_pad = np.vstack((beginning_padding, vpath, end_padding))
     return vpath_pad
-def extract_epochs_from_events(input_data, index_data, filtered_R_data, event_files, events_directory, fs=1000, fs_target=250, ms_before_stimulus=0):
+def extract_epochs_from_events(input_data, index_data, filtered_R_data, event_files, events_directory, fs=1000, fs_target=250, ms_before_stimulus=0, epoch_duration=None):
     """
     Extract time-locked data epochs based on stimulus events.
 
@@ -2971,25 +2971,28 @@ def extract_epochs_from_events(input_data, index_data, filtered_R_data, event_fi
     events_directory (str): 
         Path to the directory containing the event files.
     fs (int, optional): 
-        The original sampling frequency is in Hz. Defaults to 1000 Hz.
+        The original sampling frequency in Hz. Defaults to 1000 Hz.
     fs_target (int, optional): 
-        The target sampling frequency is in Hz after resampling. Defaults to 250 Hz.
+        The target sampling frequency in Hz after resampling. Defaults to 250 Hz.
     ms_pre_stimulus (int, optional): 
         Time in milliseconds to offset the start of the epoch before the stimulus onset. Defaults to 0 ms.
+    epoch_duration
+        The duration of the epoch in samples. If None, a default duration of 1 second (equal to fs_target) is used.
 
     Returns:
     ---------
     epoch_data (numpy.ndarray): 
-        A 3D array of extracted data epochs, structured as (number of timepoints, number of trials, number of states).
+        3D array of extracted data epochs, structured as (number of timepoints, number of trials, number of states).
     epoch_indices (numpy.ndarray): 
-        An array of indices corresponds to the extracted epochs for each session.
+        Array of indices corresponding to the extracted epochs for each session.
     concatenated_R_data (numpy.ndarray): 
-        A concatenated array of R data across all sessions.
+        Concatenated array of R data across all sessions.
     """
 
     # Calculate the downsampling factor
     downsampling_factor = fs / fs_target
-
+    # Set default duration to 1 second if None
+    epoch_duration = fs_target if epoch_duration is None else epoch_duration 
     # Calculate the shift for the stimulus onset
     stimulus_shift = ms_before_stimulus / downsampling_factor if ms_before_stimulus != 0 else 0
 
@@ -3013,14 +3016,14 @@ def extract_epochs_from_events(input_data, index_data, filtered_R_data, event_fi
         event_differences = np.diff(downsampled_events, axis=0)
 
         # Identify valid events that are sufficiently spaced apart
-        valid_event_indices = (event_differences >= fs_target)
+        valid_event_indices = (event_differences >= epoch_duration)
 
         # Ensure the first event is included if it meets the downsample condition
-        if event_differences[0] >= fs_target:
+        if event_differences[0] >= epoch_duration:
             valid_event_indices = np.concatenate(([True], valid_event_indices))
 
         # Filter events that meet the downsample condition
-        valid_event_indices &= (len(data_session) - downsampled_events >= fs_target)
+        valid_event_indices &= (len(data_session) - downsampled_events >= epoch_duration)
 
         # Select filtered event indices based on the downsample condition
         filtered_event_indices = downsampled_events[valid_event_indices]
@@ -3031,7 +3034,7 @@ def extract_epochs_from_events(input_data, index_data, filtered_R_data, event_fi
         # Iterate over each filtered event
         for event_index in filtered_event_indices:
             start_index = event_index + stimulus_shift  # Adjust start index to include time before stimulus
-            end_index = start_index + fs_target  # Define end index for the epoch
+            end_index = start_index + epoch_duration  # Define end index for the epoch
 
             # Append the data for this epoch to the data_epochs_list
             data_epochs_list.append(data_session[start_index:end_index, :])
