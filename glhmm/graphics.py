@@ -850,7 +850,7 @@ def plot_correlation_matrix(corr_vals, statistical_measures, normalize_vals=Fals
         axes.set_xticks(x_tick_positions+0.5)
         axes.set_xticklabels([xticklabels[i] for i in x_tick_labels] if len(xticklabels) != len(x_tick_labels) else xticklabels,
         rotation=xlabel_rotation, fontsize=10, ha=ha)
-    elif pval.shape[1]>1:
+    elif corr_vals.shape[1]>1:
         axes.set_xticks(x_tick_positions+0.5)
         axes.set_xticklabels(x_tick_labels, rotation=xlabel_rotation, fontsize=10, ha=ha)
     else:
