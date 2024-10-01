@@ -683,12 +683,12 @@ def test_across_sessions_within_subject(D_data, R_data, idx_data, method="multiv
         'Nperm': Nperm}
     return result
 
-def test_across_visits(input_data, vpath_data, n_states, method="multivariate", Nperm=0, verbose = True, 
+def test_across_visits(input_data, vpath_data, method="multivariate", Nperm=0, verbose = True, 
                        confounds=None, test_statistics_option=False, pairwise_statistic ="mean",
                        FWER_correction=False, category_lim=10, identify_categories = False, 
                        vpath_surrogates=None):
     """
-    Perform permutation testing across the Viterbi path for continuous data.
+    Perform permutation testing across Viterbi path for continuous data.
     
     Parameters:
     --------------            
@@ -696,11 +696,10 @@ def test_across_visits(input_data, vpath_data, n_states, method="multivariate", 
         Dependent variable with shape (n, q), where n is the number of samples (n_timepoints x n_trials), 
         and q represents dependent/target variables.  
     vpath_data (numpy.ndarray): 
-        The hidden state path data of the continuous measurements is represented as a (n, p) matrix. 
-        It could be a 2D matrix where each row represents trials over a period of time and
+        The hidden state path data of the continuous measurements represented as a (n, p) matrix. 
+        It could be a 2D matrix where each row represents a trials over a period of time and
         each column represents a state variable and gives the shape ((n_timepoints X n_trials), n_states). 
-        If it is a 1D array of of shape ((n_timepoints X n_trials),) where each row value represents a giving state.                                 
-    n_states (int):             The number of hidden states in the hidden state path data.
+        If it is a 1D array of of shape ((n_timepoints X n_trials),) where each row value represent a giving state.                                 
     method (str, optional), default="multivariate":     
         Statistical method for the permutation test. Valid options are 
         "multivariate", "univariate", "cca", "one_vs_rest" or "state_pairs". 
@@ -717,7 +716,7 @@ def test_across_visits(input_data, vpath_data, n_states, method="multivariate", 
     FWER_correction (bool, optional), default=False: 
         Specify whether to perform family-wise error rate (FWER) correction for multiple comparisons using the MaxT method.
         Note: FWER_correction is not necessary if pval_correction is applied later for multiple comparison p-value correction.
-    category_lim: int or None, optional, default=None
+    category_lim : int or None, optional, default=None
         Maximum allowed number of categories for F-test. Acts as a safety measure for columns 
         with integer values, like age, which may be mistakenly identified as multiple categories.                   
     
@@ -737,12 +736,12 @@ def test_across_visits(input_data, vpath_data, n_states, method="multivariate", 
             - method=="cca": (T, Nperm, 1)
             - method=="one_vs_rest": (T, Nperm, p)
             - method=="state_pairs": (T, Nperm, 1)
-        'statistical_measures': A dictionary that marks the columns (q dimension) in the test_statistics and tells the unit it is based on. It could be r_squared, correlation coefficients, t-, f-statistics, z_score, mean or median.
+        'statistical_measures': A dictionary that marks the columns (q dimension) in the test_statistics an tell the unit it is based on. Could be r_squared, correlation coefficeints, t-, f-statistics, z_score, mean or median.
         'test_type': the type of test, which is the name of the function
         'method': the method used for analysis Valid options are
                 "multivariate", "univariate", or "cca", "one_vs_rest" and "state_pairs" (default: "multivariate").
-        'max_correction': Specifies if FWER has been applied using MaxT, and can either output True or False.
-        'Nperm': The number of permutations that have been performed.
+        'max_correction': Specifies if FWER has been applied using MaxT, can either output True or False.
+        'Nperm' :The number of permutations that has been performed.
     """
     # Initialize variables
     test_type = 'test_across_visits'
@@ -750,13 +749,16 @@ def test_across_visits(input_data, vpath_data, n_states, method="multivariate", 
     # Ensure Nperm is at least 1
     if Nperm <= 1:
         Nperm = 1
-        # Set a flag for identifying categories without permutation
+        # Set flag for identifying categories without permutation
         identify_categories = True
         if method == 'cca' or method =='one_vs_rest' or method =='state_pairs' and Nperm == 1:
             raise ValueError("'cca', 'one_vs_rest' and 'state_pairs' does not support parametric statistics. The number of permutations ('Nperm') cannot be set to 1. "
                             "Please increase the number of permutations to perform a valid analysis.")
 
-         
+    if vpath_surrogates is not None:
+        # Define Nperm if vpath_surrogates is provided
+        Nperm = vpath_surrogates.shape[-1]
+             
     # Check if the Viterbi path is correctly constructed
     if vpath_check_2D(vpath_data) == False:
         raise ValueError(
@@ -765,7 +767,7 @@ def test_across_visits(input_data, vpath_data, n_states, method="multivariate", 
             "Please verify your input to the 'test_across_visits' function."
         )
    
-    # Check the validity of method
+    # Check validity of method
     valid_methods = ["multivariate", "univariate", "cca", "one_vs_rest", "state_pairs"]
     validate_condition(method.lower() in valid_methods, "Invalid option specified for 'method'. Must be one of: " + ', '.join(valid_methods))
     
@@ -778,8 +780,10 @@ def test_across_visits(input_data, vpath_data, n_states, method="multivariate", 
         vpath_bin = np.zeros((len(vpath_data), len(np.unique(vpath_data))))
         vpath_bin[np.arange(len(vpath_data)), vpath_data - 1] = 1
         vpath_data = vpath_bin.copy()
-
-
+    
+    # Number of states
+    n_states = len(np.unique(vpath_array))
+    
     # Get input shape information
     n_T, _, n_p, n_q, input_data, vpath_data= get_input_shape(input_data, vpath_data, verbose)  
 
@@ -792,7 +796,7 @@ def test_across_visits(input_data, vpath_data, n_states, method="multivariate", 
             print("Warning: Cannot perform FWER_correction with different test statisticss.\nConsider to set identify_categories=False")
             raise ValueError("Cannot perform FWER_correction")    
    
-    # Initialize arrays based on the shape of data shape and defined options
+    # Initialize arrays based on shape of data shape and defined options
     pval, base_statistics, test_statistics_list = initialize_arrays(vpath_data, n_p, n_q,
                                                                             n_T, method, Nperm,
                                                                             test_statistics_option)
@@ -816,7 +820,7 @@ def test_across_visits(input_data, vpath_data, n_states, method="multivariate", 
             test_statistics, reg_pinv = initialize_permutation_matrices(method, Nperm, n_p, n_q, data_t, category_columns=category_columns)
             # Perform permutation testing
             for perm in tqdm(range(Nperm)) if n_T == 1 & verbose==True else range(n_T):
-                # Redo vpath_surrogate calculation if the number of states is not the same (out of 1000 permutations it happens maybe 1-2 times with this demo dataset)
+                # Redo vpath_surrogate calculation if the number of states are not the same (out of 1000 permutations it happens maybe 1-2 times with this demo dataset)
                 
                 if vpath_surrogates is None:
                     while True:
