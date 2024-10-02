@@ -2954,7 +2954,7 @@ def pad_vpath(vpath, lag_val):
     # Concatenate the padding with the original vpath
     vpath_pad = np.vstack((beginning_padding, vpath, end_padding))
     return vpath_pad
-def extract_epochs_from_events(input_data, index_data, filtered_R_data, event_files, events_directory, fs=1000, fs_target=250, ms_before_stimulus=0, epoch_duration=None):
+def extract_epochs_from_events(input_data, index_data, filtered_R_data, event_data, fs=1000, fs_target=250, ms_before_stimulus=0, epoch_duration=None):
     """
     Extract time-locked data epochs based on stimulus events.
 
@@ -2970,10 +2970,8 @@ def extract_epochs_from_events(input_data, index_data, filtered_R_data, event_fi
         2D array containing preprocessed indices for the session.
     filtered_R_data (list): 
         List of filtered R data arrays for each session based on the events.
-    event_files (list): 
-        List of event files corresponding to the session.
-    events_directory (str): 
-        Path to the directory containing the event files.
+    event_data (list): 
+        List of event information for each session.
     fs (int, optional): 
         The original sampling frequency in Hz. Defaults to 1000 Hz.
     fs_target (int, optional): 
@@ -3006,12 +3004,12 @@ def extract_epochs_from_events(input_data, index_data, filtered_R_data, event_fi
     valid_epoch_counts = []  
 
     # Iterate over each event file corresponding to a session
-    for idx, event_file in enumerate(event_files):
+    for idx, events in enumerate(event_data):
         # Extract data values for the specific session using preprocessed indices
         data_session = input_data[index_data[idx, 0]:index_data[idx, 1], :]
 
-        # Load events from the current event file
-        events = np.load(os.path.join(events_directory, event_file))
+        # # Load events from the current event file
+        # events = np.load(os.path.join(events_directory, event_file))
 
         # Downsample the event time indices
         downsampled_events = (events[:, 0] / downsampling_factor).astype(int)
