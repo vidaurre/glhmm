@@ -744,7 +744,7 @@ def plot_p_value_matrix(pval_in, alpha = 0.05, normalize_vals=True, figsize=(9, 
 def plot_correlation_matrix(corr_vals, statistical_measures, normalize_vals=False, 
                             figsize=(9, 5), title_text="Correlation Coefficients Heatmap", 
                             annot=False, cmap_type='default', cmap_reverse=True, xlabel="", ylabel="", 
-                            xticklabels=None, x_tick_min=None, x_tick_max=None, num_x_ticks=5,
+                            xticklabels=None, x_tick_min=None, x_tick_max=None, num_x_ticks=None,
                             xlabel_rotation=0, none_diagonal = False, num_colors = 256, save_path=None):
     from matplotlib import cm, colors
     from mpl_toolkits.axes_grid1 import make_axes_locatable
