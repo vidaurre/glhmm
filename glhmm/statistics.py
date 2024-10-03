@@ -2852,7 +2852,7 @@ def get_concatenate_sessions(D_sessions, R_sessions=None, idx_sessions=None):
     return np.array(D_con), np.array(R_con), idx_sessions_con
 
 
-def reconstruct_session_matrices(D_con, D_sessions=None, n_timepoints=None, n_trials=None, n_channels = None):
+def reconstruct_concatenated_to_3D(D_con, D_sessions=None, n_timepoints=None, n_trials=None, n_channels = None):
     """
     Reconstruct session-specific D-matrices from a concatenated D-matrix.
 
