@@ -2851,26 +2851,27 @@ def get_concatenate_sessions(D_sessions, R_sessions=None, idx_sessions=None):
     # Convert lists to numpy arrays
     return np.array(D_con), np.array(R_con), idx_sessions_con
 
-
-def reconstruct_concatenated_to_3D(D_con, D_sessions=None, n_timepoints=None, n_trials=None, n_channels = None):
+def reconstruct_concatenated_to_3D(D_con, D_original=None, n_timepoints=None, n_trials=None, n_channels = None):
     """
-    Reconstruct session-specific D-matrices from a concatenated D-matrix.
-
-    This function reverses the concatenation of session-specific D-matrices, restoring them to their original dimensions. 
-    If the original D-matrices (`D_sessions`) are not provided, the function requires the number of timepoints, trials, and channels to accurately reconstruct the session matrices.
-
+    Reshape a concatenated 2D matrix back into its original 3D format (timepoints, trials, channels).
+    
+    This function converts a concatenated 2D matrix `D_con` (e.g., from HMM Gamma values)
+    back into its original 3D shape. If the original session matrix `D_original` is provided,
+    the function will infer the number of timepoints, trials, and channels from its shape. 
+    Otherwise, the user must provide the correct dimensions.
+    
     Parameters:
     ------------
     D_con (numpy.ndarray): 
         A 2D concatenated D-matrix of shape ((n_timepoints * n_trials), n_channels).
-    D_sessions (numpy.ndarray, optional): 
+    D_original (numpy.ndarray, optional): 
         A 3D array containing the original D-matrices for each session, with shape (n_timepoints, n_trials, n_channels).
     n_timepoints (int, optional): 
-        A number of timepoints per trial, is required if `D_sessions` is not provided.
+        A number of timepoints per trial, is required if `D_original` is not provided.
     n_trials (int, optional): 
-        A number of trials per session, is required if `D_sessions` is not provided.
+        A number of trials per session, is required if `D_original` is not provided.
     n_channels (int, optional): 
-        Number of channels, required if `D_sessions` is not provided.
+        Number of channels, required if `D_original` is not provided.
 
     Returns:
     ---------
@@ -2880,19 +2881,19 @@ def reconstruct_concatenated_to_3D(D_con, D_sessions=None, n_timepoints=None, n_
     Raises:
     --------
     ValueError: 
-        If `D_sessions` is provided and is not a 3D numpy array, or if the provided dimensions do not match the shape of `D_con`.
-        If `n_timepoints`, `n_trials`, or `n_channels` are not provided when `D_sessions` is missing.
+        If `D_original` is provided and is not a 3D numpy array, or if the provided dimensions do not match the shape of `D_con`.
+        If `n_timepoints`, `n_trials`, or `n_channels` are not provided when `D_original` is missing.
         If the shape of `D_con` does not match the expected dimensions based on the input parameters.
     """
     # Input validation and initialization
-    if D_sessions is not None and len([arg for arg in [n_timepoints, n_trials, n_channels] if arg is not None]) == 0:
-        if not isinstance(D_sessions, np.ndarray) or D_sessions.ndim != 3:
-            raise ValueError("Invalid input: D_sessions must be a 3D numpy array.")
-        n_timepoints, n_trials, n_channels = D_sessions.shape
-        D_reconstruct = np.zeros_like(D_sessions)
+    if D_original is not None and len([arg for arg in [n_timepoints, n_trials, n_channels] if arg is not None]) == 0:
+        if not isinstance(D_original, np.ndarray) or D_original.ndim != 3:
+            raise ValueError("Invalid input: D_original must be a 3D numpy array.")
+        n_timepoints, n_trials, n_channels = D_original.shape
+        D_reconstruct = np.zeros_like(D_original)
     else:
         if None in [n_timepoints, n_trials, n_channels]:
-            raise ValueError("Invalid input: n_timepoints, n_trials, and n_channels must be provided if D_sessions is not provided.")
+            raise ValueError("Invalid input: n_timepoints, n_trials, and n_channels must be provided if D_original is not provided.")
         D_reconstruct = np.zeros((n_timepoints, n_trials, n_channels))
     
     # Check if the shape of D_con matches the expected shape
