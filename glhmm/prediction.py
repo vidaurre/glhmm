@@ -151,6 +151,108 @@ def compute_gradient(hmm, Y, incl_Pi=True, incl_P=True, incl_Mu=False, incl_Sigm
         
     return hmmgrad
 
+def compute_gradient_preall(hmm, Y, subHMM, subGamma, subXi_tmp, incl_Pi=True, incl_P=True, incl_Mu=False, incl_Sigma=True):
+
+    if not hmm.trained:
+        raise Exception("The model has not yet been trained")
+
+    Pi = hmm.Pi
+    P = hmm.P
+    K = hmm.hyperparameters["K"] # number of states
+    q = Y.shape[1] #hmm.Sigma[0]['rate'].shape[0] # number of variables (regions/parcels)
+
+    # subHMM, subGamma, subXi_tmp = hmm.dual_estimate(X=None, Y=Y, for_kernel=True)
+    GammaT = subGamma.transpose()
+    subXi = np.mean(subXi_tmp, axis=0)
+
+    Xisum = np.sum(subXi, axis=1)
+    Xisumreal = Xisum
+    # make sure that values are not getting too close to 0
+    for i in range(K):
+        Xisumreal[i] = max(Xisum[i], sys.float_info.min)
+
+    XiT = subXi.transpose()
+    Xi_tmp = XiT / Xisumreal
+    Xi = Xi_tmp.transpose()
+
+    # gradient w.r.t. state prior:
+    if incl_Pi:
+        Pireal = Pi
+        # make sure that values are not getting too close to 0
+        for i in range(K):
+            Pireal[i] = max(Pi[i], sys.float_info.min)
+        
+        dPi = GammaT[:,0] / Pireal
+
+    # gradient w.r.t. transition probabilities:
+    if incl_P:
+        Preal = P
+        # make sure that values are not getting too close to 0
+        for i in range(K):
+            for j in range(K):
+                Preal[i,j] = max(P[i,j], sys.float_info.min)
+    
+        dP = Xi / Preal
+
+    if (incl_Mu) or (incl_Sigma):
+        Sigma = np.zeros(shape=(q, q, K))
+        invSigma = np.zeros(shape=(q, q, K))
+        for k in range(K):
+            Sigma[:,:,k] = hmm.get_covariance_matrix(k=k)
+            invSigma[:,:,k] = hmm.get_inverse_covariance_matrix(k=k)
+
+        # gradient w.r.t. state means
+        if incl_Mu:
+            if hmm.hyperparameters["model_mean"] == 'no':
+                raise Exception("Cannot compute gradient w.r.t state means because state means were not modelled")
+            
+            Mu = hmm.get_means()
+            dMu = np.zeros(shape=(q, K))
+            for k in range(K):
+                Xi_V = Y - Mu[:,k]
+                Xi_VT = Xi_V.transpose()
+                iSigmacond = np.matmul(invSigma[:,:,k], Xi_VT)
+                GamiSigmacond = GammaT[k,:]*iSigmacond
+                dMu[:,k] = np.sum(GamiSigmacond, axis=1)
+        
+        # gradient w.r.t. state covariances
+        if incl_Sigma:
+            dSigma = np.zeros(shape=(q, q, K))
+            YT = Y.transpose()
+            for k in range(K):
+                if not hmm.hyperparameters["model_mean"] == 'no':
+                    Mu = hmm.get_means()
+                    Xi_V = Y- Mu[:,k]
+                else:
+                    Xi_V = Y
+                Xi_VT = Xi_V.transpose()
+                Gamma_tmp = -sum(GammaT[k,:]/2)
+                GamiSigma = Gamma_tmp * invSigma[:,:,k]
+                GamXi = GammaT[k,:] * Xi_VT
+                GamXi2 = np.matmul(GamXi, Xi_V)
+                iSigmaGamXi = 0.5 * np.matmul(invSigma[:,:,k], GamXi2)
+                iSigmaGamXi2 = np.matmul(iSigmaGamXi, invSigma[:,:,k])
+                dSigma[:,:,k] = GamiSigma + iSigmaGamXi2
+
+    hmmgrad = np.empty(shape=0)
+
+    if incl_Pi:
+        hmmgrad = -dPi
+
+    if incl_P:
+        dP_flat = np.ndarray.flatten(dP)
+        hmmgrad = np.concatenate((hmmgrad, -dP_flat))
+
+    if incl_Mu:
+        dMu_flat = np.ndarray.flatten(dMu)
+        hmmgrad = np.concatenate((hmmgrad, -dMu_flat))
+    
+    if incl_Sigma:
+        dSigma_flat = np.ndarray.flatten(dSigma)
+        hmmgrad = np.concatenate((hmmgrad, -dSigma_flat))
+        
+    return hmmgrad
+
 def hmm_kernel(hmm, Y, indices, type='Fisher', shape='linear', incl_Pi=True, incl_P=True, incl_Mu=False, incl_Sigma=True, tau=None, return_feat=False, return_dist=False):
     """Constructs a kernel from an HMM, as well as the respective feature matrix 
     and/or distance matrix
@@ -254,6 +356,33 @@ def hmm_kernel(hmm, Y, indices, type='Fisher', shape='linear', incl_Pi=True, inc
     else:   
         return kernel    
 
+def build_Fisherkernel(hmm, data, indices):
+    def linear_Fisherkernel(_x1, _x2):
+        Y_x1 = data[indices[_x1[0],0]:indices[_x1[0],1],:]
+        feats_x1 = compute_gradient(hmm, Y_x1)
+        Y_x2 = data[indices[_x2[0],0]:indices[_x2[0],1],:]
+        feats_x2 = compute_gradient(hmm, Y_x2)
+        lFK = feats_x1 @ feats_x2.transpose()
+        return lFK
+    return linear_Fisherkernel
+
+def build_Fisherkernel_preall(hmm, data, indices, incl_Pi=True, incl_P=True, incl_Mu=False, incl_Sigma=True):
+    S = indices.shape[0]
+    K = hmm.hyperparameters["K"]
+    q = data.shape[1]
+    feat_dim = incl_Pi*K + incl_P*K*K + incl_Mu*K*q + incl_Sigma*K*q*q
+    feat = np.zeros(shape=(S,feat_dim))
+    for s in range(S):
+        Y_s = data[indices[s,0]:indices[s,1],:]
+        subHMM, subGamma, subXi_tmp = hmm.dual_estimate(X=None, Y=Y_s, for_kernel=True)
+        feat[s,:] = compute_gradient_preall(hmm, Y_s, subHMM, subGamma, subXi_tmp)
+
+    def linear_Fisherkernel_preall(_x1, _x2):
+        feats_x1 = feat[_x1,:]
+        feats_x2 = feat[_x2,:]
+        lFK = feats_x1 @ feats_x2.transpose()
+        return lFK
+    return linear_Fisherkernel_preall
 
 def get_summ_features(hmm, Y, indices, metrics):
     """Util function to get summary features from HMM. 
