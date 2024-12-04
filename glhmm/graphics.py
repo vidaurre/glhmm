@@ -1049,9 +1049,9 @@ def plot_vpath(viterbi_path, signal=None, idx_data=None, figsize=(7, 4), fontsiz
         If a string is provided, it saves the figure to that specified path
     """
     num_states = viterbi_path.shape[1]
-    colors = sns.color_palette("Set3", n_colors=num_states)
+    colors = sb.color_palette("Set3", n_colors=num_states)
     if num_states > len(colors):
-        extra_colors = sns.color_palette("husl", n_colors=num_states - len(colors))
+        extra_colors = sb.color_palette("husl", n_colors=num_states - len(colors))
         colors.extend(extra_colors)
 
     fig, axes = plt.subplots(figsize=figsize)
@@ -1219,9 +1219,9 @@ def plot_FO(FO, figsize=(8, 4), fontsize_labels=13, fontsize_title=16, width=0.8
     bottom = np.zeros(FO.shape[0])
     sessions = np.arange(1, FO.shape[0] + 1)
     num_states = FO.shape[1]
-    colors = sns.color_palette("Set3", n_colors=num_states)
+    colors = sb.color_palette("Set3", n_colors=num_states)
     if num_states > len(colors):
-        extra_colors = sns.color_palette("husl", n_colors=num_states - len(colors))
+        extra_colors = sb.color_palette("husl", n_colors=num_states - len(colors))
         colors.extend(extra_colors)
         
     for k in range(num_states):
@@ -1294,9 +1294,9 @@ def plot_switching_rates(SR, figsize=(8, 4), fontsize_labels=13, fontsize_title=
     multiplier = 0
     sessions = np.arange(1, SR.shape[0] + 1)
     num_states = SR.shape[1]
-    colors = sns.color_palette("Set3", n_colors=num_states)
+    colors = sb.color_palette("Set3", n_colors=num_states)
     if num_states > len(colors):
-        extra_colors = sns.color_palette("husl", n_colors=num_states - len(colors))
+        extra_colors = sb.color_palette("husl", n_colors=num_states - len(colors))
         colors.extend(extra_colors)
 
     for k in range(num_states):
@@ -1366,9 +1366,9 @@ def plot_state_lifetimes(LT, figsize=(8, 4), fontsize_labels=13, fontsize_title=
     multiplier = 0
     sessions = np.arange(1, LT.shape[0] + 1)
     num_states = LT.shape[1]
-    colors = sns.color_palette("Set3", n_colors=num_states)
+    colors = sb.color_palette("Set3", n_colors=num_states)
     if num_states > len(colors):
-        extra_colors = sns.color_palette("husl", n_colors=num_states - len(colors))
+        extra_colors = sb.color_palette("husl", n_colors=num_states - len(colors))
         colors.extend(extra_colors)
 
     for k in range(num_states):
