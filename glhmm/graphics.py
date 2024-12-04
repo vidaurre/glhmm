@@ -14,7 +14,6 @@ import warnings
 from matplotlib import cm, colors
 from matplotlib.colors import LogNorm, LinearSegmentedColormap, to_rgba_array
 from mpl_toolkits.axes_grid1 import make_axes_locatable
-
 from . import utils
 
 
@@ -531,9 +530,7 @@ def plot_p_value_matrix(pval_in, alpha = 0.05, normalize_vals=True, figsize=(9, 
                         cmap_type='default', cmap_reverse=True, xlabel="", ylabel="", 
                         xticklabels=None, x_tick_min=None, x_tick_max=None, num_x_ticks=None, 
                         none_diagonal = False, num_colors = 259, xlabel_rotation=0, save_path=None):
-    from matplotlib import cm, colors
-    import seaborn as sb
-    from mpl_toolkits.axes_grid1 import make_axes_locatable
+
     """
     Plot a heatmap of p-values.
 
@@ -744,10 +741,9 @@ def plot_p_value_matrix(pval_in, alpha = 0.05, normalize_vals=True, figsize=(9, 
 def plot_correlation_matrix(corr_vals, statistical_measures, normalize_vals=False, 
                             figsize=(9, 5), title_text="Correlation Coefficients Heatmap", 
                             annot=False, cmap_type='default', cmap_reverse=True, xlabel="", ylabel="", 
-                            xticklabels=None, x_tick_min=None, x_tick_max=None, num_x_ticks=None,
+                            xticklabels=None, x_tick_min=None, x_tick_max=None, num_x_ticks=5,
                             xlabel_rotation=0, none_diagonal = False, num_colors = 256, save_path=None):
-    from matplotlib import cm, colors
-    from mpl_toolkits.axes_grid1 import make_axes_locatable
+
     """
     Plot a heatmap of correlation coefficients.
 
@@ -1012,7 +1008,6 @@ def plot_scatter_with_labels(p_values, alpha=0.05, title_text="", xlabel=None, y
 
     plt.show()
     
-import seaborn as sns
 
 def plot_vpath(viterbi_path, signal=None, idx_data=None, figsize=(7, 4), fontsize_labels=13, fontsize_title=16, 
                yticks=None, time_conversion_rate=None, xlabel="Timepoints", ylabel="", title="Viterbi Path", 
@@ -1571,13 +1566,13 @@ def plot_condition_difference(Gamma_epoch, R_trials, title='Average Probability 
     global_max = float('-inf')
 
     # Plot for each condition
-    for condition in conditions:
+    for idx, condition in enumerate(conditions):
         for i in range(Gamma_epoch.shape[0]):
             filtered_values = Gamma_epoch[i, (R_trials == condition), :]
-            filt_val[condition, i, :] = np.mean(filtered_values, axis=0).round(3)
+            filt_val[idx, i, :] = np.mean(filtered_values, axis=0).round(3)
         # Update global min and max y-values
-        current_min = filt_val[condition, :, :].min()
-        current_max = filt_val[condition, :, :].max()
+        current_min = filt_val[idx, :, :].min()
+        current_max = filt_val[idx, :, :].max()
         global_min = min(global_min, current_min)
         global_max = max(global_max, current_max)
 
@@ -1602,14 +1597,14 @@ def plot_condition_difference(Gamma_epoch, R_trials, title='Average Probability 
         x_tick_labels = x_tick_positions
 
     # Plot for each condition with standardized y-axis
-    for condition in conditions:
-        axes[condition].plot(filt_val[condition, :, :])
-        axes[condition].set_title(f"Condition {condition}")
-        axes[condition].set_xticks(x_tick_positions)
-        axes[condition].set_xticklabels(x_tick_labels)
-        axes[condition].set_yticks(np.linspace(global_min, global_max, 5).round(2))
-        axes[condition].set_ylim(global_min, global_max)  # Set standardized y-limits # Set standardized y-limits
-        axes[condition].set_xlim(x_tick_positions[0], x_tick_positions[-1])
+    for idx, condition in enumerate(conditions):
+        axes[idx].plot(filt_val[idx, :, :])
+        axes[idx].set_title(f"Condition {condition}")
+        axes[idx].set_xticks(x_tick_positions)
+        axes[idx].set_xticklabels(x_tick_labels)
+        axes[idx].set_yticks(np.linspace(global_min, global_max, 5).round(2))
+        axes[idx].set_ylim(global_min, global_max)  # Set standardized y-limits # Set standardized y-limits
+        axes[idx].set_xlim(x_tick_positions[0], x_tick_positions[-1])
 
         
     # Find the element-wise difference
@@ -1850,7 +1845,7 @@ def plot_p_values_over_time(pval_in, figsize=(8, 4), xlabel="Timepoints", ylabel
     plt.show()
     
     
-def plot_p_values_bar(pval_in,xticklabels=[],  figsize=(9, 4), num_colors=256, xlabel="",
+def plot_p_values_bar(pval_in, xticklabels=[],  figsize=(9, 4), num_colors=256, xlabel="",
                         ylabel="P-values (Log Scale)", title_text="Bar Plot",
                         tick_positions=[0, 0.001, 0.01, 0.05, 0.1, 0.3, 1], top_adjustment=0.9, 
                         alpha = 0.05, pad_title=20, xlabel_rotation=45, pval_text_hight_same=False, 
@@ -1890,7 +1885,7 @@ def plot_p_values_bar(pval_in,xticklabels=[],  figsize=(9, 4), num_colors=256, x
     pval_min = -3
     # Convert to log scale
     color_array = np.logspace(pval_min, 0, num_colors).reshape(1, -1)
-    pval = pval_in.copy()
+    pval = pval_in.flatten().copy()
     pval[pval<10**pval_min] =10**pval_min 
     if alpha == None:
         # Create custom colormap
