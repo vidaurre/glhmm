@@ -14,6 +14,7 @@ import warnings
 from matplotlib import cm, colors
 from matplotlib.colors import LogNorm, LinearSegmentedColormap, to_rgba_array
 from mpl_toolkits.axes_grid1 import make_axes_locatable
+
 from . import utils
 
 
@@ -127,7 +128,7 @@ def show_Gamma(Gamma, line_overlay=None, tlim=None, Hz=1, palette='viridis'):
     plt.show()
 
 
-def show_temporal_statistic(Gamma,indices,statistic='FO',type_plot='barplot'):
+def show_temporal_statistic(Gamma,indices, statistic='FO',type_plot='barplot'):
     """Plots a statistic over time for a set of sessions.
 
     Parameters:
@@ -530,7 +531,9 @@ def plot_p_value_matrix(pval_in, alpha = 0.05, normalize_vals=True, figsize=(9, 
                         cmap_type='default', cmap_reverse=True, xlabel="", ylabel="", 
                         xticklabels=None, x_tick_min=None, x_tick_max=None, num_x_ticks=None, 
                         none_diagonal = False, num_colors = 259, xlabel_rotation=0, save_path=None):
-
+    from matplotlib import cm, colors
+    import seaborn as sb
+    from mpl_toolkits.axes_grid1 import make_axes_locatable
     """
     Plot a heatmap of p-values.
 
@@ -743,7 +746,8 @@ def plot_correlation_matrix(corr_vals, statistical_measures, normalize_vals=Fals
                             annot=False, cmap_type='default', cmap_reverse=True, xlabel="", ylabel="", 
                             xticklabels=None, x_tick_min=None, x_tick_max=None, num_x_ticks=5,
                             xlabel_rotation=0, none_diagonal = False, num_colors = 256, save_path=None):
-
+    from matplotlib import cm, colors
+    from mpl_toolkits.axes_grid1 import make_axes_locatable
     """
     Plot a heatmap of correlation coefficients.
 
@@ -1008,6 +1012,7 @@ def plot_scatter_with_labels(p_values, alpha=0.05, title_text="", xlabel=None, y
 
     plt.show()
     
+import seaborn as sns
 
 def plot_vpath(viterbi_path, signal=None, idx_data=None, figsize=(7, 4), fontsize_labels=13, fontsize_title=16, 
                yticks=None, time_conversion_rate=None, xlabel="Timepoints", ylabel="", title="Viterbi Path", 
@@ -1049,9 +1054,9 @@ def plot_vpath(viterbi_path, signal=None, idx_data=None, figsize=(7, 4), fontsiz
         If a string is provided, it saves the figure to that specified path
     """
     num_states = viterbi_path.shape[1]
-    colors = sb.color_palette("Set3", n_colors=num_states)
+    colors = sns.color_palette("Set3", n_colors=num_states)
     if num_states > len(colors):
-        extra_colors = sb.color_palette("husl", n_colors=num_states - len(colors))
+        extra_colors = sns.color_palette("husl", n_colors=num_states - len(colors))
         colors.extend(extra_colors)
 
     fig, axes = plt.subplots(figsize=figsize)
@@ -1219,9 +1224,9 @@ def plot_FO(FO, figsize=(8, 4), fontsize_labels=13, fontsize_title=16, width=0.8
     bottom = np.zeros(FO.shape[0])
     sessions = np.arange(1, FO.shape[0] + 1)
     num_states = FO.shape[1]
-    colors = sb.color_palette("Set3", n_colors=num_states)
+    colors = sns.color_palette("Set3", n_colors=num_states)
     if num_states > len(colors):
-        extra_colors = sb.color_palette("husl", n_colors=num_states - len(colors))
+        extra_colors = sns.color_palette("husl", n_colors=num_states - len(colors))
         colors.extend(extra_colors)
         
     for k in range(num_states):
@@ -1294,9 +1299,9 @@ def plot_switching_rates(SR, figsize=(8, 4), fontsize_labels=13, fontsize_title=
     multiplier = 0
     sessions = np.arange(1, SR.shape[0] + 1)
     num_states = SR.shape[1]
-    colors = sb.color_palette("Set3", n_colors=num_states)
+    colors = sns.color_palette("Set3", n_colors=num_states)
     if num_states > len(colors):
-        extra_colors = sb.color_palette("husl", n_colors=num_states - len(colors))
+        extra_colors = sns.color_palette("husl", n_colors=num_states - len(colors))
         colors.extend(extra_colors)
 
     for k in range(num_states):
@@ -1366,9 +1371,9 @@ def plot_state_lifetimes(LT, figsize=(8, 4), fontsize_labels=13, fontsize_title=
     multiplier = 0
     sessions = np.arange(1, LT.shape[0] + 1)
     num_states = LT.shape[1]
-    colors = sb.color_palette("Set3", n_colors=num_states)
+    colors = sns.color_palette("Set3", n_colors=num_states)
     if num_states > len(colors):
-        extra_colors = sb.color_palette("husl", n_colors=num_states - len(colors))
+        extra_colors = sns.color_palette("husl", n_colors=num_states - len(colors))
         colors.extend(extra_colors)
 
     for k in range(num_states):
@@ -1510,8 +1515,14 @@ def plot_state_prob_and_covariance(init_stateP, TP, state_means, state_FC, cmap=
         plt.savefig(save_path, bbox_inches='tight') 
     plt.show()
     
-def plot_condition_difference(Gamma_epoch, R_trials, title='Average Probability and Difference', fontsize=16, figsize=(9, 2), vertical_lines=None, line_colors=None, highlight_boxes=False, 
-                              stimulus_onset=None, x_tick_min=None, x_tick_max=None, num_x_ticks=5, xlabel ='Timepoints',save_path=None):
+
+def plot_condition_difference(
+    Gamma_epoch, R_trials, 
+    title='Average Probability and Difference', 
+    condition_labels=('Condition 1', 'Condition 2'), fontsize_sup_title=16,
+    fontsize_title=14, fontsize_labels=12, figsize=(12, 3), vertical_lines=None, line_colors=None, 
+    highlight_boxes=False, stimulus_onset=None, x_tick_min=None, 
+    x_tick_max=None, num_x_ticks=5, num_y_ticks=5, xlabel='Timepoints', save_path=None):
     """
     Plots the average probability for each state over time for two conditions and their difference.
 
@@ -1524,8 +1535,14 @@ def plot_condition_difference(Gamma_epoch, R_trials, title='Average Probability 
         Should have the same length as the second dimension of Gamma_epoch.
     title (str, optional), default='Average Probability and Difference':
         Title for the plot.
-    fontsize (int, optional), default=16:
-        Font size for labels and title.
+    condition_labels : tuple of str, optional
+        Labels for the two conditions. Default is ('Condition 1', 'Condition 2').
+    fontsize_sup_title (int, optional), default=16:
+        Font size for sup_title.
+    fontsize_title (int, optional), default=14:
+        Font size for title.
+    fontsize_labels (int, optional), default=12:
+        Font size for labels.
     figsize (tuple, optional), default=(9, 2):
         Figure size (width, height).
     vertical_lines (list of tuples, optional), default=None:
@@ -1543,6 +1560,8 @@ def plot_condition_difference(Gamma_epoch, R_trials, title='Average Probability 
         Maximum value for the x-tick labels.
     num_x_ticks (int, optional), default=5:
         Number of x-ticks.
+    num_y_ticks (int, optional), default=5:
+        Number of y-ticks.
     save_path (str), optional, default=None
         If a string is provided, it saves the figure to that specified path
     Example usage:
@@ -1550,9 +1569,11 @@ def plot_condition_difference(Gamma_epoch, R_trials, title='Average Probability 
     plot_condition_difference(Gamma_epoch, R_trials, vertical_lines=[(10, 100)], highlight_boxes=True)
     """
 
-    # Check if stimulus_onset is a number
+    # Validate inputs
     if stimulus_onset is not None and not isinstance(stimulus_onset, (int, float)):
         raise ValueError("stimulus_onset must be a number.")
+    if len(condition_labels) != 2:
+        raise ValueError("condition_labels must be a tuple with exactly two labels.")
     
     filt_val = np.zeros((2, Gamma_epoch.shape[0], Gamma_epoch.shape[2]))
 
@@ -1575,11 +1596,10 @@ def plot_condition_difference(Gamma_epoch, R_trials, title='Average Probability 
         current_max = filt_val[idx, :, :].max()
         global_min = min(global_min, current_min)
         global_max = max(global_max, current_max)
-
-    # Generate x-tick positions based on the number of timepoints
+        
+    # Generate x-tick labels
     num_timepoints = Gamma_epoch.shape[0]
-    x_tick_positions = np.linspace(0, num_timepoints - 1, 5).astype(int)
-
+    x_tick_positions = np.linspace(0, num_timepoints - 1, num_x_ticks).astype(int)
     # Generate x-tick labels based on user input or default to time points
     if x_tick_min is not None and x_tick_max is not None:
         x_tick_labels = np.linspace(x_tick_min, x_tick_max, num_x_ticks).round(2)
@@ -1599,12 +1619,13 @@ def plot_condition_difference(Gamma_epoch, R_trials, title='Average Probability 
     # Plot for each condition with standardized y-axis
     for idx, condition in enumerate(conditions):
         axes[idx].plot(filt_val[idx, :, :])
-        axes[idx].set_title(f"Condition {condition}")
+        axes[idx].set_title(condition_labels[idx], fontsize=fontsize_title)
         axes[idx].set_xticks(x_tick_positions)
         axes[idx].set_xticklabels(x_tick_labels)
-        axes[idx].set_yticks(np.linspace(global_min, global_max, 5).round(2))
+        axes[idx].set_yticks(np.linspace(global_min, global_max, num_y_ticks).round(2))
         axes[idx].set_ylim(global_min, global_max)  # Set standardized y-limits # Set standardized y-limits
         axes[idx].set_xlim(x_tick_positions[0], x_tick_positions[-1])
+        axes[idx].set_ylabel('Average Probability', fontsize=fontsize_labels)
 
         
     # Find the element-wise difference
@@ -1612,12 +1633,14 @@ def plot_condition_difference(Gamma_epoch, R_trials, title='Average Probability 
 
     # Plot the difference
     axes[2].plot(difference)
-    axes[2].set_title("Difference")
-    axes[2].set_xticks(np.linspace(0, Gamma_epoch.shape[0] - 1, 5).astype(int))
-    axes[2].set_yticks(np.linspace(axes[2].get_ylim()[0], axes[2].get_ylim()[1], 5).round(2))
+    axes[2].set_title("Difference", fontsize=fontsize_title)
+
+    axes[2].set_yticks(np.linspace(axes[2].get_ylim()[0], axes[2].get_ylim()[1], num_y_ticks).round(2))
     axes[2].set_xticks(x_tick_positions)
     axes[2].set_xticklabels(x_tick_labels)
     axes[2].set_xlim(x_tick_positions[0], x_tick_positions[-1])
+    axes[2].set_xlabel(xlabel, fontsize=fontsize_labels)
+
 
     # Add stimulus onset line and label
     if stimulus_onset is not None:
@@ -1637,14 +1660,13 @@ def plot_condition_difference(Gamma_epoch, R_trials, title='Average Probability 
 
     # Set labels fontsize
     for ax in axes:
-        ax.set_xlabel(xlabel, fontsize=12)
-        ax.set_ylabel('Average probability', fontsize=12)
+        ax.set_xlabel(xlabel, fontsize=fontsize_labels) 
 
     # Label each state on the right for the last figure (axes[2])
     state_labels = [f"State {state+1}" for state in range(Gamma_epoch.shape[2])]
-    axes[2].legend(state_labels, loc='center left', bbox_to_anchor=(1.05, 0.5), fontsize=12)
+    axes[2].legend(state_labels, loc='center left', bbox_to_anchor=(1.05, 0.5), fontsize=fontsize_labels)
 
-    fig.suptitle(title, fontsize=fontsize)
+    fig.suptitle(title, fontsize=fontsize_sup_title)
 
     # Show the plot
     plt.tight_layout(rect=[0, 0, 1, 0.95])
@@ -1654,11 +1676,10 @@ def plot_condition_difference(Gamma_epoch, R_trials, title='Average Probability 
     plt.show()
     
     
-def plot_p_values_over_time(pval_in, figsize=(8, 4), xlabel="Timepoints", ylabel="P-values (Log Scale)",
-                            title_text="P-values over time", stimulus_onset=None, x_tick_min=None, x_tick_max=None, num_x_ticks=5, 
-                            tick_positions=[0, 0.001, 0.01, 0.05, 0.1, 0.3, 1], num_colors=259, 
-                            alpha=0.05,plot_style = "line", linewidth=2.5,save_path=None
-                            ):
+def plot_p_values_over_time(pval_in, figsize=(8, 3), xlabel="Timepoints", ylabel="P-values (Log Scale)",
+                            title_text="P-values over time", stimulus_onset=None, x_tick_min=None, x_tick_max=None, 
+                            num_x_ticks=5, tick_positions=[0, 0.001, 0.01, 0.05, 0.1, 0.3, 1], num_colors=259, 
+                            alpha=0.05, plot_style="line", linewidth=2.5, save_path=None):
     """
     Plot a scatter plot of p-values over time with a log-scale y-axis and a colorbar.
 
@@ -1702,7 +1723,8 @@ def plot_p_values_over_time(pval_in, figsize=(8, 4), xlabel="Timepoints", ylabel
     if stimulus_onset is not None and not isinstance(stimulus_onset, (int, float)):
         raise ValueError("stimulus_onset must be a number.")
     
-    if pval_in.ndim != 1:
+    pval = np.squeeze(pval_in.copy())
+    if pval.ndim != 1:
         # Raise an exception and stop function execution
         raise ValueError("To use the function 'plot_p_values_over_time', the variable for p-values must be one-dimensional.")
 
@@ -1715,7 +1737,7 @@ def plot_p_values_over_time(pval_in, figsize=(8, 4), xlabel="Timepoints", ylabel
     pval_min = -3
     # Convert to log scale
     color_array = np.logspace(pval_min, 0, num_colors).reshape(1, -1)
-    pval = pval_in.copy()
+    
     pval[pval<10**pval_min] =10**pval_min 
 
     time_points = np.arange(len(pval))
