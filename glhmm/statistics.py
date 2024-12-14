@@ -198,17 +198,24 @@ def test_across_subjects(D_data, R_data, idx_data=None, method="multivariate", N
         D_t, R_t = deconfound_values(D_data[t, :],R_data[t, :], confounds)
         
         # Removing rows that contain nan-values
-        if method == "multivariate" or method == "cca":
+        if method in {"multivariate", "cca"}:
             # Removing rows that contain nan-values
-            D_t, R_t, _ = remove_nan_values(D_t, R_t, method)
+            D_t, R_t, nan_mask = remove_nan_values(D_t, R_t, method)
         
         # Create test_statistics based on method
         test_statistics, reg_pinv = initialize_permutation_matrices(method, Nperm, n_p, n_q, D_t, test_combination, category_columns=category_columns)
 
         if dict_family is not None and idx_array is None:
-            # Call function "__palm_quickperms" from glhmm.palm_functions
-            permutation_matrix = __palm_quickperms(dict_mfam["EB"], M=dict_mfam["M"], nP=dict_mfam["nP"], 
-                                                CMC=dict_mfam["CMC"], EE=dict_mfam["EE"])
+            if np.sum(~nan_mask) is not len(nan_mask) and method.lower()=="cca":
+                raise ValueError(
+                    "The 'EB.csv' file contains NaN values in your R_data. "
+                    "You must remove these NaN values to apply CCA."
+                )
+
+            else:
+                # Call function "__palm_quickperms" from glhmm.palm_functions
+                permutation_matrix = __palm_quickperms(dict_mfam["EB"], M=dict_mfam["M"], nP=dict_mfam["nP"], 
+                                                    CMC=dict_mfam["CMC"], EE=dict_mfam["EE"])
             # Convert the index so it starts from 0
             permutation_matrix -= 1
             
@@ -2967,14 +2974,13 @@ def pad_vpath(vpath, lag_val):
     vpath_pad = np.vstack((beginning_padding, vpath, end_padding))
     return vpath_pad
 
-def extract_epochs_from_events(input_data, index_data, filtered_R_data, event_data, 
-                               fs, fs_target=None, ms_before_stimulus=0, epoch_duration=None):
+def get_event_epochs(input_data, index_data, filtered_R_data, event_markers, 
+                               fs, fs_target=None, ms_before_stimulus=0, epoch_window_ms=None):
     """
     Extract time-locked data epochs based on stimulus events.
 
     This function processes 2D input data to extract epochs aligned to specific stimulus events. 
-    The epochs are extracted based on provided event files and are resampled to the target rate. 
-    The function also returns relevant indices and concatenates filtered R data across sessions.
+    The epochs are extracted based on provided event file (event_markers) and are resampled to the target frequency. 
 
     Parameters:
     ------------
@@ -2984,7 +2990,7 @@ def extract_epochs_from_events(input_data, index_data, filtered_R_data, event_da
         2D array containing preprocessed indices for the session.
     filtered_R_data (list): 
         List of filtered R data arrays for each session based on the events.
-    event_data (list): 
+    event_markers (list): 
         List of event information for each session.
     fs (int, optional): 
         The original sampling frequency in Hz. Defaults to 1000 Hz.
@@ -2992,8 +2998,8 @@ def extract_epochs_from_events(input_data, index_data, filtered_R_data, event_da
         The target sampling frequency in Hz after resampling. Defaults to 250 Hz.
     ms_pre_stimulus (int, optional): 
         Time in milliseconds to offset the start of the epoch before the stimulus onset. Defaults to 0 ms.
-    epoch_duration
-        The duration of the epoch in samples. If None, a default duration of 1 second (equal to fs_target) is used.
+    epoch_window_ms
+        Epoch window length in milliseconds. If None, a default duration of 1 second (equal to fs_target) is used.
 
     Returns:
     ---------
@@ -3009,7 +3015,7 @@ def extract_epochs_from_events(input_data, index_data, filtered_R_data, event_da
     # Calculate the downsampling factor
     downsampling_factor = fs / fs_target
     # Set default duration to 1 second if None
-    epoch_duration = fs_target if epoch_duration is None else epoch_duration 
+    epoch_window_ms = fs_target if epoch_window_ms is None else epoch_window_ms 
     # Calculate the shift for the stimulus onset
     stimulus_shift = ms_before_stimulus / downsampling_factor if ms_before_stimulus != 0 else 0
 
@@ -3019,28 +3025,26 @@ def extract_epochs_from_events(input_data, index_data, filtered_R_data, event_da
     valid_epoch_counts = []  
 
     # Iterate over each event file corresponding to a session
-    for idx, events in enumerate(event_data):
+    for idx, events in enumerate(event_markers):
         # Extract data values for the specific session using preprocessed indices
         data_session = input_data[index_data[idx, 0]:index_data[idx, 1], :]
 
-        # # Load events from the current event file
-        event_data = np.load(events)
 
         # Downsample the event time indices
-        downsampled_events = (event_data[:, 0] / downsampling_factor).astype(int)
+        downsampled_events = (events[:, 0] / downsampling_factor).astype(int)
 
         # Calculate differences between consecutive events
         event_differences = np.diff(downsampled_events, axis=0)
 
         # Identify valid events that are sufficiently spaced apart
-        valid_event_indices = (event_differences >= epoch_duration)
+        valid_event_indices = (event_differences >= epoch_window_ms)
 
         # Ensure the first event is included if it meets the downsample condition
-        if event_differences[0] >= epoch_duration:
+        if event_differences[0] >= epoch_window_ms:
             valid_event_indices = np.concatenate(([True], valid_event_indices))
 
         # Filter events that meet the downsample condition
-        valid_event_indices &= (len(data_session) - downsampled_events >= epoch_duration)
+        valid_event_indices &= (len(data_session) - downsampled_events >= epoch_window_ms)
 
         # Select filtered event indices based on the downsample condition
         filtered_event_indices = downsampled_events[valid_event_indices]
@@ -3051,7 +3055,7 @@ def extract_epochs_from_events(input_data, index_data, filtered_R_data, event_da
         # Iterate over each filtered event
         for event_index in filtered_event_indices:
             start_index = event_index + stimulus_shift  # Adjust start index to include time before stimulus
-            end_index = start_index + epoch_duration  # Define end index for the epoch
+            end_index = start_index + epoch_window_ms  # Define end index for the epoch
 
             # Append the data for this epoch to the data_epochs_list
             data_epochs_list.append(data_session[start_index:end_index, :])
