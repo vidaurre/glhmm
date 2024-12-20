@@ -15,7 +15,7 @@ from scipy import signal
 from . import auxiliary
 # import auxiliary
 
-def apply_pca(X,d,exact=True):
+def apply_pca(X,d,whitening=False, exact=True):
     """Applies PCA to the input data X.
 
     Parameters:
@@ -37,7 +37,8 @@ def apply_pca(X,d,exact=True):
     if type(d) is np.ndarray:
         X -= np.mean(X,axis=0)
         X = X @ d
-        # if whitening: X /= np.std(X,axis=0)
+        whitening = True
+        if whitening: X /= np.std(X,axis=0)
         return X
 
     svd_solver = 'full' if exact else 'auto'
@@ -536,5 +537,3 @@ def load_files(files,I=None,do_only_indices=False):
     if len(X) == 0: X = None
 
     return X,Y,indices
-
-
