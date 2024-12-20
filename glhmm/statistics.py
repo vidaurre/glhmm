@@ -206,7 +206,7 @@ def test_across_subjects(D_data, R_data, idx_data=None, method="multivariate", N
         test_statistics, reg_pinv = initialize_permutation_matrices(method, Nperm, n_p, n_q, D_t, test_combination, category_columns=category_columns)
 
         if dict_family is not None and idx_array is None:
-            if np.sum(~nan_mask) is not len(nan_mask) and method.lower()=="cca":
+            if method.lower()=="cca" and np.sum(~nan_mask) is not len(nan_mask):
                 raise ValueError(
                     "The 'EB.csv' file contains NaN values in your R_data. "
                     "You must remove these NaN values to apply CCA."
@@ -696,22 +696,22 @@ def test_across_sessions_within_subject(D_data, R_data, idx_data, method="multiv
         'Nperm': Nperm}
     return result
 
-def test_across_state_visits(vpath_data, sig_data , method="multivariate", Nperm=0, verbose = True, 
+def test_across_state_visits(D_data, R_data , method="multivariate", Nperm=0, verbose = True, 
                        confounds=None, test_statistics_option=False, pairwise_statistic ="mean",
                        FWER_correction=False, category_lim=10, identify_categories = False, 
-                       vpath_surrogates=None):
+                       vpath_surrogates=None, state_com="larger"):
     """
     Perform permutation testing across Viterbi path for continuous data.
     
     Parameters:
     --------------    
-    vpath_data (numpy.ndarray): 
-        The hidden state path data of the continuous measurements represented as a (n, p) matrix. 
-        It could be a 2D matrix where each row represents a trials over a period of time and
-        each column represents a state variable and gives the shape ((n_timepoints X n_trials), n_states). 
-        If it is a 1D array of of shape ((n_timepoints X n_trials),) where each row value represent a giving state.          
-    signal_data (numpy.ndarray): 
-        Dependent variable with shape (n, q), where n is the number of samples (n_timepoints x n_trials), 
+    D_data (numpy.ndarray): 
+        The Viterbi path of the brain data represented as a (n, p) matrix. 
+        It could be a 2D matrix where each row represents a sessions over a period of time and
+        each column represents a state variable and gives the shape ((n_timepoints X n_sessions), n_states). 
+        If it is a 1D array of of shape ((n_timepoints X n_sessions),) where each row value represent a giving state.          
+    R_data (numpy.ndarray): 
+        Physiological signal measurements with shape (n, q), where n is the number of samples (n_timepoints x n_sessions), 
         and q represents dependent/target variables.                               
     method (str, optional), default="multivariate":     
         Statistical method for the permutation test. Valid options are 
@@ -732,7 +732,10 @@ def test_across_state_visits(vpath_data, sig_data , method="multivariate", Nperm
     category_lim : int or None, optional, default=None
         Maximum allowed number of categories for F-test. Acts as a safety measure for columns 
         with integer values, like age, which may be mistakenly identified as multiple categories.                   
-    
+    state_com (str, optional), default="larger".  
+        Only affect the one_vs_rest test. We can choose to wether the signal of a state is either larger or smaller than the mean/median signal size of the remaining states. 
+        Valid options are "larger" or "smaller".
+
     Returns:
     ----------  
     result (dict): A dictionary containing the following keys. Depending on the `test_statistics_option` and `method`, it can return the p-values, 
@@ -758,7 +761,11 @@ def test_across_state_visits(vpath_data, sig_data , method="multivariate", Nperm
     """
     # Initialize variables
     test_type = 'test_across_state_visits'
-      
+    
+    if vpath_surrogates is not None:
+        # Define Nperm if vpath_surrogates is provided
+        Nperm = vpath_surrogates.shape[-1]
+
     # Ensure Nperm is at least 1
     if Nperm <= 1:
         Nperm = 1
@@ -767,19 +774,18 @@ def test_across_state_visits(vpath_data, sig_data , method="multivariate", Nperm
         if method == 'cca' or method =='one_vs_rest' or method =='state_pairs' and Nperm == 1:
             raise ValueError("'cca', 'one_vs_rest' and 'state_pairs' does not support parametric statistics. The number of permutations ('Nperm') cannot be set to 1. "
                             "Please increase the number of permutations to perform a valid analysis.")
-
-    if vpath_surrogates is not None:
-        # Define Nperm if vpath_surrogates is provided
-        Nperm = vpath_surrogates.shape[-1]
              
     # Check if the Viterbi path is correctly constructed
-    if vpath_check_2D(vpath_data) == False:
+    if vpath_check_2D(D_data) == False:
         raise ValueError(
-            "'vpath_data' is not correctly formatted. Ensure that the Viterbi path is correctly positioned within the target matrix (R). "
+            "'D_data' is not correctly formatted. Ensure that the Viterbi path is correctly positioned within the target matrix (R). "
             "The data should be one-hot encoded if it's 2D, or an array of integers if it's 1D. "
             "Please verify your input to the 'test_across_state_visits' function."
         )
-   
+    # Check validity of method
+    valid_state_com = ["larger", "smaller"]
+    validate_condition(state_com.lower() in valid_state_com, "Invalid option specified for 'state_com'. Must be one of: " + ', '.join(valid_state_com))
+    
     # Check validity of method
     valid_methods = ["multivariate", "univariate", "cca", "one_vs_rest", "state_pairs"]
     validate_condition(method.lower() in valid_methods, "Invalid option specified for 'method'. Must be one of: " + ', '.join(valid_methods))
@@ -788,20 +794,20 @@ def test_across_state_visits(vpath_data, sig_data , method="multivariate", Nperm
     validate_condition(pairwise_statistic.lower() in valid_statistic, "Invalid option specified for 'statistic'. Must be one of: " + ', '.join(valid_statistic))
     
     # Convert vpath from matrix to vector
-    vpath_array=generate_vpath_1D(vpath_data)
-    if vpath_data.ndim == 1:
-        vpath_bin = np.zeros((len(vpath_data), len(np.unique(vpath_data))))
-        vpath_bin[np.arange(len(vpath_data)), vpath_data - 1] = 1
-        vpath_data = vpath_bin.copy()
+    vpath_array=generate_vpath_1D(D_data)
+    if D_data.ndim == 1:
+        vpath_bin = np.zeros((len(D_data), len(np.unique(D_data))))
+        vpath_bin[np.arange(len(D_data)), D_data - 1] = 1
+        D_data = vpath_bin.copy()
     
     # Number of states
     n_states = len(np.unique(vpath_array))
     
     # Get input shape information
-    n_T, _, n_p, n_q, vpath_data, sig_data= get_input_shape(vpath_data, sig_data , verbose)  
+    n_T, _, n_p, n_q, vpath_data, R_data= get_input_shape(D_data, R_data , verbose)  
 
     # Identify categorical columns in R_data
-    category_columns = categorize_columns_by_statistical_method(sig_data, method, Nperm, identify_categories, category_lim,pairwise_statistic=pairwise_statistic)
+    category_columns = categorize_columns_by_statistical_method(R_data, method, Nperm, identify_categories, category_lim,pairwise_statistic=pairwise_statistic)
     
     # Identify categorical columns
     if category_columns["t_test_cols"]!=[] or category_columns["f_anova_cols"]!=[]:
@@ -810,7 +816,7 @@ def test_across_state_visits(vpath_data, sig_data , method="multivariate", Nperm
             raise ValueError("Cannot perform FWER_correction")    
    
     # Initialize arrays based on shape of data shape and defined options
-    pval, base_statistics, test_statistics_list = initialize_arrays(sig_data, n_p, n_q,
+    pval, base_statistics, test_statistics_list = initialize_arrays(R_data, n_p, n_q,
                                                                             n_T, method, Nperm,
                                                                             test_statistics_option)
 
@@ -818,14 +824,14 @@ def test_across_state_visits(vpath_data, sig_data , method="multivariate", Nperm
     # Print tqdm over n_T if there are more than one timepoint
     for t in tqdm(range(n_T)) if n_T > 1 & verbose==True else range(n_T):
         # Correct for confounds and center data_t
-        data_t, _ = deconfound_values(sig_data[t, :],None, confounds)
+        data_t, _ = deconfound_values(R_data[t, :],None, confounds)
 
         # Removing rows that contain nan-values
         if method == "multivariate" or method == "cca":
             if vpath_surrogates is None:
-                data_t, vpath_array, _ = remove_nan_values(data_t, vpath_array, method)
+                vpath_array, data_t, _ = remove_nan_values(vpath_array, data_t, method)
             else:
-                data_t, vpath_surrogates, _ = remove_nan_values(data_t, vpath_surrogates, method)
+                vpath_surrogates, data_t, _ = remove_nan_values(vpath_surrogates, data_t, method)
         
         if method != "state_pairs":
             ###################### Permutation testing for other tests beside state pairs #################################
@@ -846,7 +852,7 @@ def test_across_state_visits(vpath_data, sig_data , method="multivariate", Nperm
                         
                 if method =="one_vs_rest":
                     for state in range(1, n_states+1):
-                        test_statistics[perm,state -1] =calculate_baseline_difference(vpath_surrogate, data_t, state, pairwise_statistic.lower(), category_columns)
+                        test_statistics[perm,state -1] =calculate_baseline_difference(vpath_surrogate, data_t, state, pairwise_statistic.lower(), state_com)
     
                         
                 elif method =="multivariate":
@@ -874,9 +880,6 @@ def test_across_state_visits(vpath_data, sig_data , method="multivariate", Nperm
         ###################### Permutation testing for state pairs #################################
         elif method =="state_pairs":
             # Run this code if it is "state_pairs"
-            # Correct for confounds and center data_t
-            data_t, _ = deconfound_values(sig_data[t, :],None, confounds)
-            
             # Generates all unique combinations of length 2 
             pairwise_comparisons = list(combinations(range(1, n_states + 1), 2))
             test_statistics = np.zeros((Nperm, len(pairwise_comparisons)))
@@ -970,7 +973,7 @@ def remove_nan_values(D_data, R_data, method):
     if method == "multivariate":
         # When applying "multivariate" we need to remove rows for our D_data, as we cannot use it as a predictor for
         # Check for NaN values and remove corresponding rows
-        nan_mask = np.isnan(D_data).any(axis=1)
+        nan_mask = np.isnan(D_data) if D_data.ndim == 1 else np.isnan(D_data).any(axis=1)
         # nan_mask = np.isnan(D_data).any(axis=1)
         # Get indices or rows that have been removed
         # removed_indices = np.where(nan_mask)[0]
@@ -1703,7 +1706,7 @@ def generate_vpath_1D(vpath):
             # Then it is already a vector
             vpath_array = vpath.copy()
 
-    return vpath_array
+    return vpath_array.astype(np.int8)
 
 
 
@@ -1730,9 +1733,9 @@ def surrogate_state_time(perm, viterbi_path,n_states):
         if np.ndim(viterbi_path) == 2 and viterbi_path.shape[1] !=1:
             viterbi_path_surrogate = viterbi_path_to_stc(viterbi_path, n_states)
         elif np.ndim(viterbi_path) == 2 and viterbi_path.shape[1] ==1:
-            viterbi_path_surrogate = np.squeeze(viterbi_path.copy().astype(int))
+            viterbi_path_surrogate = np.squeeze(viterbi_path.copy().astype(np.int8))
         else:
-            viterbi_path_surrogate = viterbi_path.copy().astype(int)
+            viterbi_path_surrogate = viterbi_path.copy().astype(np.int8)
             
     else:
         viterbi_path_surrogate = surrogate_viterbi_path(viterbi_path, n_states)
@@ -1741,7 +1744,7 @@ def surrogate_state_time(perm, viterbi_path,n_states):
 
 def surrogate_state_time_matrix(Nperm, vpath_data, n_states):
     vpath_array=generate_vpath_1D(vpath_data)
-    vpath_surrogates = np.zeros((len(vpath_array),Nperm))
+    vpath_surrogates = np.zeros((len(vpath_array),Nperm), dtype=np.int8)
     for perm in tqdm(range(Nperm)):
         while True:
             vpath_surrogates[:,perm] = surrogate_state_time(perm, vpath_array, n_states)
@@ -1766,7 +1769,7 @@ def viterbi_path_to_stc(viterbi_path, n_states):
     stc (numpy.ndarray): 
         State-time matrix where each row represents a time point and each column represents a state.
     """
-    stc = np.zeros((len(viterbi_path), n_states), dtype=int)
+    stc = np.zeros((len(viterbi_path), n_states), dtype=np.int8)
     if np.min(viterbi_path)==0:
         stc[np.arange(len(viterbi_path)), viterbi_path] = 1
     else:
@@ -1801,7 +1804,7 @@ def surrogate_viterbi_path(viterbi_path, n_states):
         stc = viterbi_path.copy()
 
     # Initialize the surrogate Viterbi path, state probability and previous state
-    viterbi_path_surrogate = np.zeros(viterbi_path_1D.shape)
+    viterbi_path_surrogate = np.zeros(viterbi_path_1D.shape, dtype=np.int8)
     state_probs = stc.mean(axis=0).cumsum()
     prev_state = None
     index = 0
@@ -1809,49 +1812,38 @@ def surrogate_viterbi_path(viterbi_path, n_states):
     while index < len(viterbi_path_1D):
         # Find the next index where the state changes
         t_next = np.where(viterbi_path_1D[index:] != viterbi_path_1D[index])[0]
+        t_next = index + t_next[0] if len(t_next) > 0 else len(viterbi_path_1D)
 
-        if len(t_next) == 0:
-            t_next = len(viterbi_path_1D)
-        else:
-            #t_next = t_next[0]
-            t_next = index + t_next[0]
-            
         if prev_state is not None:
-            # Create a copy of the state-time matrixte
-            transition_prob_matrix = stc.copy()
-            
-            # Remove the column of the previous sta
-            transition_prob_matrix = np.delete(transition_prob_matrix, prev_state, axis=1)
-            # Find rows where every element is 0
-            zero_rows = np.all(transition_prob_matrix == 0, axis=1)
+            # Adjust the transition probability matrix
+            transition_prob_matrix = np.delete(stc, prev_state, axis=1)
+            valid_rows = ~np.all(transition_prob_matrix == 0, axis=1)
+            transition_prob_matrix = transition_prob_matrix[valid_rows]
 
-            # Remove rows where every element is 0
-            transition_prob_matrix_filt = transition_prob_matrix[~zero_rows]
-            
-            # Renormalize state probabilities to sum up to 1
-            state_probs = transition_prob_matrix_filt.mean(axis=0).cumsum()
-            # Generate a random number to determine the next state
+            # Renormalize state probabilities
+            state_probs = transition_prob_matrix.mean(axis=0).cumsum()
+
+            # Generate the next state
             ran_num = random.uniform(0, 1)
-            state = np.where(state_probs >= ran_num)[0][0]
+            state = np.searchsorted(state_probs, ran_num)
+
             # Adjust state index if needed
-            if state >=prev_state and n_states!=prev_state+1: #n_states!=prev_state+1 => Not equal to last state
-                state+=1
-            elif state+1==prev_state and n_states==prev_state+1:
-                state=state+0
+            if state >= prev_state and prev_state + 1 != n_states:
+                state += 1
+
         else:
             # If it's the first iteration, randomly choose the initial state
             ran_num = random.uniform(0, 1)
-            state = np.where(state_probs >= ran_num)[0][0]
+            state = np.searchsorted(state_probs, ran_num)
         
-        # Update the surrogate path. 
-        state += 1 # We update with +1 in the end because the surrogate path starts from 0
-        viterbi_path_surrogate[index:t_next] = state
+        # Update the surrogate path
+        viterbi_path_surrogate[index:t_next] = state + 1
         index = t_next
-        prev_state = state - 1  # Update the previous state index
+        prev_state = state
     
-    return viterbi_path_surrogate.astype(int)
+    return viterbi_path_surrogate.astype(np.int8)
 
-def calculate_baseline_difference(vpath_array, R_data, state, pairwise_statistic, category_columns):
+def calculate_baseline_difference(vpath_array, R_data, state, pairwise_statistic, state_com):
     """
     Calculate the difference between the specified statistics of a state and all other states combined.
 
@@ -1872,15 +1864,23 @@ def calculate_baseline_difference(vpath_array, R_data, state, pairwise_statistic
         The calculated difference between the specified state and all other states combined.
     """
     if pairwise_statistic == 'median':
+        # Calculate the median for the specific state
         state_R_data = np.nanmedian(R_data[vpath_array == state])
+        # Calculate the median for all other states
         other_R_data = np.nanmedian(R_data[vpath_array != state])
     elif pairwise_statistic == 'mean':
+        # Calculate the mean for the specific state
         state_R_data = np.nanmean(R_data[vpath_array == state])
+        # Calculate the mean for all other states
         other_R_data = np.nanmean(R_data[vpath_array != state])
     else:
         raise ValueError("Invalid stat value")
     # Detect any difference
-    difference = np.abs(state_R_data) - np.abs(other_R_data)
+    # difference = np.abs(state_R_data) - np.abs(other_R_data)
+    if state_com=="larger":
+        difference = state_R_data - other_R_data
+    else:
+        difference =  other_R_data - state_R_data
     
     return difference
 
@@ -2476,13 +2476,12 @@ def pval_cluster_based_correction(test_statistics, pval, alpha=0.05, individual_
 
                     # Find clusters
                     cluster_label = label(thresh_nperm > 0)
-
-                    if len(np.unique(cluster_label)>0) or np.sum(cluster_label)==0:
-                        # Sum values inside each cluster
+                    if len(np.unique(cluster_label)) > 1:
                         temp_cluster_sums = [np.sum(thresh_nperm[cluster_label == label]) for label in range(1, len(np.unique(cluster_label)))]
-
-                        # Store the sum of values for the biggest cluster
-                        max_cluster_sums[perm] = max(temp_cluster_sums)
+                        if temp_cluster_sums:
+                            max_cluster_sums[perm] = max(temp_cluster_sums)
+                        else:
+                            max_cluster_sums[perm] = 0  # No clusters
             # Calculate cluster threshold
             cluster_thresh = np.percentile(max_cluster_sums, 100 - (100 * alpha))
 
@@ -2536,6 +2535,9 @@ def pval_cluster_based_correction(test_statistics, pval, alpha=0.05, individual_
                     if temp_cluster_sums:
                         # Store the sum of values for the biggest cluster
                         max_cluster_sums[perm] = max(temp_cluster_sums)
+                    else:
+                        max_cluster_sums[perm] = 0  # No clusters
+                    
             # Otherwise it is a 2D matrix
             else: 
                 # Take each permutation map and transform to Z
@@ -2620,6 +2622,44 @@ def get_indices_array(idx_data):
     for count, (start, end) in enumerate(idx_data_copy):
         idx_array[start:end] = count
     return idx_array
+
+
+def get_indices_range(size, step):
+    """
+    Create a 2D matrix of start and end indices with a fixed step size.
+
+    Parameters:
+    --------------
+    size (int): 
+        The total size of the data to generate indices for.
+    step (int): 
+        The step size for each range.
+
+    Returns:
+    ----------  
+    indices (ndarray): 
+        A 2D NumPy array where each row represents the start and end indices.
+    
+    Example:
+    ----------
+    >>> size = 1000
+    >>> step = 250
+    >>> get_indices_range(size, step)
+    array([[   0,  250],
+           [ 250,  500],
+           [ 500,  750],
+           [ 750, 1000]])
+    """
+    # Generate start and end indices
+    start_values = np.arange(0, size, step)
+    end_values = np.arange(step, size + step, step)
+    end_values[-1] = size  # Ensure the last value is exactly the size
+
+    # Combine into a 2D array
+    indices = np.column_stack((start_values, end_values))
+
+    return indices
+
 
 def get_indices_timestamp(n_timestamps, n_subjects):
     """
@@ -2927,7 +2967,7 @@ def reconstruct_concatenated_to_3D(D_con, D_original=None, n_timepoints=None, n_
 
 
 
-def pad_vpath(vpath, lag_val):
+def pad_vpath(vpath, lag_val, indices_tde=None):
     """
     Pad the Viterbi path with repeated first and last rows.
 
@@ -2941,10 +2981,14 @@ def pad_vpath(vpath, lag_val):
     vpath (numpy.ndarray): 
         A 2D array representing the Viterbi path, where each row corresponds to a specific state in the HMM 
         and each column represents different features or observations.
-
     lag_val (int): 
         The number of times to repeat the first and last rows for padding.
-
+    indices_tde (list of tuples, optional): 
+        A list of tuples, where each tuple contains the start and end indices of individual sequences 
+        within the vpath. If provided, padding is applied to each sequence separately.
+    indices_tde (numpy.ndarray): 
+        Is a 2D array where each row represents the start and end index for a session for the TDE-HMM dataset.
+        
     Returns:
     ---------
     numpy.ndarray: 
@@ -2961,17 +3005,36 @@ def pad_vpath(vpath, lag_val):
         raise ValueError("Invalid input: vpath must be a 2D numpy array.")
     if not isinstance(lag_val, int) or lag_val <= 0:
         raise ValueError("Invalid input: lag_val must be a positive integer.")
+    if indices_tde is not None:
+        if not isinstance(indices_tde, np.ndarray) or vpath.ndim != 2 or indices_tde[-1][-1]!=len(vpath):
+            raise ValueError("Invalid input: indices_tde does not match with vpath.")
+    if indices_tde is None:
+        # Get the first and last rows
+        first_row = vpath[0]
+        last_row = vpath[-1]
 
-    # Get the first and last rows
-    first_row = vpath[0]
-    last_row = vpath[-1]
+        # Create padding for the beginning and the end
+        beginning_padding = np.tile(first_row, (lag_val, 1))
+        end_padding = np.tile(last_row, (lag_val, 1))
 
-    # Create padding for the beginning and the end
-    beginning_padding = np.tile(first_row, (lag_val, 1))
-    end_padding = np.tile(last_row, (lag_val, 1))
+        # Concatenate the padding with the original vpath
+        vpath_pad = np.vstack((beginning_padding, vpath, end_padding))
+    else:
+        # Multiple sequence padding based on indices_tde
+        vpath_list=[]
+        for start, end in indices_tde:
+            # Get the first and last rows
+            first_row = vpath[start]
+            last_row = vpath[end-1]
 
-    # Concatenate the padding with the original vpath
-    vpath_pad = np.vstack((beginning_padding, vpath, end_padding))
+            # Create padding for the beginning and the end
+            beginning_padding = np.tile(first_row, (lag_val, 1))
+            end_padding = np.tile(last_row, (lag_val, 1))
+
+            # Append each session to the empty list
+            vpath_list.append(np.vstack((beginning_padding, vpath[start:end], end_padding)) )
+            # Concatenate the padding with the original vpath
+            vpath_pad = np.concatenate(vpath_list,axis=0)
     return vpath_pad
 
 def get_event_epochs(input_data, index_data, filtered_R_data, event_markers, 
@@ -2980,7 +3043,8 @@ def get_event_epochs(input_data, index_data, filtered_R_data, event_markers,
     Extract time-locked data epochs based on stimulus events.
 
     This function processes 2D input data to extract epochs aligned to specific stimulus events. 
-    The epochs are extracted based on provided event file (event_markers) and are resampled to the target frequency. 
+    The epochs are extracted based on provided event files and are resampled to the target rate. 
+    The function also returns relevant indices and concatenates filtered R data across sessions.
 
     Parameters:
     ------------
