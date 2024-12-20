@@ -220,7 +220,7 @@ def get_life_times(vpath,indices,threshold=0):
     for j in range(N):
         ind = np.arange(indices[j,0],indices[j,1]).astype(int)
         for k in range(K):
-            visits,_ = get_visits(vpath[ind,:],k,threshold=0)
+            visits,_ = get_visits(vpath[ind,:],k,threshold=threshold)
             if len(visits) > 0:
                 meanLF[j,k] = statistics.mean(visits)
                 medianLF[j,k] = statistics.median(visits)
@@ -259,7 +259,7 @@ def get_state_onsets(vpath,indices,threshold=0):
         onsets_j = []
         ind = np.arange(indices[j,0],indices[j,1]).astype(int)
         for k in range(K):
-            _,onsets_k = get_visits(vpath[ind,:],k,threshold=0)
+            _,onsets_k = get_visits(vpath[ind,:],k,threshold=threshold)
             onsets_j.append(onsets_k)
         onsets.append(onsets_j)
     return onsets
