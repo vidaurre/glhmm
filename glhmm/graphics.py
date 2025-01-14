@@ -528,11 +528,8 @@ def interpolate_colormap(cmap_list):
 def plot_p_value_matrix(pval_in, alpha = 0.05, normalize_vals=True, figsize=(9, 5), 
                          title_text="Heatmap (p-values)", fontsize_labels=12, fontsize_title=14, annot=False, 
                         cmap_type='default', cmap_reverse=True, xlabel="", ylabel="", 
-                        xticklabels=None, x_tick_min=None, x_tick_max=None, num_x_ticks=None, 
-                        none_diagonal = False, num_colors = 259, xlabel_rotation=0, save_path=None):
-    from matplotlib import cm, colors
-    import seaborn as sb
-    from mpl_toolkits.axes_grid1 import make_axes_locatable
+                        xticklabels=None, x_tick_min=None, x_tick_max=None, num_x_ticks=None, tick_positions = [0.001, 0.01, 0.05, 0.1, 0.3, 1], 
+                        none_diagonal = False, num_colors = 256, xlabel_rotation=0, save_path=None):
     """
     Plot a heatmap of p-values.
 
@@ -563,6 +560,14 @@ def plot_p_value_matrix(pval_in, alpha = 0.05, normalize_vals=True, figsize=(9, 
     xticklabels (List[str], optional), default=None:
         If not provided, labels will be numbers equal to shape of pval.shape[1].
         Else you can define your own labels, e.g., xticklabels=['sex', 'age'].
+    x_tick_min (float, optional), default=None:
+        Minimum value for the x-tick labels.
+    x_tick_max (float, optional), default=None:
+        Maximum value for the x-tick labels.
+    num_x_ticks (int, optional), default=5:
+        Number of x-ticks.
+    tick_positions (list, optional), default=[0, 0.001, 0.01, 0.05, 0.1, 0.3, 1]
+        Positions of ticks on the colorbar.
     none_diagonal (bool, optional), default=False:
         If you want to turn the diagonal into NaN numbers.
     num_colors (numpy.ndarray), default=259:
@@ -572,26 +577,36 @@ def plot_p_value_matrix(pval_in, alpha = 0.05, normalize_vals=True, figsize=(9, 
     save_path (str, optional), default=None
         If a string is provided, it saves the figure to that specified path
     """
-    pval = pval_in.copy()
+    if pval_in.ndim>2:
+        pval = np.squeeze(pval_in)
+        if pval.ndim>2:
+            raise ValueError(f"The p-value is {pval.ndim} dimensional\n"
+                    "Adjust your p-values so it becomes 2-dimensional")
+
+    else:
+        pval = pval_in.copy()
     if pval.ndim==0:
         pval = np.reshape(pval, (1, 1))
     if xlabel_rotation==45:
         ha ="right"
     else:
-        ha = "center"    
-    num_x_ticks = num_x_ticks if num_x_ticks is not None else pval.shape[1] if pval.shape[1]<20 else 5
+        ha = "center" 
+    if pval.ndim==2:   
+        num_x_ticks = num_x_ticks if num_x_ticks is not None else pval.shape[1] if pval.shape[1]<20 else 5
+    else:
+        num_x_ticks = num_x_ticks if num_x_ticks is not None else pval.shape[0] if pval.shape[0]<20 else 5
 
+
+    # Ensure p-values are within the log range
     pval_min = -3
+    pval = np.clip(pval, 10**pval_min, 1)
+    # Convert to log scale
     color_array = np.logspace(pval_min, 0, num_colors).reshape(1, -1)
     
-    pval[pval<10**pval_min] =10**pval_min 
-
     fig, axes = plt.subplots(figsize=figsize)
     if len(pval.shape)==1:
         pval =np.expand_dims(pval,axis=0)
     if cmap_type=='default':
-        if normalize_vals:
-            color_array = np.logspace(pval_min, 0, num_colors).reshape(1, -1)
 
         if alpha == None and normalize_vals==False:
             cmap = cm.coolwarm.reversed()
@@ -604,7 +619,7 @@ def plot_p_value_matrix(pval_in, alpha = 0.05, normalize_vals=True, figsize=(9, 
             # Create a LinearSegmentedColormap
             cmap = LinearSegmentedColormap.from_list('custom_colormap', modified_cmap)
         else:
-            color_array = np.logspace(pval_min, 0, num_colors).reshape(1, -1)
+
             # Make a jump in color after alpha
             # Get blue colormap
             cmap_blue = blue_colormap()
@@ -644,7 +659,7 @@ def plot_p_value_matrix(pval_in, alpha = 0.05, normalize_vals=True, figsize=(9, 
         pval = pval_with_nan_diagonal.copy()
 
     if normalize_vals:
-        norm = LogNorm(vmin=1e-3, vmax=1)
+        norm = LogNorm(vmin=10**pval_min, vmax=1)
 
         heatmap = sb.heatmap(pval, ax=axes, cmap=cmap, annot=annot, fmt=".3f", cbar=False, norm=norm)
     else:
@@ -696,36 +711,19 @@ def plot_p_value_matrix(pval_in, alpha = 0.05, normalize_vals=True, figsize=(9, 
     # of ax and the padding between cax and ax will be fixed at 0.05 inch.
     
     if normalize_vals:   
+        # Define tick positions and labels
+        tick_positions = np.array(tick_positions)
+        # Add colorbar
         divider = make_axes_locatable(axes)
         cax = divider.append_axes("right", size="5%", pad=0.05)
-        colorbar = plt.colorbar(heatmap.get_children()[0], cax=cax, ticks=np.logspace(-3, 0, num_colors))
-        colorbar.update_ticks()
-        
-         # Round the tick values to three decimal places
-        rounded_ticks = [round(tick, 3) for tick in colorbar.get_ticks()]
-        
-        if figsize[-1] ==1:
-            # Set colorbar ticks based on the same log scale
-            tick_positions = [0, 0.001, 0.01, 0.05, 0.3, 1]
-        else:
-            # Set colorbar ticks based on the same log scale
-            tick_positions = [0, 0.001, 0.01, 0.05, 0.1, 0.3, 1]
-        tick_labels = [f'{tick:.3f}' if tick in tick_positions else '' for tick in rounded_ticks]
-        unique_values_set = set()
-        unique_values_array = ['' if value == '' or value in unique_values_set else (unique_values_set.add(value), value)[1] for value in tick_labels]
-
-        indices_not_empty = [index for index, value in enumerate(unique_values_array) if value != '']
-
-        colorbar.set_ticklabels(unique_values_array)
-        colorbar.ax.tick_params(axis='y')
-
-        for idx, tick_line in enumerate(colorbar.ax.yaxis.get_ticklines()):
-            if idx not in indices_not_empty:
-                tick_line.set_visible(False)
-            
+        colorbar = plt.colorbar(
+            plt.cm.ScalarMappable(norm=norm, cmap=cmap),
+            cax=cax, ticks=tick_positions, format="%.3g"
+        )
+    
     else:
         divider = make_axes_locatable(axes)
-        cax = divider.append_axes("right", size="5%", pad=0.05)
+        cax = divider.append_axes("right", size="3.5%", pad=0.05)
         # Create a custom colorbar
         colorbar = plt.colorbar(heatmap.get_children()[0], cax=cax)
         # Set the ticks to range from the bottom to the top of the colorbar
@@ -737,6 +735,7 @@ def plot_p_value_matrix(pval_in, alpha = 0.05, normalize_vals=True, figsize=(9, 
         colorbar.set_ticks(np.linspace(min_value, max_value, 5).round(2))
         #colorbar.set_ticks([0, 0.25, 0.5, 1])  # Adjust ticks as needed
         
+    plt.tight_layout()
     # Save the figure if save_path is provided
     if save_path is not None:
         plt.savefig(save_path, bbox_inches='tight')
@@ -749,8 +748,6 @@ def plot_correlation_matrix(corr_vals, statistical_measures, normalize_vals=Fals
                             annot=False, cmap_type='default', cmap_reverse=True, xlabel="", ylabel="", 
                             xticklabels=None, x_tick_min=None, x_tick_max=None, num_x_ticks=5,
                             xlabel_rotation=0, none_diagonal = False, num_colors = 256, save_path=None):
-    from matplotlib import cm, colors
-    from mpl_toolkits.axes_grid1 import make_axes_locatable
     """
     Plot a heatmap of correlation coefficients.
 
@@ -783,6 +780,12 @@ def plot_correlation_matrix(corr_vals, statistical_measures, normalize_vals=Fals
     xticklabels (List[str], optional), default=None:
         If not provided, labels will be numbers equal to the shape of corr_vals.shape[1].
         Else, you can define your own labels, e.g., xticklabels=['sex', 'age'].
+    x_tick_min (float, optional), default=None:
+        Minimum value for the x-tick labels.
+    x_tick_max (float, optional), default=None:
+        Maximum value for the x-tick labels.
+    num_x_ticks (int, optional), default=5:
+        Number of x-ticks.
     none_diagonal (bool, optional), default=False:
         If True, turn the diagonal into NaN numbers.
     num_colors (int, optional), default=256:
@@ -1018,8 +1021,6 @@ def plot_scatter_with_labels(p_values, alpha=0.05, title_text="", xlabel=None, y
         plt.savefig(save_path, bbox_inches='tight') 
 
     plt.show()
-    
-import seaborn as sns
 
 def plot_vpath(viterbi_path, signal=None, idx_data=None, figsize=(7, 4), fontsize_labels=13, fontsize_title=16, 
                yticks=None, time_conversion_rate=None, xlabel="Timepoints", ylabel="", title="Viterbi Path", 
@@ -1061,9 +1062,9 @@ def plot_vpath(viterbi_path, signal=None, idx_data=None, figsize=(7, 4), fontsiz
         If a string is provided, it saves the figure to that specified path
     """
     num_states = viterbi_path.shape[1]
-    colors = sns.color_palette("Set3", n_colors=num_states)
+    colors = sb.color_palette("Set3", n_colors=num_states)
     if num_states > len(colors):
-        extra_colors = sns.color_palette("husl", n_colors=num_states - len(colors))
+        extra_colors = sb.color_palette("husl", n_colors=num_states - len(colors))
         colors.extend(extra_colors)
 
     fig, axes = plt.subplots(figsize=figsize)
@@ -1240,9 +1241,9 @@ def plot_FO(FO, figsize=(8, 4), fontsize_ticks=12, fontsize_labels=14, fontsize_
     bottom = np.zeros(FO.shape[0])
     sessions = np.arange(1, FO.shape[0] + 1)
     num_states = FO.shape[1]
-    colors = sns.color_palette("Set3", n_colors=num_states)
+    colors = sb.color_palette("Set3", n_colors=num_states)
     if num_states > len(colors):
-        extra_colors = sns.color_palette("husl", n_colors=num_states - len(colors))
+        extra_colors = sb.color_palette("husl", n_colors=num_states - len(colors))
         colors.extend(extra_colors)
         
     for k in range(num_states):
@@ -1327,9 +1328,9 @@ def plot_switching_rates(SR, figsize=(8, 4),fontsize_ticks=12, fontsize_labels=1
     multiplier = 0
     sessions = np.arange(1, SR.shape[0] + 1)
     num_states = SR.shape[1]
-    colors = sns.color_palette("Set3", n_colors=num_states)
+    colors = sb.color_palette("Set3", n_colors=num_states)
     if num_states > len(colors):
-        extra_colors = sns.color_palette("husl", n_colors=num_states - len(colors))
+        extra_colors = sb.color_palette("husl", n_colors=num_states - len(colors))
         colors.extend(extra_colors)
 
     for k in range(num_states):
@@ -1415,9 +1416,9 @@ def plot_state_lifetimes(LT, figsize=(8, 4), fontsize_ticks=12, fontsize_labels=
     multiplier = 0
     sessions = np.arange(1, LT.shape[0] + 1)
     num_states = LT.shape[1]
-    colors = sns.color_palette("Set3", n_colors=num_states)
+    colors = sb.color_palette("Set3", n_colors=num_states)
     if num_states > len(colors):
-        extra_colors = sns.color_palette("husl", n_colors=num_states - len(colors))
+        extra_colors = sb.color_palette("husl", n_colors=num_states - len(colors))
         colors.extend(extra_colors)
 
     for k in range(num_states):
@@ -1732,8 +1733,8 @@ def plot_condition_difference(
 def plot_p_values_over_time(pval_in, figsize=(8, 3), xlabel="Timepoints", ylabel="P-values (Log Scale)",
                             title_text="P-values over time", fontsize_labels=12, fontsize_title=14, 
                             stimulus_onset=None, x_tick_min=None, x_tick_max=None, 
-                            num_x_ticks=5, tick_positions=[0, 0.001, 0.01, 0.05, 0.1, 0.3, 1], num_colors=259, 
-                            alpha=0.05, plot_style="line", linewidth=2.5, save_path=None):
+                            num_x_ticks=5, tick_positions=[0.001, 0.01, 0.05, 0.1, 0.3, 1], num_colors=259, 
+                            alpha=0.05, plot_style="line", linewidth=2.5, scatter_on=True, save_path=None):
     """
     Plot a scatter plot of p-values over time with a log-scale y-axis and a colorbar.
 
@@ -1785,30 +1786,22 @@ def plot_p_values_over_time(pval_in, figsize=(8, 3), xlabel="Timepoints", ylabel
     if pval.ndim != 1:
         # Raise an exception and stop function execution
         raise ValueError("To use the function 'plot_p_values_over_time', the variable for p-values must be one-dimensional.")
-
-    # Generate Timepoints based on total_time_seconds
-    # if total_time_seconds:
-    #     time_points = np.linspace(0, total_time_seconds, len(pval))
-    # else:
-    #     time_points = np.arange(len(pval))
-
+    
+    # Ensure p-values are within the log range
     pval_min = -3
+    pval = np.clip(pval, 10**pval_min, 1)
     # Convert to log scale
     color_array = np.logspace(pval_min, 0, num_colors).reshape(1, -1)
     
-    pval[pval<10**pval_min] =10**pval_min 
-
     time_points = np.arange(len(pval))
 
-    if alpha is None:
+    if alpha == None:
         # Create custom colormap
         coolwarm_cmap = custom_colormap()
         # Create a new colormap with the modified color_array
         cmap_list = coolwarm_cmap(color_array)[0]
-        modified_cmap = interpolate_colormap(cmap_list)
-        # Create a LinearSegmentedColormap
-        cmap = LinearSegmentedColormap.from_list('custom_colormap', modified_cmap)
-    else:
+        cmap_list = interpolate_colormap(cmap_list)
+    else:    
         # Make a jump in color after alpha
         # Get blue colormap
         cmap_blue = blue_colormap()
@@ -1827,12 +1820,10 @@ def plot_p_values_over_time(pval_in, figsize=(8, 3), xlabel="Timepoints", ylabel
         # Apply the colormap to the generated values
         cmap_red = red_cmap(colormap_val_red)
         cmap_blue = blue_cmap(colormap_val_blue)
-
         # overwrite the values below alpha
         cmap_list[:num_elements_red,:]=cmap_red
         cmap_list[num_elements_red:,:]=cmap_blue
-        cmap = LinearSegmentedColormap.from_list('custom_colormap', cmap_list)
-            
+    cmap = LinearSegmentedColormap.from_list('custom_colormap', cmap_list)        
     # Create the line plot with varying color based on p-values
     _, axes = plt.subplots(figsize=figsize)
 
@@ -1840,25 +1831,28 @@ def plot_p_values_over_time(pval_in, figsize=(8, 3), xlabel="Timepoints", ylabel
     norm = LogNorm(vmin=10**pval_min , vmax=1)
 
     if plot_style == "line":
-        if alpha !=None:
-            # Plot the line segments with varying colors
-            for i in range(len(time_points)-1):
-                if pval[i+1]>alpha:
-                    color = cmap(norm(pval[i+1]))
-                else:
-                    color = cmap(norm(pval[i]))
-                axes.plot([time_points[i], time_points[i+1]], [pval[i], pval[i+1]], color=color, linewidth=linewidth)
-        else:
-            for i in range(len(time_points)-1):
-                if pval[i+1]>alpha:
-                    color = cmap(norm(pval[i+1]))
-                else:
-                    color = cmap(norm(pval[i]))
-                axes.plot([time_points[i], time_points[i+1]], [pval[i], pval[i+1]], color=color, linewidth=linewidth)
+        # Plot the line segments with varying colors
+        for i in range(len(time_points)-1):
+            # Determine the color for the current segment
+            if scatter_on and pval[i + 1] > alpha:
+                color = cmap(norm(pval[i + 1]))
+            else:
+                color = cmap(norm(pval[i]))
+
+            # Plot the line segment
+            axes.plot([time_points[i], time_points[i + 1]],[pval[i], pval[i + 1]], color=color, linewidth=linewidth)
+
+            if scatter_on:
+                # Handle specific scatter cases
+                if pval[i + 1] > alpha and pval[i] < alpha:
+                    if i > 0 and pval[i - 1] < alpha:
+                        pass  # Explicit no-op for clarity
+                    else:
+                        axes.scatter([time_points[i]],[pval[i]],c=pval[i],cmap=cmap,norm=norm)
     elif plot_style=="scatter":
-        axes.scatter(time_points, pval, c=pval, cmap=cmap, norm=LogNorm(vmin=1e-3, vmax=1))
+        axes.scatter(time_points, pval, c=pval, cmap=cmap, norm=LogNorm(vmin=10**pval_min, vmax=1))
     elif plot_style=="scatter_line":
-        axes.scatter(time_points, pval, c=pval, cmap=cmap, norm=LogNorm(vmin=1e-3, vmax=1))    
+        axes.scatter(time_points, pval, c=pval, cmap=cmap, norm=LogNorm(vmin=10**pval_min, vmax=1))    
             # Draw lines between points
         axes.plot(time_points, pval, color='black', linestyle='-', linewidth=1)
     # Add labels and title
@@ -1894,36 +1888,24 @@ def plot_p_values_over_time(pval_in, figsize=(8, 3), xlabel="Timepoints", ylabel
     axes.set_yscale('log')
     # Mark specific values on the y-axis
     plt.yticks([0.001, 0.01, 0.05, 0.1, 0.3, 1], ['0.001', '0.01', '0.05', '0.1', '0.3', '1'])
-    # Add a colorbar to show the correspondence between colors and p-values
-    divider = make_axes_locatable(axes)
-    cax = divider.append_axes("right", size="5%", pad=0.05)
-    colorbar = plt.colorbar(plt.cm.ScalarMappable(norm=norm, cmap=cmap), cax=cax, ticks=np.logspace(-3, 0, num_colors), format="%1.0e")
-    colorbar.update_ticks()
-
-    # Round the tick values to three decimal places
-    rounded_ticks = [round(tick, 3) for tick in colorbar.get_ticks()]
-    tick_labels = [f'{tick:.3f}' if tick in tick_positions else '' for tick in rounded_ticks]
-    unique_values_set = set()
-    unique_values_array = ['' if value == '' or value in unique_values_set else (unique_values_set.add(value), value)[1] for value in tick_labels]
-
-    indices_not_empty = [index for index, value in enumerate(unique_values_array) if value != '']
-
-    colorbar.set_ticklabels(unique_values_array)
-    colorbar.ax.tick_params(axis='y')
-
-    for idx, tick_line in enumerate(colorbar.ax.yaxis.get_ticklines()):
-        if idx not in indices_not_empty:
-            tick_line.set_visible(False)
-
     
+    # Add colorbar
+    divider = make_axes_locatable(axes)
+    cax = divider.append_axes("right", size="3.5%", pad=0.05)
+    colorbar = plt.colorbar(
+        plt.cm.ScalarMappable(norm=norm, cmap=cmap),
+        cax=cax, ticks=tick_positions, format="%.3g"
+    )
+
+    plt.tight_layout()
     # Add stimulus onset line and label
     if stimulus_onset is not None:
         axes.axvline(x=stimulus_onset, color='black', linestyle='--', linewidth=2)
     # Save the figure if save_path is provided
     if save_path is not None:
         plt.savefig(save_path, bbox_inches='tight') 
+        
     plt.show()
-    
 
 def plot_p_values_bar(
     pval_in, xticklabels=None, figsize=(9, 4), num_colors=256, xlabel="",
@@ -2052,10 +2034,9 @@ def plot_p_values_bar(
     axes.spines['right'].set_visible(False)
     axes.spines['top'].set_visible(False)
 
-
     # Add colorbar
     divider = make_axes_locatable(axes)
-    cax = divider.append_axes("right", size="5%", pad=0.05)
+    cax = divider.append_axes("right", size="3.5%", pad=0.05)
     colorbar = plt.colorbar(
         plt.cm.ScalarMappable(norm=norm, cmap=cmap),
         cax=cax, ticks=tick_positions, format="%.3g"
@@ -2063,7 +2044,7 @@ def plot_p_values_bar(
 
     # Add extra space for the title
     plt.subplots_adjust(top=top_adjustment)
-
+    plt.tight_layout()
     # Save the plot if required
     if save_path:
         plt.savefig(save_path, bbox_inches='tight')
