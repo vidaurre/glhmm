@@ -22,12 +22,12 @@ import re
 
 
 def test_across_subjects(D_data, R_data, idx_data=None, method="multivariate", Nperm=0, confounds = None, 
-                         dict_family = None,  within_group =False, between_groups=False,  verbose = True, test_statistics_option=True, 
+                         dict_family = None,  within_group =False, between_groups=False, test_statistics_option=True, 
                          FWER_correction=False, identify_categories=False, category_lim=10, 
-                         test_combination=False, predictor_names=[], outcome_names=[]):
+                         test_combination=False, predictor_names=[], outcome_names=[], verbose = True):
     """
-    Perform permutation testing across subjects. Family structure can be taken into account by inputting "dict_family".
-    Three options are available to customize the statistical analysis to a particular research questions:
+    Perform permutation testing across subjects. Family structure can be taken into account by inputting "dict_family". To do this, an Exchangeable Block (EB) file must be created and loaded.
+    Three options are available to customise the statistical analysis to particular research questions:
         - "multivariate": Perform permutation testing using regression analysis.
         - "univariate": Conduct permutation testing with correlation analysis.
         - "cca": Apply permutation testing using canonical correlation analysis.
@@ -36,17 +36,17 @@ def test_across_subjects(D_data, R_data, idx_data=None, method="multivariate", N
     --------------
     D_data (numpy.ndarray): 
         Input data array of shape that can be either a 2D array or a 3D array.
-        For 2D, the data is represented as a (n, p) matrix, where n represents 
+        For 2D, the data is represented as an (n, p) matrix, where n represents 
         the number of subjects, and p represents the number of predictors.
-        For 3D array, it has a shape (T, n, p), where the first dimension 
+        For a 3D array, it has a shape (T, n, p), where the first dimension 
         represents timepoints, the second dimension represents the number of subjects, 
         and the third dimension represents features. 
         For 3D, permutation testing is performed per timepoint for each subject.              
     R_data (numpy.ndarray): 
         The dependent variable can be either a 2D array or a 3D array. 
-        For 2D array, it has a shape of (n, q), where n represents 
+        For a 2D array, it has a shape of (n, q), where n represents 
         the number of subjects, and q represents the outcome of the dependent variable.
-        For 3D array, it has a shape (T, n, q), where the first dimension 
+        For a 3D array, it has a shape (T, n, q), where the first dimension 
         represents timepoints, the second dimension represents the number of subjects, 
         and the third dimension represents a dependent variable.   
         For 3D, permutation testing is performed per timepoint for each subject.     
@@ -57,12 +57,13 @@ def test_across_subjects(D_data, R_data, idx_data=None, method="multivariate", N
     method (str, optional), default="multivariate": 
         The statistical method to be used for the permutation test. Valid options are
         "multivariate", "univariate", or "cca".       
-        Note: "cca" stands for Canonical Correlation Analysis                                        
+        Note: "cca" stands for Canonical Correlation Analysis                                         
     Nperm (int), default=0: 
         Number of permutations to perform.                       
     confounds (numpy.ndarray or None, optional), default=None: 
-        The confounding variables to be regressed out from the input data (D_data).
-        If provided, the regression analysis is performed to remove the confounding effects.    
+        The confounding variables to be regressed out from the input data.
+        The array should have a shape (n, c), where n is the number of subjects and c is the number of confounding variables. 
+        Each column represents a different confound to be controlled for in the analysis.
     dict_family (dict): 
         Dictionary containing family structure information.                          
         - file_location (str): The file location of the family structure data in CSV format.
@@ -70,54 +71,59 @@ def test_across_subjects(D_data, R_data, idx_data=None, method="multivariate", N
                                     Defaults to None.
         - CMC (bool, optional), default=False: 
             A flag indicating whether to use the Conditional Monte Carlo method (CMC).
-        - EE (bool, optional), default=True: A flag indicating whether to assume exchangeable errors, which allows permutation.
-    verbose (bool, optional): 
-        If True, display progress messages. If False, suppress progress messages.    
+        - EE (bool, optional), default=True: A flag indicating whether to assume exchangeable errors, which allows permutation.  
     within_group (bool, optional), default=False: 
-        If True, the function will perfrom within group permutation      
+        If True, the function will perform within-group permutation.      
     between_groups (bool, optional), default=False: 
-        If True, the function will perfrom between group permutation                                                  
+        If True, the function will perform between-group permutation.                                                    
     test_statistics_option (bool, optional), default=True: 
         If True, the function will return the test statistics for each permutation.
     FWER_correction (bool, optional), default=False: 
         Specify whether to perform family-wise error rate (FWER) correction using the MaxT method.
         Note: FWER_correction is not necessary if pval_correction is applied later for multiple comparison p-value correction.                  
     identify_categories: bool or list or numpy.ndarray, optional, default=False
-        If True, automatically identify categorical columns. If list or ndarray, use the provided list of column indices.    
+        If True, automatically identify categorical columns. If a list or ndarray, use the provided list of column indices.    
     category_lim : int or None, optional, default=10
-        Maximum allowed number of categories for F-test. Acts as a safety measure for columns 
+        Maximum allowed number of categories for the F-test. Acts as a safety measure for columns 
         with integer values, like age, which may be mistakenly identified as multiple categories.        
     test_combination (bool or str, optional), default=False:
-            Calculates geometric means of p-values using permutation testing.
-            This is useful for summarizing statistical significance across multiple tests in experimental conditions.
-            Valid options are False, True, "across_rows", or "across_columns".
-            When method="multivariate":
-                - True (bool): Returns a single p-value (1-by-1).
-                - "across_rows" (str): Compute the geometric mean for each of the p rows along the q columns. The multivariate test returns (1-by-q) p-values, and applying "test combination" will give in a single p-value (1-by-1).
-            When method="univariate":
-                - True (bool): Returns a single p-value (1-by-1). (1-by-1)
-                - "across_rows" (str): Compute the geometric means for each of the p rows along the q columns. Returns one value for each of the rows (1-by-p). 
-                - "across_columns" (str): Compute the geometric means for each of the q columns along the p rows. Returns one value for each of the q columns (1-by-q).                        
+        Apply Non-Parametric Combination (NPC) algorithm to combine multiple p-values into fewer p-values 
+        (across rows, across columns or a single p-value)
+        Valid options are False, True, "across_rows", or "across_columns".
+        When method="multivariate":
+            - True (bool): Returns a single p-value (1-by-1).
+            - "across_rows" (str): Compute the geometric mean for each of the p rows along the q columns. The multivariate test returns (1-by-q) p-values, and applying "test combination" will give a single p-value (1-by-1).
+        When method="univariate":
+            - True (bool): Returns a single p-value (1-by-1).
+            - "across_rows" (str): Compute the geometric means for each of the p rows along the q columns. Returns one value for each of the rows (1-by-p). 
+            - "across_columns" (str): Compute the geometric means for each of the q columns along the p rows. Returns one value for each of the q columns (1-by-q).                       
+    predictor_names (list of str, optional):
+        Names of the predictor variables (features) used in the analysis. The order of predictor_names should match the order of columns in D_data.
+    outcome_names (list of str, optional):
+        Names of the outcome variables used in the analysis.
+    verbose (bool, optional): 
+        If True, display progress messages. If False, suppress progress messages.  
+        
     Returns:
     ----------  
     result (dict): 
         A dictionary containing the following keys. Depending on the `test_statistics_option` and `method`, it can return the p-values, 
-        correlation coefficients, test statistics.
+        correlation coefficients, and test statistics.
         'pval': P-values for the test with shapes based on the method:
             - method=="multivariate": (T, q)
             - method=="univariate": (T, p, q)
             - method=="cca": (T, 1)
-        'test_statistics': test statistics is the permutation distribution if `test_statistics_option` is True, else None.
+        'test_statistics': Test statistics as the permutation distribution if `test_statistics_option` is True, else None.
             - method=="multivariate": (T, Nperm, q)
             - method=="univariate": (T, Nperm, p, q)
             - method=="cca": (T, Nperm, 1)
-        'base_statistics': base statistics values of a giving test
-        'statistical_measures': A dictionary that identifies each trait/column (q dimension) in the test statistics and specifies its unit. Possible measures include \( r^2 \), correlation coefficients, t-statistics, f-statistics, and z-scores.
-        'test_type': the type of test, which is the name of the function
-        'method': the method used for analysis Valid options are "multivariate", "univariate", or "cca".
+        'base_statistics': Values of the test statistics calculated on the original, unpermuted data.
+        'statistical_measures': A dictionary that identifies each trait/column (q dimension) in the test statistics and specifies its unit.
+        'test_type': The type of test, in this case "test_across_subjects",
+        'method': The method used for analysis. Valid options are "multivariate", "univariate", or "cca".
         'max_correction': Specifies if FWER has been applied using MaxT, can either output True or False.  
-        'Nperm' :The number of permutations that has been performed.   
-        'test_summary': A dictionary summarizing the test results based on the applied method.
+        'Nperm': The number of permutations that has been performed.   
+        'test_summary': A dictionary summarising the test results based on the applied method.
     """
     # Initialize variables
     test_type = 'test_across_subjects'
@@ -305,12 +311,10 @@ def test_across_subjects(D_data, R_data, idx_data=None, method="multivariate", N
 
 
 def test_across_trials(D_data, R_data, idx_data, method="multivariate", Nperm=0, confounds=None, 
-                                      trial_timepoints=None,verbose=True, test_statistics_option=True, 
-                                      FWER_correction=False, identify_categories=False, category_lim=10, 
-                                      test_combination=False, predictor_names=[], outcome_names=[]):
+                       test_statistics_option=True, FWER_correction=False, identify_categories=False, category_lim=10, 
+                       test_combination=False, predictor_names=[], outcome_names=[], verbose=True):
     """
     Perform permutation testing across different trials within a session. 
-    An example could be if we want to test if any learning is happening during a session that might speed up times.
     
     Three options are available to customize the statistical analysis to a particular research questions:
         - 'multivariate': Perform permutation testing using regression analysis.
@@ -321,26 +325,27 @@ def test_across_trials(D_data, R_data, idx_data, method="multivariate", Nperm=0,
     --------------
     D_data (numpy.ndarray): 
         Input data array of shape that can be either a 2D array or a 3D array.
-        For 2D array, it got a shape of (n, p), where n represent 
-        the number of trials, and p represents the number of predictors (e.g., brain region)
-        For a 3D array,it got a shape (T, n, p), where the first dimension 
+        For 2D, the data is represented as an (n, p) matrix, where n represents 
+        the number of trials, and p represents the number of predictors.
+        For a 3D array, it has a shape (T, n, p), where the first dimension 
         represents timepoints, the second dimension represents the number of trials, 
-        and the third dimension represents features/predictors. 
-        In the latter case, permutation testing is performed per timepoint for each subject.              
+        and the third dimension represents features. 
+        For 3D, permutation testing is performed per timepoint            
     R_data (numpy.ndarray): 
-        The dependent-variable can be either a 2D array or a 3D array. 
-        For 2D array, it got a shape of (n, q), where n represent 
-        the number of trials, and q represents the outcome/dependent variable
-        For a 3D array,it got a shape (T, n, q), where the first dimension 
+        The dependent variable can be either a 2D array or a 3D array. 
+        For a 2D array, it has a shape of (n, q), where n represents 
+        the number of trials, and q represents the outcome of the dependent variable.
+        For a 3D array, it has a shape (T, n, q), where the first dimension 
         represents timepoints, the second dimension represents the number of trials, 
-        and the third dimension represents a dependent variable                    
-    idx_data (numpy.ndarray): 
-        An array containing the indices for each session. The array can be either 1D or 2D:
-        For a 1D array, a sequence of integers where each integer labels the session number. For example, [1, 1, 1, 1, 2, 2, 2, ..., N, N, N, N, N, N, N, N].
-        For a 2D array, each row represents the start and end indices for the trials in a given session, with the format [[start1, end1], [start2, end2], ..., [startN, endN]].  
+        and the third dimension represents a dependent variable.   
+        For 3D, permutation testing is performed per timepoint for each subject.                
+    idx_data (numpy.ndarray), default=None: 
+        An array containing the indices for each group. The array can be either 1D or 2D:
+        For a 1D array, a sequence of integers where each integer labels the group number. For example, [1, 1, 1, 1, 2, 2, 2, ..., N, N, N, N, N, N, N, N].
+        For a 2D array, each row represents the start and end indices for the trials in a given session, with the format [[start1, end1], [start2, end2], ..., [startN, endN]].              
     method (str, optional), default="multivariate": 
         The statistical method to be used for the permutation test. Valid options are
-        "multivariate", "univariate", or "cca".
+        "multivariate", "univariate", or "cca".       
         Note: "cca" stands for Canonical Correlation Analysis    
     Nperm (int), default=0: 
         Number of permutations to perform. 
@@ -348,36 +353,40 @@ def test_across_trials(D_data, R_data, idx_data, method="multivariate", Nperm=0,
         The confounding variables to be regressed out from the input data (D_data).
         If provided, the regression analysis is performed to remove the confounding effects.    
     trial_timepoints (int), default=None: 
-        Number of timepoints for each trial.  
-    verbose (bool, optional), default=True: 
-        If True, display progress messages. If False, suppress progress messages.                                                       
+        Number of timepoints for each trial.                                                         
     test_statistics_option (bool, optional), default=True: 
         If True, the function will return the test statistics for each permutation.
-    FWER_correction (bool, optional), default= False: 
-        Specify whether to perform family-wise error rate (FWER) correction for multiple comparisons using the MaxT method.
-        Note: FWER_correction is not necessary if pval_correction is applied later for multiple comparison p-value correction.                        
-    identify_categories, default=False: 
-        bool or list or numpy.ndarray, optional.
-        If True, automatically identify categorical columns. If list or ndarray, use the provided list of column indices.    
-    category_lim : int or None, optional, default=None
-        Maximum allowed number of categories for F-test. Acts as a safety measure for columns 
+    FWER_correction (bool, optional), default=False: 
+        Specify whether to perform family-wise error rate (FWER) correction using the MaxT method.
+        Note: FWER_correction is not necessary if pval_correction is applied later for multiple comparison p-value correction.                  
+    identify_categories: bool or list or numpy.ndarray, optional, default=False
+        If True, automatically identify categorical columns. If a list or ndarray, use the provided list of column indices.      
+    category_lim : int or None, optional, default=10
+        Maximum allowed number of categories for the F-test. Acts as a safety measure for columns 
         with integer values, like age, which may be mistakenly identified as multiple categories.     
     test_combination (bool or str, optional), default=False:
-            Calculates geometric means of p-values using permutation testing.
-            This is useful for summarizing statistical significance across multiple tests in experimental conditions.
-            Valid options are False, True, "across_rows", or "across_columns".
-            When method="multivariate":
-                - True (bool): Returns a single p-value (1-by-1).
-                - "across_rows" (str): Compute the geometric mean for each of the p rows along the q columns. The multivariate test returns (1-by-q) p-values, and applying "test combination" will give in a single p-value (1-by-1).
-            When method="univariate":
-                - True (bool): Returns a single p-value (1-by-1).
-                - "across_rows" (str): Compute the geometric means for each of the p rows along the q columns. Returns one value for each of the rows (1-by-p).
-                - "across_columns" (str): Compute the geometric means for each of the q columns along the p rows. Returns one value for each of the q columns (1-by-q).                                       
+        Apply Non-Parametric Combination (NPC) algorithm to combine multiple p-values into fewer p-values 
+        (across rows, across columns or a single p-value)
+        Valid options are False, True, "across_rows", or "across_columns".
+        When method="multivariate":
+            - True (bool): Returns a single p-value (1-by-1).
+            - "across_rows" (str): Compute the geometric mean for each of the p rows along the q columns. The multivariate test returns (1-by-q) p-values, and applying "test combination" will give a single p-value (1-by-1).
+        When method="univariate":
+            - True (bool): Returns a single p-value (1-by-1).
+            - "across_rows" (str): Compute the geometric means for each of the p rows along the q columns. Returns one value for each of the rows (1-by-p). 
+            - "across_columns" (str): Compute the geometric means for each of the q columns along the p rows. Returns one value for each of the q columns (1-by-q).                                        
+    predictor_names (list of str, optional):
+        Names of the predictor variables (features) used in the analysis. The order of predictor_names should match the order of columns in D_data.
+    outcome_names (list of str, optional):
+        Names of the outcome variables used in the analysis.
+    verbose (bool, optional): 
+        If True, display progress messages. If False, suppress progress messages. 
 
     Returns:
     ----------  
-    result (dict): A dictionary containing the following keys. Depending on the `test_statistics_option` and `method`, it can return the p-values, 
-        correlation coefficients, test statistics.
+    result (dict): 
+        A dictionary containing the following keys. Depending on the `test_statistics_option` and `method`, it can return the p-values, 
+        correlation coefficients, and test statistics.
         'pval': P-values for the test with shapes based on the method:
             - method=="multivariate": (T, q)
             - method=="univariate": (T, p, q)
@@ -386,13 +395,13 @@ def test_across_trials(D_data, R_data, idx_data, method="multivariate", Nperm=0,
             - method=="multivariate": (T, Nperm, q)
             - method=="univariate": (T, Nperm, p, q)
             - method=="cca": (T, Nperm, 1)
-        'base_statistics': base statistics of a given test
-        'statistical_measures': A dictionary that identifies each trait/column (q dimension) in the test statistics and specifies its unit. Possible measures include \( r^2 \), correlation coefficients, t-statistics, f-statistics, and z-scores.
-        'method': the method used for analysis Valid options are:
-                "multivariate", "univariate", or "cca".
-        'max_correction': Specifies if FWER has been applied using MaxT, can either output True or False.
-        'Nperm' :The number of permutations that has been performed.   
-        'test_summary': A dictionary summarizing the test results based on the applied method.
+        'base_statistics': Values of the test statistics calculated on the original, unpermuted data.
+        'statistical_measures': A dictionary that identifies each trait/column (q dimension) in the test statistics and specifies its unit.
+        'test_type': The type of test, in this case "test_across_trials",
+        'method': The method used for analysis. Valid options are "multivariate", "univariate", or "cca".
+        'max_correction': Specifies if FWER has been applied using MaxT, can either output True or False.  
+        'Nperm': The number of permutations that has been performed.   
+        'test_summary': A dictionary summarising the test results based on the applied method.
     """
     # Initialize variable
     category_columns = []   
@@ -534,12 +543,12 @@ def test_across_trials(D_data, R_data, idx_data, method="multivariate", Nperm=0,
     return result
 
 def test_across_sessions_within_subject(D_data, R_data, idx_data, method="multivariate", Nperm=0, confounds=None, 
-                                        verbose = True, test_statistics_option=True, FWER_correction=False, 
+                                        test_statistics_option=True, FWER_correction=False, 
                                         test_combination=False, identify_categories=False, 
-                                        category_lim=10, predictor_names=[], outcome_names=[]):
+                                        category_lim=10, predictor_names=[], outcome_names=[], verbose = True):
     """
-    Perform permutation testing across sessions within the same subject, while keeping the trial order the same.
-    This procedure is particularly valuable for investigating the effects of long-term treatments or monitoring changes in brain responses across sessions over time.
+    Perform permutation testing across sessions, while keeping the trial order the same.
+
     Three options are available to customize the statistical analysis to a particular research questions:
         - 'multivariate': Perform permutation testing using regression analysis.
         - 'correlation': Conduct permutation testing with correlation analysis.
@@ -549,52 +558,60 @@ def test_across_sessions_within_subject(D_data, R_data, idx_data, method="multiv
     --------------
     D_data (numpy.ndarray): 
         Input data array of shape that can be either a 2D array or a 3D array.
-        For 2D array, it got a shape of (n, p), where n represent 
-        the number of trials of the dataset, and each column represents a feature (e.g., brain region). 
-        For a 3D array,it got a shape (T, n, p), where the first dimension 
+        For 2D, the data is represented as an (n, p) matrix, where n represents 
+        the number of trials, and p represents the number of predictors.
+        For a 3D array, it has a shape (T, n, p), where the first dimension 
         represents timepoints, the second dimension represents the number of trials, 
-        and the third dimension represents features/predictors.             
+        and the third dimension represents features. 
+        For 3D, permutation testing is performed per timepoint             
     R_data (numpy.ndarray): 
-        The dependent-variable can be either a 2D array or a 3D array. 
-        For 2D array, it got a shape of (n, q), where n represent 
-        the number of trials, and q represents the outcome/dependent variable
-        For a 3D array,it got a shape (T, n, q), where the first dimension 
+        The dependent variable can be either a 2D array or a 3D array. 
+        For a 2D array, it has a shape of (n, q), where n represents 
+        the number of trials, and q represents the outcome of the dependent variable.
+        For a 3D array, it has a shape (T, n, q), where the first dimension 
         represents timepoints, the second dimension represents the number of trials, 
-        and the third dimension represents a dependent variable                   
-    idx_data (numpy.ndarray): 
-        An array containing the indices for each session. The array can be either 1D or 2D:
-        For a 1D array, a sequence of integers where each integer labels the session number. For example, [1, 1, 1, 1, 2, 2, 2, ..., N, N, N, N, N, N, N, N].
-        For a 2D array, each row represents the start and end indices for the trials in a given session, with the format [[start1, end1], [start2, end2], ..., [startN, endN]].  
+        and the third dimension represents a dependent variable.   
+        For 3D, permutation testing is performed per timepoint for each subject.                
+    idx_data (numpy.ndarray):           
+        An array containing the indices for each group. The array can be either 1D or 2D:
+        For a 1D array, a sequence of integers where each integer labels the group number. For example, [1, 1, 1, 1, 2, 2, 2, ..., N, N, N, N, N, N, N, N].
+        For a 2D array, each row represents the start and end indices for the trials in a given session, with the format [[start1, end1], [start2, end2], ..., [startN, endN]].    
     method (str, optional), default="multivariate": 
         The statistical method to be used for the permutation test. Valid options are
         "multivariate", "univariate", or "cca".
         Note: "cca" stands for Canonical Correlation Analysis    
     Nperm (int), default=0: 
-        Number of permutations to perform.                
-    confounds (numpy.ndarray or None, optional): 
+        Number of permutations to perform. 
+    confounds (numpy.ndarray or None, optional), default=None: 
         The confounding variables to be regressed out from the input data (D_data).
-        If provided, the regression analysis is performed to remove the confounding effects. (default: None):                           
-    verbose (bool, optional), default=False: 
-        If True, display progress messages and prints. If False, suppress messages.                                                             
-    test_statistics_option (bool, optional), default=true: 
+        If provided, the regression analysis is performed to remove the confounding effects.                                                                                       
+    test_statistics_option (bool, optional), default=True: 
         If True, the function will return the test statistics for each permutation.
     FWER_correction (bool, optional), default=False: 
-        Specify whether to perform family-wise error rate (FWER) correction for multiple comparisons using the MaxT method.
-        Note: FWER_correction is not necessary if pval_correction is applied later for multiple comparison p-value correction.
+        Specify whether to perform family-wise error rate (FWER) correction using the MaxT method.
+        Note: FWER_correction is not necessary if pval_correction is applied later for multiple comparison p-value correction. 
     test_combination (bool or str, optional), default=False:
-            Calculates geometric means of p-values using permutation testing.
-            This is useful for summarizing statistical significance across multiple tests in experimental conditions.
-            Valid options are False, True, "across_rows", or "across_columns".
-            When method="multivariate":
-                - True (bool): Returns a single p-value (1-by-1).
-                - "across_rows" (str): Compute the geometric mean for each of the p rows along the q columns. The multivariate test returns (1-by-q) p-values, and applying "test combination" will give in a single p-value (1-by-1).
-            When method="univariate":
-                - True (bool): Returns a single p-value (1-by-1).
-                - "across_rows" (str): Compute the geometric means for each of the p rows along the q columns. Returns one value for each of the rows (1-by-p).
-                - "across_columns" (str): Compute the geometric means for each of the q columns along the p rows. Returns one value for each of the q columns (1-by-q).      
+        Apply Non-Parametric Combination (NPC) algorithm to combine multiple p-values into fewer p-values 
+        (across rows, across columns or a single p-value)
+        Valid options are False, True, "across_rows", or "across_columns".
+        When method="multivariate":
+            - True (bool): Returns a single p-value (1-by-1).
+            - "across_rows" (str): Compute the geometric mean for each of the p rows along the q columns. The multivariate test returns (1-by-q) p-values, and applying "test combination" will give a single p-value (1-by-1).
+        When method="univariate":
+            - True (bool): Returns a single p-value (1-by-1).
+            - "across_rows" (str): Compute the geometric means for each of the p rows along the q columns. Returns one value for each of the rows (1-by-p). 
+            - "across_columns" (str): Compute the geometric means for each of the q columns along the p rows. Returns one value for each of the q columns (1-by-q).                                        
+    identify_categories: bool or list or numpy.ndarray, optional, default=False
+        If True, automatically identify categorical columns. If a list or ndarray, use the provided list of column indices.      
     category_lim : int or None, optional, default=10
-        Maximum allowed number of categories for F-test. Acts as a safety measure for columns 
-        with integer values, like age, which may be mistakenly identified as multiple categories.                              
+        Maximum allowed number of categories for the F-test. Acts as a safety measure for columns 
+        with integer values, like age, which may be mistakenly identified as multiple categories.
+    predictor_names (list of str, optional):
+        Names of the predictor variables (features) used in the analysis. The order of predictor_names should match the order of columns in D_data.
+    outcome_names (list of str, optional):
+        Names of the outcome variables used in the analysis.   
+    verbose (bool, optional), default=False: 
+        If True, display progress messages and prints. If False, suppress messages.                            
     
     Returns:
     ----------  
@@ -609,13 +626,13 @@ def test_across_sessions_within_subject(D_data, R_data, idx_data, method="multiv
             - method=="multivariate": (T, Nperm, q)
             - method=="univariate": (T, Nperm, p, q)
             - method=="cca": (T, Nperm, 1)
-        'base_statistics': base statistics of a given test
-        'statistical_measures': A dictionary that identifies each trait/column (q dimension) in the test statistics and specifies its unit. Possible measures include \( r^2 \), correlation coefficients, t-statistics, f-statistics, and z-scores.
-        'method': the method used for analysis Valid options are
-                "multivariate", "univariate", or "cca" , default: "multivariate").
-        'max_correction': Specifies if FWER has been applied using MaxT, can either output True or False.
-        'Nperm' :The number of permutations that has been performed.
-        'test_summary': A dictionary summarizing the test results based on the applied method.
+        'base_statistics': Values of the test statistics calculated on the original, unpermuted data.
+        'statistical_measures': A dictionary that identifies each trait/column (q dimension) in the test statistics and specifies its unit.
+        'test_type': The type of test, in this case "test_across_sessions",
+        'method': The method used for analysis. Valid options are "multivariate", "univariate", or "cca".
+        'max_correction': Specifies if FWER has been applied using MaxT, can either output True or False.  
+        'Nperm': The number of permutations that has been performed.   
+        'test_summary': A dictionary summarising the test results based on the applied method.
                   
     """ 
     # Initialize variable
@@ -761,34 +778,33 @@ def test_across_sessions_within_subject(D_data, R_data, idx_data, method="multiv
     
     return result
 
-def test_across_state_visits(D_data, R_data , method="multivariate", Nperm=0, verbose = True, 
-                       confounds=None, test_statistics_option=True, pairwise_statistic ="mean",
-                       FWER_correction=False, category_lim=10, identify_categories = False, 
-                       vpath_surrogates=None, state_com="larger", predictor_names=[], outcome_names=[]):
+def test_across_state_visits(D_data, R_data , method="multivariate", Nperm=0, confounds=None, 
+                             test_statistics_option=True, pairwise_statistic ="mean",
+                             FWER_correction=False, category_lim=10, identify_categories = False, 
+                             vpath_surrogates=None, state_com="larger", predictor_names=[], outcome_names=[], verbose = True):
     """
     Perform permutation testing across Viterbi path for continuous data.
     
     Parameters:
     --------------    
     D_data (numpy.ndarray): 
-        The Viterbi path of the brain data represented as a (n, p) matrix. 
-        It could be a 2D matrix where each row represents a sessions over a period of time and
-        each column represents a state variable and gives the shape ((n_timepoints X n_sessions), n_states). 
-        If it is a 1D array of of shape ((n_timepoints X n_sessions),) where each row value represent a giving state.          
+        The Viterbi path can be either a 2D or 1D array:
+        - For 2D, it is one-hot encoded for each state at every timepoint, with shape (n, p), where n is the number of samples (n_timepoints x n_sessions), 
+        and p represents the number of states.
+        - For 1D, it is a discrete state value array with shape (n,), where n is the number of samples (n_timepoints x n_sessions), and each value represents a given state.        
     R_data (numpy.ndarray): 
         Physiological signal measurements with shape (n, q), where n is the number of samples (n_timepoints x n_sessions), 
-        and q represents dependent/target variables.                               
+        and q represents dependent/target variables.
+        For multivariate methods, this represents multiple dependent variables recorded simultaneously.                               
     method (str, optional), default="multivariate":     
         Statistical method for the permutation test. Valid options are 
         "multivariate", "univariate", "cca", "osr" or "osa". 
         Note: "cca" stands for Canonical Correlation Analysis.   
     Nperm (int), default=0:                
-        Number of permutations to perform. 
-    verbose (bool, optional): 
-        If True, display progress messages. If False, suppress progress messages.
+        Number of permutations to perform
     test_statistics_option (bool, optional), default=True: 
         If True, the function will return the test statistics for each permutation.
-    pairwise_statistic (str, optional), default="mean".  
+    pairwise_statistic (str, optional), default="mean":  
         The chosen statistic when applying methods one-state-vs-the-rest (osr) or one-state-vs-another-state (osa). 
         Valid options are "mean" or "median".
     FWER_correction (bool, optional), default=False: 
@@ -797,33 +813,34 @@ def test_across_state_visits(D_data, R_data , method="multivariate", Nperm=0, ve
     category_lim : int or None, optional, default=None
         Maximum allowed number of categories for F-test. Acts as a safety measure for columns 
         with integer values, like age, which may be mistakenly identified as multiple categories.                   
-    state_com (str, optional), default="larger".  
-        Only affect the osr test. We can choose to wether the signal of a state is either larger or smaller than the mean/median signal size of the remaining states. 
+    state_com (str, optional), default="larger":  
+        Only affects the osr test. Choose whether the signal of a state is either larger or smaller than the mean/median signal size of the remaining states. 
         Valid options are "larger" or "smaller".
+    verbose (bool, optional): 
+        If True, display progress messages. If False, suppress progress messages.
 
     Returns:
     ----------  
-    result (dict): A dictionary containing the following keys. Depending on the `test_statistics_option` and `method`, it can return the p-values, 
-        correlation coefficients, test statistics.
+    result (dict):  A dictionary containing the following keys. Depending on the `test_statistics_option` and `method`, it can return the p-values and test statistics.
         'pval': P-values for the test with shapes based on the method:
             - method=="multivariate": (T, q)
             - method=="univariate": (T, p, q)
             - method=="cca": (T, 1)
             - method=="osr": (T, p, 1)
             - method=="osa": (T, p, p)
+        'base_statistics': Values of the test statistics calculated on the original, unpermuted data and got the same shape as 'pval'.
         'test_statistics': test statistics is the permutation distribution if `test_statistics_option` is True, else None.
             - method=="multivariate": (T, Nperm, q)
             - method=="univariate": (T, Nperm, p, q)
             - method=="cca": (T, Nperm, 1)
             - method=="osr": (T, Nperm, p)
-            - method=="osa": (T, Nperm, 1)
-        'statistical_measures': A dictionary that marks the columns (q dimension) in the test_statistics an tell the unit it is based on. Could be r_squared, correlation coefficeints, t-, f-statistics, z_score, mean or median.
-        'test_type': the type of test, which is the name of the function
-        'method': the method used for analysis Valid options are
-                "multivariate", "univariate", or "cca", "osr" and "osa", default: "multivariate").
+            - method=="osa": (T, Nperm, p, p)
+        'statistical_measures': A dictionary that identifies each trait/column (q dimension) in the test statistics and specifies its unit.
+        'test_type': The type of test, in this case "test_across_viterbi_path".
+        'method': The method used for analysis. Valid options are "multivariate", "univariate", "cca", "osr", or "osa".
         'max_correction': Specifies if FWER has been applied using MaxT, can either output True or False.
-        'Nperm' :The number of permutations that has been performed.
-        'test_summary': A dictionary summarizing the test results based on the applied method.
+        'Nperm': The number of permutations that has been performed.
+        'test_summary': A dictionary summarising the test results based on the applied method.
     """
     # Initialize variables
     test_type = 'test_across_state_visits'
@@ -1642,16 +1659,13 @@ def get_pval(test_statistics, Nperm, method, t, pval, FWER_correction=False):
     """
     if method == "multivariate" or method == "osr":
         if FWER_correction:
-            # Perform family wise permutation correction
-            # Define the number of columns and rows
-            nCols = test_statistics[0,:].shape[-1]
-            nRows = len(test_statistics)
-            # Get the maximum explained variance for each column
-            max_test_statistics =np.tile(np.max(test_statistics, axis=1), (1, nCols)).reshape(nCols, nRows-1).T
-            
+            # Perform family-wise permutation correction
+            # Compute the maximum statistic for each permutation (excluding the first row)
+            max_test_statistics = np.max(test_statistics[1:], axis=1)  # Shape: (Nperm,)
+
             # Count how many times MaxT statistics exceed or equal each observed statistic
             # Adding 1 to numerator and denominator for bias correction
-            pval[t, :] = (np.sum(max_test_statistics[1:] >= test_statistics[0,:], axis=0) + 1) / (Nperm + 1)
+            pval[t, :] = (np.sum(max_test_statistics[:, np.newaxis] >= test_statistics[0, :], axis=0) + 1) / (Nperm + 1)
             
         else:
             # Count how many times test_statistics exceed or equal each observed statistic
@@ -1660,27 +1674,22 @@ def get_pval(test_statistics, Nperm, method, t, pval, FWER_correction=False):
         
     elif method == "univariate" or method =="cca":
         if FWER_correction:
-            # Perform family wise permutation correction
-            # Define the number of columns and rows
-            nCols = test_statistics.shape[-1]
-            nRows = test_statistics.shape[1]
-
+            # Perform family-wise permutation correction
             # Calculate the MaxT statistics for each permutation (excluding the observed)
-            # The empirical distribution of the maximum test statistics in the MaxT method does not include the observed statistics.
-            maxT_statistics = np.max(np.abs(test_statistics[1:, :, :]), axis=(1, 2))
+            # The empirical distribution of the maximum test statistics does not include the observed statistics
+            maxT_statistics = np.max(np.abs(test_statistics[1:, :, :]), axis=(1, 2))  # Shape: (Nperm - 1,)
 
-            # Calculate the observed test statistics
-            observed_test_stats = np.abs(test_statistics[0])
-
+            # Extract the observed test statistics (first row)
+            observed_test_stats = np.abs(test_statistics[0, :, :])  # Shape: (p_dim, q_dim)
 
             # Use broadcasting to compare observed statistics against MaxT statistics
-            observed_expanded = observed_test_stats[np.newaxis, :, :]  # Shape: (1, nRows, nCols)
+            # Expand dimensions for broadcasting
+            observed_expanded = observed_test_stats[np.newaxis, :, :]  # Shape: (1, p_dim, q_dim)
             maxT_expanded = maxT_statistics[:, np.newaxis, np.newaxis]  # Shape: (Nperm - 1, 1, 1)
-
 
             # Count how many times MaxT statistics exceed or equal each observed statistic
             # Adding 1 to numerator and denominator for bias correction
-            pval[t, :, :] = (np.sum(maxT_expanded >= observed_expanded, axis=0) + 1) / (Nperm + 1)
+            pval[t, :, :] = (np.sum(maxT_expanded >= observed_expanded, axis=0) + 1) / (Nperm + 1)  # Shape: (p_dim, q_dim)
             
         else:    
             # Count how many times test_statistics exceed or equal each observed statistic
@@ -2663,59 +2672,52 @@ def pval_FWER_correction(result_dic=None, test_statistics=None, Nperm=None, meth
         raise ValueError("Missing required parameters: test_statistics, Nperm, or method.")
 
     if method == "multivariate":
-        if test_statistics.shape[0] == Nperm:
+        if test_statistics.shape[0] == Nperm:  # Case 1: Without timepoints
             test_statistics = np.expand_dims(test_statistics, axis=1) if test_statistics.ndim == 1 else test_statistics
-            nCols = test_statistics[0, :].shape[-1]
-            nRows = len(test_statistics)
-            pval_FWER = np.zeros((nCols))
+            # Compute the maximum statistic for each permutation
+            max_stats = np.max(test_statistics[1:], axis=1)  # Shape: (Nperm - 1,)
 
-            max_test_statistics = np.tile(np.max(test_statistics[1:, :], axis=1), (1, nCols)).reshape(nCols, nRows - 1).T
-            pval_FWER[:] = (np.sum(max_test_statistics >= test_statistics[0, :], axis=0) + 1) / (Nperm + 1)
-        else:
+            # Get the observed (unpermuted) statistics (first permutation)
+            observed_stats = test_statistics[0, :]  # Shape: (F,)
+
+            # Compute FWER-corrected p-values for each feature
+            pval_FWER = (np.sum(max_stats[:, np.newaxis] >= observed_stats, axis=0) + 1) / (Nperm + 1)  # Shape: (F,)
+        else:  # Case 2: With timepoints
             n_T = test_statistics.shape[0]
             test_statistics = np.expand_dims(test_statistics, axis=2) if test_statistics[0, :].ndim == 1 else test_statistics
-            nCols = test_statistics.shape[2]
-            nRows = test_statistics.shape[1]
-            pval_FWER = np.zeros((n_T, nCols))
+            # Compute the maximum statistic for each timepoint and permutation
+            max_stats = np.max(test_statistics[:, 1:, :], axis=2)  # Shape: (T, Nperm - 1)
 
-            for t in range(n_T):
-                max_test_statistics = np.tile(np.max(test_statistics[t, 1:], axis=1), (1, nCols)).reshape(nCols, nRows - 1).T
-                pval_FWER[t, :] = (np.sum(max_test_statistics >= test_statistics[t, 0, :], axis=0) + 1) / (Nperm + 1)
+            # Get the observed (unpermuted) statistics (first permutation for each timepoint)
+            observed_stats = test_statistics[:, 0, :]  # Shape: (T, F)
+
+            # Compute FWER-corrected p-values for each timepoint and feature
+            pval_FWER = (np.sum(max_stats[:, :, np.newaxis] >= observed_stats[:, np.newaxis, :], axis=1) + 1) / (Nperm + 1)  # Shape: (T, F)
 
     elif method == "univariate":
-        if test_statistics.shape[0] == Nperm:
+        if test_statistics.shape[0] == Nperm:  # Case 1: Without timepoints
             test_statistics = np.expand_dims(test_statistics, axis=2) if test_statistics[0, :].ndim == 1 else test_statistics
-            nCols = test_statistics.shape[-1]
-            nRows = test_statistics.shape[1]
+            maxT_statistics = np.max(np.abs(test_statistics[1:, :, :]), axis=(1, 2))  # Shape: (Nperm - 1,)
+            observed_test_stats = np.abs(test_statistics[0])  # Shape: (p, q)
 
-            maxT_statistics = np.max(np.abs(test_statistics[1:, :, :]), axis=(1, 2))
-            observed_test_stats = np.abs(test_statistics[0])
-
-            observed_expanded = observed_test_stats[np.newaxis, :, :]
-            maxT_expanded = maxT_statistics[:, np.newaxis, np.newaxis]
-
-            pval_FWER = (np.sum(maxT_expanded >= observed_expanded, axis=0) + 1) / (Nperm + 1)
-        else:
+            # Use broadcasting to compare observed statistics against MaxT statistics - Get a comparison for every combination of permutation, feature, and outcome.
+            pval_FWER = (np.sum(maxT_statistics[:, np.newaxis, np.newaxis] >= observed_test_stats, axis=0) + 1) / (Nperm + 1)  # Shape: (p, q)
+        else:  # Case 2: With timepoints
             n_T = test_statistics.shape[0]
             test_statistics = np.expand_dims(test_statistics, axis=3) if test_statistics[0, :].ndim == 2 else test_statistics
-            nCols = test_statistics.shape[-1]
-            nRows = test_statistics.shape[2]
-            pval_FWER = np.zeros((n_T, nRows, nCols))
+            pval_FWER = np.zeros((n_T, test_statistics.shape[-2], test_statistics.shape[-1]))  # Shape: (T, p, q)
 
             for t in range(n_T):
-                maxT_statistics = np.max(np.abs(test_statistics[t, 1:, :, :]), axis=(1, 2))
-                observed_test_stats = np.abs(test_statistics[t, 0])
+                maxT_statistics = np.max(np.abs(test_statistics[t, 1:, :, :]), axis=(1, 2))  # Shape: (Nperm - 1,)
+                observed_test_stats = np.abs(test_statistics[t, 0])  # Shape: (p, q)
 
-                observed_expanded = observed_test_stats[np.newaxis, :, :]
-                maxT_expanded = maxT_statistics[:, np.newaxis, np.newaxis]
-
-                pval_FWER[t, :] = (np.sum(maxT_expanded >= observed_expanded, axis=0) + 1) / (Nperm + 1)
+                # Use broadcasting to compare observed statistics against MaxT statistics - Get a comparison for every combination of permutation, feature, and outcome.
+                pval_FWER[t, :, :] = (np.sum(maxT_statistics[:, np.newaxis, np.newaxis] >= observed_test_stats, axis=0) + 1) / (Nperm + 1)
 
     else:
         raise ValueError("Invalid method. Must be 'multivariate' or 'univariate'.")
 
-    return np.squeeze(pval_FWER) if pval_FWER.ndim>2 else pval_FWER
-
+    return np.squeeze(pval_FWER) if pval_FWER.ndim > 2 else pval_FWER
 
 def pval_cluster_based_correction(result_dic = None, test_statistics=[], pval=None, alpha=0.05, individual_feature=False):
     """
