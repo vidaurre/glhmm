@@ -1911,7 +1911,7 @@ def plot_p_values_bar(
     pval_in, xticklabels=None, figsize=(9, 4), num_colors=256, xlabel="",
     ylabel="P-values (Log Scale)", title_text="Bar Plot", fontsize_labels =12,fontsize_title=14,
     tick_positions=[0.001, 0.01, 0.05, 0.1, 0.3, 1], top_adjustment=0.8,
-    alpha=0.05, pad_title=25, xlabel_rotation=45, pval_text_hight_same=False,
+    alpha=0.05, pad_title=25, xlabel_rotation=45, pval_text_height_same=False,
     save_path=None):
     """
     Visualize a bar plot with LogNorm and a colorbar.
@@ -2002,7 +2002,7 @@ def plot_p_values_bar(
     bars = axes.bar(xticklabels, pval, color=bar_colors)
 
     # Add data labels above bars
-    max_yval = max(pval) if pval_text_hight_same else None
+    max_yval = max(pval) if pval_text_height_same else None
     for bar in bars:
         yval = bar.get_height().round(3)
         if yval ==1:
