@@ -670,6 +670,9 @@ def roll_by_vector(arr, shifts, axis=1,gpu_enabled=False):
 
     arr = xp.swapaxes(arr,axis,-1)
     all_idcs = xp.ogrid[[slice(0,n) for n in arr.shape]]
+    # Check if all_idcs is a tuple, and convert to a list if needed
+    if isinstance(all_idcs, tuple): 
+        all_idcs = list(all_idcs)
 
     # Convert to a positive shift
     all_idcs[-1] = all_idcs[-1] - xp.expand_dims(shifts,axis=1)
