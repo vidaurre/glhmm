@@ -1946,6 +1946,8 @@ def plot_p_values_bar(
         Padding for the plot title.
     save_path (str), optional, default=None
         If a string is provided, it saves the figure to that specified path
+    pval_text_height_same (bool), default=False
+        Whether the p-values of each bar should be plotted at the same height or adjusted to the height of each individual bar
     """
     # Validate input and flatten p-values
     pval = np.squeeze(pval_in).flatten()
