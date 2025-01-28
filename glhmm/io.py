@@ -12,6 +12,10 @@ import pickle
 import os
 import warnings
 import h5py
+from zipfile import ZipFile
+from tqdm import tqdm
+from pathlib import Path
+import requests
 
 from . import glhmm
 from . import auxiliary
@@ -368,3 +372,73 @@ def load_statistics(filename, directory=None):
     return data_dict
 
 
+def download_file_with_progress_bar(url: str, dest_path: Path):
+    """
+    Download a file with a progress bar.
+
+    Parameters
+    ----------
+    url : str
+        URL of the file to download.
+    dest_path : Path
+        Path to save the downloaded file.
+
+    """
+    response = requests.get(url, stream=True)
+    response.raise_for_status()  # Raise an error for bad responses
+    total_size = int(response.headers.get('content-length', 0))  # Get the file size from headers
+    block_size = 1024  # 1 Kilobyte per block
+
+    with open(dest_path, 'wb') as file, tqdm(
+        desc=f"Downloading {dest_path.name}",
+        total=total_size,
+        unit='B',
+        unit_scale=True,
+        unit_divisor=1024,
+    ) as progress:
+        for data in response.iter_content(block_size):
+            file.write(data)
+            progress.update(len(data))
+
+def prepare_data_directory(PATH_DATA: Path, zenodo_url: str = "https://zenodo.org/record/14756003/files/data.zip"):
+    """
+    Ensure the data directory is prepared. If the specified directory does not exist, 
+    download and extract the data from Zenodo.
+
+    Parameters
+    ----------
+    data_dir : Path
+        Path to the specific data directory (e.g., 'data/Procedure_1').
+    zenodo_url : str, optional, default='https://zenodo.org/record/14756003/files/data.zip'
+        URL of the Zenodo zip file containing the data.
+
+    Returns
+    -------
+    Path
+        Path to the specific data directory where the data is stored.
+    """
+    # Check if the specific data directory exists
+    if PATH_DATA.exists():    
+        return PATH_DATA
+
+    # Define the parent directory for downloading and extracting the data
+    PATH_PARENT = PATH_DATA.parent.parent # that is the folder of the working directory
+
+    # Define the zip file name in the parent directory
+    zip_path = PATH_PARENT / "data.zip"
+
+    # Download the data zip file from Zenodo with a progress bar
+    print(f"Downloading data from {zenodo_url}...")
+    download_file_with_progress_bar(zenodo_url, zip_path)
+
+    # Extract the zip file
+    print(f"Extracting data to {PATH_PARENT}...")
+    with ZipFile(zip_path, 'r') as zip_ref:
+        zip_ref.extractall(PATH_PARENT)
+    print(f"Data extracted successfully.")
+
+    # Remove the zip file after extraction
+    zip_path.unlink()
+    print(f"Removed temporary zip file: {zip_path}.")
+
+    return PATH_DATA

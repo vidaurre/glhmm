@@ -902,7 +902,7 @@ def test_across_state_visits(D_data, R_data , method="multivariate", Nperm=0, co
     pval, base_statistics, test_statistics_list, F_stats_list, t_stats_list = initialize_arrays(n_p, n_q,n_T, method, Nperm, test_statistics_option)
 
     # Custom variable names
-    predictor_names = [f"State {i+1}" for i in range(pval.shape[-2])] if predictor_names==[] or len(predictor_names)!=pval.shape[-2] else predictor_names
+    predictor_names = [f"State {i+1}" for i in range(n_states)] if predictor_names==[] or len(predictor_names)!=n_states else predictor_names
     outcome_names = [f"Regressor {i+1}" for i in range(pval.shape[-1])] if outcome_names==[] or len(outcome_names)!=pval.shape[-1] else outcome_names
 
     # Print tqdm over n_T if there are more than one timepoint
@@ -937,7 +937,7 @@ def test_across_state_visits(D_data, R_data , method="multivariate", Nperm=0, co
                 if method =="osr":
                     for state in range(1, n_states+1):
                         test_statistics[perm,state -1] =calculate_baseline_difference(vpath_surrogate, data_t, state, pairwise_statistic.lower(), state_com)
-    
+
                 elif method =="multivariate":
                     # Make vpath to a binary matrix
                     vpath_surrogate_binary = np.zeros((len(vpath_surrogate), len(np.unique(vpath_surrogate))))
@@ -1002,7 +1002,11 @@ def test_across_state_visits(D_data, R_data , method="multivariate", Nperm=0, co
 
     # Create report summary
     test_summary =create_test_summary(R_data, base_statistics,pval, predictor_names, outcome_names, method, F_stats_list, t_stats_list,n_T, n_N, n_p,n_q)
-
+    if method =="osr":
+        test_summary["state_com"] = state_com 
+    if method =="osa":
+        test_summary["pairwise_comparisons"] =pairwise_comparisons
+        
     Nperm = 0 if Nperm==1 else Nperm
     
     category_columns = {key: value for key, value in category_columns.items() if value}
@@ -3565,7 +3569,7 @@ def categorize_columns_by_statistical_method(R_data, method, Nperm, identify_cat
         elif method == "multivariate":
             category_columns['r_squared_cols'] = 'all_columns'
         # If method is either osr or osa, apply the chosen pairwise_statistic (mean or median)
-        elif method == "osr" or method =="state_paris":
+        elif method == "osr" or method =="osa":
             category_columns[pairwise_statistic] = 'all_columns'
             
     return category_columns
@@ -5132,7 +5136,7 @@ def display_test_summary(result_dict, output="both", timepoint=0, return_tables=
         model_summary = coef_table = None
         
         # Check if T-statistics are 2D or 3D (time-dependent)
-        if t_stats.ndim == 2:
+        if t_stats.ndim == 2 or t_stats.ndim == 3 and t_stats.shape[0] == 1:
             # Time-independent case
             if output in ["both", "model"]:
                 model_summary = pd.DataFrame({
@@ -5202,8 +5206,135 @@ def display_test_summary(result_dict, output="both", timepoint=0, return_tables=
                 return model_summary
             elif output == "coef":
                 return coef_table
-    else:
+                
+    elif result_dict["method"] == "osr":
+        if result_dict["test_summary"]['Timepoints'] == 1:
+            # Extract necessary data from result_dict
+            base_statistics = result_dict['test_statistics'][0,:]
+            pval = result_dict['pval']
+            predictors = result_dict['test_summary']['Predictor']
+            outcomes = result_dict['test_summary']['Outcome']
+                
+            # Generate Model Summary
+            max_stat = np.max(np.abs(base_statistics), axis=0)
+            min_pval = np.min(pval, axis=0)
+            n_predictors =len(np.unique(result_dict["test_summary"]["Predictor"]))
 
+            # unit extraction
+            if 'all_columns' in result_dict["statistical_measures"].values():
+                key = list(result_dict["statistical_measures"].keys())[0]
+                # Get the unit for each column
+                unit_key = key.split('_cols')[0]
+                
+            # Check if all outcomes have the same prefix and end with a number
+            prefix = outcomes[0].split(' ')[0]
+            if all(re.match(rf"^{prefix} \d+$", outcome) for outcome in outcomes):
+                # Sorting using the numerical part of each string
+                outcomes = sorted(np.unique(outcomes), key=lambda x: int(x.split(' ')[1]))
+
+                model_summary = pd.DataFrame({
+                    "Unit": [f"{unit_key}-diff"],  
+                    "Nperm": [result_dict["Nperm"]],  
+                    "Max Statistic": [max_stat], 
+                    "Min P-value": [min_pval],  
+
+                })
+            if not return_tables:
+                print(f"\nModel Summary (OSR-{result_dict['test_summary']['state_com']}):")
+                print(model_summary.to_string(index=False))
+
+            if output in ["both", "coef"]:
+                coef_table = pd.DataFrame({
+                    "State": predictors,
+                    f"{unit_key} difference": base_statistics,
+                    "P-value": pval
+                })
+                if not return_tables:
+                    print(f"\nCoefficients Table (OSR-{result_dict['test_summary']['state_com']}):")
+                    print(coef_table.to_string(index=False))
+    elif result_dict["method"] == "osa":
+        if result_dict["test_summary"]['Timepoints'] == 1:
+            # Extract necessary data from result_dict
+            base_statistics = result_dict['test_statistics'][0,:]
+            pval = result_dict['pval']
+            predictors = result_dict['test_summary']['Predictor']
+                
+            # unit extraction
+            if 'all_columns' in result_dict["statistical_measures"].values():
+                key = list(result_dict["statistical_measures"].keys())[0]
+                # Get the unit for each column
+                unit_key = key.split('_cols')[0]
+                
+            model_summary = pd.DataFrame({
+                "Unit": [f"{unit_key}-diff"],  
+                "Nperm": [result_dict["Nperm"]],  
+            })
+            if not return_tables:
+                print(f"\nModel Summary (OSA)):")
+                print(model_summary.to_string(index=False))
+
+            if output in ["both", "coef"]:
+                result_dict['test_summary']['pairwise_comparisons']
+                coef_table = pd.DataFrame({
+                    "State X": [x for x, y in result_dict['test_summary']['pairwise_comparisons']],
+                    "State Y": [y for x, y in result_dict['test_summary']['pairwise_comparisons']],
+                    f"{unit_key} difference": base_statistics,
+                    "P-value": [pval[x-1, y-1] for x, y in result_dict['test_summary']['pairwise_comparisons']]
+                })
+                if not return_tables:
+                    print(f"\nCoefficients Table (OSA):")
+                    print(coef_table.to_string(index=False))
+
+        else:
+            # Time-dependent case
+            # Extract necessary data from result_dict
+            base_statistics = result_dict['base_statistics'][timepoint,:]
+            pval = result_dict['pval'][timepoint,:]
+            predictors = result_dict['test_summary']['Predictor']
+            outcomes = result_dict['test_summary']['Outcome']
+                
+            # Generate Model Summary
+            max_stat = np.max(np.abs(base_statistics), axis=0)
+            min_pval = np.min(pval, axis=0)
+            n_predictors =len(np.unique(result_dict["test_summary"]["Predictor"]))
+
+            # unit extraction
+            if 'all_columns' in result_dict["statistical_measures"].values():
+                key = list(result_dict["statistical_measures"].keys())[0]
+                # Get the unit for each column
+                unit_key = key.split('_cols')[0]
+
+            model_summary = pd.DataFrame({
+                "Outcome": np.unique(outcomes),
+                "Max Statistic": max_stat,
+                "Min P-value": min_pval,
+                "Unit": unit_key,
+                "Nperm": result_dict["Nperm"]
+            })
+            if not return_tables:
+                print("\nModel Summary:")
+                print(model_summary.to_string(index=False))
+
+            if output in ["both", "coef"]:
+                coef_table = pd.DataFrame({
+                    "Predictor": result_dict["test_summary"]["Predictor"],
+                    "Outcome": result_dict["test_summary"]["Outcome"],
+                    "Base Statistic": base_statistics.flatten().round(5),
+                    "P-value": pval.flatten().round(5)
+                })
+                if not return_tables:
+                    print("\nCoefficients Table:")
+                    print(coef_table.to_string(index=False))
+
+                  # Return tables if requested
+        if return_tables:
+            if output == "both":
+                return model_summary, coef_table
+            elif output == "model":
+                return model_summary
+            elif output == "coef":
+                return coef_table   
+    else:
         if result_dict["test_summary"]['Timepoints'] == 1:
             # Extract necessary data from result_dict
             base_statistics = result_dict['base_statistics']
