@@ -3182,16 +3182,25 @@ def get_concatenate_data_memmap(D_raw, filename="D_con.dat"):
     num_features = D_raw[0].shape[1]
     
     # Create a memory-mapped file
-    D_con = np.memmap(filename, dtype=D_raw[0].dtype, mode="w+", shape=(total_samples, num_features))
+    D_con_dat = np.memmap(filename, dtype=D_raw[0].dtype, mode="w+", shape=(total_samples, num_features))
     
     # Write data incrementally
     start = 0
     for d in D_raw:
         end = start + d.shape[0]
-        D_con[start:end] = d  # Copy data into memory-mapped file
+        D_con_dat[start:end] = d  # Copy data into memory-mapped file
         start = end
+
+    # Convert memmap to a regular NumPy array
+    D_con = np.array(D_con_dat)
     
-    return D_con  # Returns the memory-mapped array
+    # Explicitly delete the memmap object before removing the file
+    del D_con_dat
+    
+    # Remove the temporary memory-mapped file
+    os.remove(filename)
+
+    return D_con 
 
 def get_concatenate_subjects(D_sessions):
     """
