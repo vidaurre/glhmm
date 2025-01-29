@@ -3158,6 +3158,40 @@ def get_indices_update_nan(idx_data, nan_mask):
     
     return idx_data_update
 
+def get_concatenate_data_memmap(D_raw, filename="D_con.dat"):
+    """
+    Saves a list of NumPy arrays (D_raw) into a memory-mapped file to optimize RAM usage.
+    
+    Parameters:
+    -----------
+    D_raw : list of np.ndarray
+        List containing session-wise NumPy arrays with the same number of columns.
+    filename : str, optional
+        Name of the memory-mapped file to store the concatenated dataset (default is "D_con.dat").
+    
+    Returns:
+    --------
+    np.memmap
+        Memory-mapped NumPy array containing the concatenated data.
+    """
+    if not D_raw:
+        raise ValueError("D_raw cannot be empty.")
+    
+    # Define the shape dynamically based on D_raw
+    total_samples = sum(d.shape[0] for d in D_raw)
+    num_features = D_raw[0].shape[1]
+    
+    # Create a memory-mapped file
+    D_con = np.memmap(filename, dtype=D_raw[0].dtype, mode="w+", shape=(total_samples, num_features))
+    
+    # Write data incrementally
+    start = 0
+    for d in D_raw:
+        end = start + d.shape[0]
+        D_con[start:end] = d  # Copy data into memory-mapped file
+        start = end
+    
+    return D_con  # Returns the memory-mapped array
 
 def get_concatenate_subjects(D_sessions):
     """
