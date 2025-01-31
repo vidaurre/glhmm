@@ -2016,73 +2016,94 @@ def viterbi_path_to_stc(viterbi_path, n_states):
         stc[np.arange(len(viterbi_path)), viterbi_path-1] = 1
     return stc
 
-
-
 def surrogate_viterbi_path(viterbi_path, n_states):
     """
-    Generate surrogate Viterbi path based on state-time matrix.
+    Generate a surrogate Viterbi path that preserves segment structure but 
+    reassigns each segment to a different state without repetition.
 
     Parameters:
     --------------
     viterbi_path (numpy.ndarray):   
-        1D array or 2D matrix containing the Viterbi path.
+        1D array containing the original Viterbi path with unique state segments.
     n_states (int):                
-        Number of states in the hidden Markov model.
+        Total number of states.
 
     Returns:
     ----------  
     viterbi_path_surrogate (numpy.ndarray): 
-        Surrogate Viterbi path as a 1D array representing the state indices.
-        The number of states in the array varies from 1 to n_states
+        A 1D array with the same segmentation structure but reassigned unique states.
     """
-    # Check if the input viterbi_path is a 1D array or 2D matrix
-    if np.squeeze(viterbi_path).ndim == 1:
-        viterbi_path_1D = np.squeeze(viterbi_path).copy()
-        stc = viterbi_path_to_stc(viterbi_path_1D, n_states)
-    else:
-        viterbi_path_1D = np.argmax(viterbi_path, axis=1)
-        stc = viterbi_path.copy()
-
-    # Initialize the surrogate Viterbi path, state probability and previous state
-    viterbi_path_surrogate = np.zeros(viterbi_path_1D.shape, dtype=np.int8)
-    state_probs = stc.mean(axis=0).cumsum()
-    prev_state = None
-    index = 0
-    # Generate surrogate path
-    while index < len(viterbi_path_1D):
-        # Find the next index where the state changes
-        t_next = np.where(viterbi_path_1D[index:] != viterbi_path_1D[index])[0]
-        t_next = index + t_next[0] if len(t_next) > 0 else len(viterbi_path_1D)
-
-        if prev_state is not None:
-            # Adjust the transition probability matrix
-            transition_prob_matrix = np.delete(stc, prev_state, axis=1)
-            valid_rows = ~np.all(transition_prob_matrix == 0, axis=1)
-            transition_prob_matrix = transition_prob_matrix[valid_rows]
-
-            # Renormalize state probabilities
-            state_probs = transition_prob_matrix.mean(axis=0).cumsum()
-
-            # Generate the next state
-            ran_num = random.uniform(0, 1)
-            state = np.searchsorted(state_probs, ran_num)
-
-            # Adjust state index if needed
-            if state >= prev_state and prev_state + 1 != n_states:
-                state += 1
-
-        else:
-            # If it's the first iteration, randomly choose the initial state
-            ran_num = random.uniform(0, 1)
-            state = np.searchsorted(state_probs, ran_num)
-        
-        # Update the surrogate path
-        viterbi_path_surrogate[index:t_next] = state + 1
-        index = t_next
-        prev_state = state
+    # Identify unique states and their segment indices
+    unique_states, segment_start_indices = np.unique(viterbi_path, return_index=True)
     
+    # Ensure the number of unique states matches the expected count
+    if len(unique_states) != n_states:
+        raise ValueError("Mismatch: Unique states in viterbi_path does not match n_states")
+
+    # Generate a shuffled mapping ensuring no state is mapped to itself
+    shuffled_states = unique_states.copy()
+    np.random.shuffle(shuffled_states)
+    
+    while np.any(shuffled_states == unique_states):
+        np.random.shuffle(shuffled_states)
+
+    # Create a state mapping
+    state_mapping = dict(zip(unique_states, shuffled_states))
+
+    # Apply the mapping to generate the surrogate path
+    viterbi_path_surrogate = np.vectorize(state_mapping.get)(viterbi_path)
+
     return viterbi_path_surrogate.astype(np.int8)
 
+def surrogate_viterbi_path(viterbi_path, n_states):
+    """
+    Generate a surrogate Viterbi path while keeping the segment 
+    structure intact. Each segment (continuous run of the same state) is 
+    reassigned to a new state, ensuring that no two consecutive segments 
+
+    Parameters:
+    --------------
+    viterbi_path (numpy.ndarray):   
+        1D array representing the original Viterbi path with unique state segments.
+    n_states (int):                
+        The total number of states.
+
+    Returns:
+    ----------  
+    viterbi_path_surrogate (numpy.ndarray): 
+        A 1D array with the same segmentation pattern but reassigned states, ensuring 
+        that no segment is mapped to the same state as the previous one.
+    """
+    # Detect segment boundaries (where the state changes)
+    segment_start_indices = np.where(np.diff(viterbi_path) != 0)[0] + 1
+    segment_start_indices = np.insert(segment_start_indices, 0, 0)  # Include the first index
+
+    # Extract unique states and shuffle them for reassignment
+    original_states = np.unique(viterbi_path)
+    shuffled_states = original_states.copy()
+    
+    # Ensure shuffled states are different from the original sequence
+    while np.any(shuffled_states == original_states):
+        np.random.shuffle(shuffled_states)
+
+    # Assign states ensuring no consecutive segments have the same value
+    viterbi_path_surrogate = np.zeros_like(viterbi_path, dtype=np.int8)
+    last_state = None
+    available_states = shuffled_states.copy()
+
+    for i, start in enumerate(segment_start_indices):
+        end = segment_start_indices[i + 1] if i + 1 < len(segment_start_indices) else len(viterbi_path)
+
+        # Choose a new state that is different from the last assigned state
+        possible_states = available_states[available_states != last_state]
+        new_state = np.random.choice(possible_states)
+        
+        # Assign the new state to the segment
+        viterbi_path_surrogate[start:end] = new_state
+        last_state = new_state
+
+    return viterbi_path_surrogate
+    
 def calculate_baseline_difference(vpath_array, R_data, state, pairwise_statistic, state_com):
     """
     Calculate the difference between the specified statistics of a state and all other states combined.
@@ -3182,16 +3203,25 @@ def get_concatenate_data_memmap(D_raw, filename="D_con.dat"):
     num_features = D_raw[0].shape[1]
     
     # Create a memory-mapped file
-    D_con = np.memmap(filename, dtype=D_raw[0].dtype, mode="w+", shape=(total_samples, num_features))
+    D_con_dat = np.memmap(filename, dtype=D_raw[0].dtype, mode="w+", shape=(total_samples, num_features))
     
     # Write data incrementally
     start = 0
     for d in D_raw:
         end = start + d.shape[0]
-        D_con[start:end] = d  # Copy data into memory-mapped file
+        D_con_dat[start:end] = d  # Copy data into memory-mapped file
         start = end
+
+    # Convert memmap to a regular NumPy array
+    D_con = np.array(D_con_dat)
     
-    return D_con  # Returns the memory-mapped array
+    # Explicitly delete the memmap object before removing the file
+    del D_con_dat
+    
+    # Remove the temporary memory-mapped file
+    os.remove(filename)
+
+    return D_con 
 
 def get_concatenate_subjects(D_sessions):
     """
