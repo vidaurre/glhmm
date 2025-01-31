@@ -2018,45 +2018,6 @@ def viterbi_path_to_stc(viterbi_path, n_states):
 
 def surrogate_viterbi_path(viterbi_path, n_states):
     """
-    Generate a surrogate Viterbi path that preserves segment structure but 
-    reassigns each segment to a different state without repetition.
-
-    Parameters:
-    --------------
-    viterbi_path (numpy.ndarray):   
-        1D array containing the original Viterbi path with unique state segments.
-    n_states (int):                
-        Total number of states.
-
-    Returns:
-    ----------  
-    viterbi_path_surrogate (numpy.ndarray): 
-        A 1D array with the same segmentation structure but reassigned unique states.
-    """
-    # Identify unique states and their segment indices
-    unique_states, segment_start_indices = np.unique(viterbi_path, return_index=True)
-    
-    # Ensure the number of unique states matches the expected count
-    if len(unique_states) != n_states:
-        raise ValueError("Mismatch: Unique states in viterbi_path does not match n_states")
-
-    # Generate a shuffled mapping ensuring no state is mapped to itself
-    shuffled_states = unique_states.copy()
-    np.random.shuffle(shuffled_states)
-    
-    while np.any(shuffled_states == unique_states):
-        np.random.shuffle(shuffled_states)
-
-    # Create a state mapping
-    state_mapping = dict(zip(unique_states, shuffled_states))
-
-    # Apply the mapping to generate the surrogate path
-    viterbi_path_surrogate = np.vectorize(state_mapping.get)(viterbi_path)
-
-    return viterbi_path_surrogate.astype(np.int8)
-
-def surrogate_viterbi_path(viterbi_path, n_states):
-    """
     Generate a surrogate Viterbi path while keeping the segment 
     structure intact. Each segment (continuous run of the same state) is 
     reassigned to a new state, ensuring that no two consecutive segments 
