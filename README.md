@@ -23,7 +23,6 @@ The required dependencies to use glhmm are:
 - seaborn
 
 - cupy (only when using GPU acceleration; requires manual install)
-- h5py
 
 ## Installation
 
