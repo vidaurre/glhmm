@@ -73,9 +73,9 @@ def test_across_subjects(D_data, R_data, idx_data=None, method="multivariate", N
             A flag indicating whether to use the Conditional Monte Carlo method (CMC).
         - EE (bool, optional), default=True: A flag indicating whether to assume exchangeable errors, which allows permutation.  
     within_group (bool, optional), default=False: 
-        If True, the function will perform within-group permutation.      
+        If True, the function will perform within-group permutation, meaning permutations will only occur within the same group or subject based on `idx_data`.       
     between_groups (bool, optional), default=False: 
-        If True, the function will perform between-group permutation.                                                    
+        If True, the function will perform between-group permutation, meaning permutations will be conducted across different groups as defined by `idx_data`.                                                   
     test_statistics_option (bool, optional), default=True: 
         If True, the function will return the test statistics for each permutation.
     FWER_correction (bool, optional), default=False: 
@@ -1983,6 +1983,26 @@ def surrogate_state_time(perm, viterbi_path,n_states):
 
 
 def surrogate_state_time_matrix(Nperm, vpath_data, n_states):
+    """
+    Generate a matrix of surrogate Viterbi paths by permuting state assignments 
+    while ensuring that all states are represented in each permutation.
+
+    Parameters:
+    --------------
+    Nperm (int):
+        The number of surrogate permutations to generate.
+    vpath_data (numpy.ndarray):
+        The original Viterbi path data, representing the state sequence.
+    n_states (int):
+        The total number of states.
+
+    Returns:
+    ----------  
+    vpath_surrogates (numpy.ndarray):
+        A 2D array of shape (len(vpath_data), Nperm), where each column is a 
+        surrogate Viterbi path that maintains the segment structure and 
+        ensures all states are included.
+    """  
     vpath_array=generate_vpath_1D(vpath_data)
     vpath_surrogates = np.zeros((len(vpath_array),Nperm), dtype=np.int8)
     for perm in tqdm(range(Nperm)):
