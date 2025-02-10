@@ -1874,7 +1874,7 @@ def permute_subject_trial_idx(idx_array, unique_values=None, value_counts=None):
     """
     # # Get unique values and their counts
     # unique_values, value_counts = np.unique(idx_array, return_counts=True)
-    if np.sum(np.diff(value_counts))==0:
+    if np.all(np.diff(value_counts) ==0):
         # Permute the unique values
         permuted_unique_values = np.random.permutation(unique_values)
 
@@ -1927,7 +1927,7 @@ def permutation_matrix_within_subject_across_sessions(Nperm, R_data, idx_array):
     permutation_matrix = np.zeros((max_length,Nperm), dtype=int)
     idx_array_update = idx_array[~np.isnan(R_data[:,max_length_idx])] -1 if np.min(idx_array)==1 else idx_array[~np.isnan(R_data[:,max_length_idx])]
     # Get unique values and their counts
-    unique_values, value_counts = np.unique(idx_array, return_counts=True)
+    unique_values, value_counts = np.unique(idx_array_update, return_counts=True)
 
     # Identify unique groups per count category
     count_to_values = {}
@@ -1954,7 +1954,7 @@ def permutation_matrix_within_subject_across_sessions(Nperm, R_data, idx_array):
         if perm == 0:
             permutation_matrix[:,perm] = np.arange(max_length)
         else:
-            idx_array_perm = permute_subject_trial_idx(idx_array, unique_values, value_counts)
+            idx_array_perm = permute_subject_trial_idx(idx_array_update, unique_values, value_counts)
             unique_indices = np.unique(idx_array_perm)
             positions_permute = [np.where(np.array(idx_array_perm) == i)[0] for i in unique_indices]
             permutation_matrix[:,perm] = np.concatenate(positions_permute,axis=0)
