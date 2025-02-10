@@ -903,13 +903,13 @@ def plot_correlation_matrix(corr_vals, statistical_measures, normalize_vals=Fals
     plt.show()
 
   
-def plot_permutation_distribution(test_statistic, title_text="Permutation Distribution",xlabel="Test Statistic Values",ylabel="Density", save_path=None):
+def plot_permutation_distribution(base_statistics_perms, title_text="Permutation Distribution",xlabel="Test Statistic Values",ylabel="Density", save_path=None):
     """
     Plot the histogram of the permutation with the observed statistic marked.
 
     Parameters:
     -----------
-    test_statistic (numpy.ndarray)
+    base_statistics_perms (numpy.ndarray)
         An array containing the permutation values.
     title_text (str, optional), default="Permutation Distribution":
         Title text of the plot.
@@ -921,8 +921,8 @@ def plot_permutation_distribution(test_statistic, title_text="Permutation Distri
         If a string is provided, it saves the figure to that specified path
     """
     plt.figure()
-    sb.histplot(test_statistic, kde=True)
-    plt.axvline(x=test_statistic[0], color='red', linestyle='--', label='Observed Statistic')
+    sb.histplot(base_statistics_perms, kde=True)
+    plt.axvline(x=base_statistics_perms[0], color='red', linestyle='--', label='Observed Statistic')
     plt.xlabel(xlabel)
     plt.ylabel(ylabel)
     plt.title(title_text, fontsize=14)
