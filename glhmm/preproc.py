@@ -117,9 +117,9 @@ def dampen_peaks(X,strength=5):
     X_transformed : array-like of shape (n_samples, n_parcels)
         The transformed data after applying extreme peak dampening.
     """
-    x_mask = np.abs(X)>np.std(X)
+    x_mask = np.abs(X)>2*np.std(X)
     X_transformed = X.copy()
-    X_transformed[x_mask] = np.sign(X[x_mask])*(np.std(X) - np.log(np.std(X))/np.log(strength) + np.log(np.abs(X[x_mask]))/np.log(strength))
+    X_transformed[x_mask] = np.sign(X[x_mask])*(2*np.std(X) - np.log(2*np.std(X))/np.log(strength) + np.log(np.abs(X[x_mask]))/np.log(strength))
 
     return X_transformed
 
