@@ -99,6 +99,30 @@ def apply_ica(X,d,algorithm='parallel'):
 
     return X
 
+def dampen_peaks(X,strength=5):
+    """Applies dampening of extreme peaks to the input data X. 
+    If the absolute value of X goes beyond 2 standard deviation of X, 
+    it gets substituted by the logarithm of the absolute value of X.
+
+    Parameters:
+    -----------
+    X : array-like of shape (n_samples, n_parcels)
+        The input data to be transformed.
+    strength : positive int
+        The strength of dampening. This value refers to the base of the logarithm to use. 
+        The bigger the base, the stronger the dampening.
+
+    Returns:
+    --------
+    X_transformed : array-like of shape (n_samples, n_parcels)
+        The transformed data after applying extreme peak dampening.
+    """
+    x_mask = np.abs(X)>np.std(X)
+    X_transformed = X.copy()
+    X_transformed[x_mask] = np.sign(X[x_mask])*(np.std(X) - np.log(np.std(X))/np.log(strength) + np.log(np.abs(X[x_mask]))/np.log(strength))
+
+    return X_transformed
+
 
 def preprocess_data(data,indices,
         fs = 1, # frequency of the data
@@ -111,6 +135,7 @@ def preprocess_data(data,indices,
         exact_pca=True, # related to how to run PCA
         ica=None, # Number of independent components, % explained variance, or None (if specified, pca is not used)
         ica_algorithm='parallel', # related to how to run PCA
+        dampen_extreme_peaks=None, # it can be None, True, or an int with the strength of dampening
         post_standardise=None, # True / False, standardise the ICA/PCA components?
         downsample=None # new frequency, or None
         ):
@@ -162,9 +187,15 @@ def preprocess_data(data,indices,
 
     ica_algorithm : {"parallel", "deflation"}, default="parallel"
         Specify which algorithm to use for ICA (based on FastICA).     
+        
+    dampen_extreme_peaks : int, True or None, default=None
+        determines whether to dampen extreme peaks in the data and the strength of the dampening. 
+        If int, the strength of dampening
+        If True, the dampening is done with default value 5.
+        If None, no dampening will be applied.    
 
-    post_standardise : bool, default=False if pca is used; =True if ica is used
-        Whether to standardize after applying PCA/ICA (recommended when using the TDE-HMM)
+    post_standardise : bool, default=False if pca is used; =True if ica is used; =True if dampening is used
+        Whether to standardize after applying PCA/ICA/dampening (recommended when using the TDE-HMM)
 
     downsample : int or float or None, default=None
         The new frequency of the input data after downsampling.
@@ -233,9 +264,18 @@ def preprocess_data(data,indices,
     if ica != None:
         data = apply_ica(data,ica,ica_algorithm)
         p = data.shape[1]       
+        
+    if dampen_extreme_peaks != None: 
+        if isistance(dampen_extreme_peaks,int):
+            strength = dampen_extreme_peaks
+            data = dampen_peaks(data,strength)
+        else:
+            data = dampen_peaks(data)
+            
 
     if post_standardise is None:
         if ica: post_standardise = True
+        elif dampen_extreme_peaks: post_standardise = True
         else: post_standardise = False
 
     if (pca or ica) and post_standardise:
