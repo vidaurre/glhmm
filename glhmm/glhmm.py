@@ -460,7 +460,7 @@ class glhmm():
     def __check_Gamma(Gamma):
         K = Gamma.shape[1]
         if np.any(np.isnan(Gamma)):
-            raise Exception("NaN were generated in the state time courses, probably due to an artifacts") 
+            raise Exception("NaN were generated in the state time courses, probably due to a artifacts in the data. Consider using the preprocessing option 'dampen_extreme_peaks' before fitting the HMM ") 
         status = np.all(np.std(Gamma,axis=0)<0.001)
         #status = (np.max(Gamma)<0.6) and (np.min(Gamma)>(1/K/2))
         return status
