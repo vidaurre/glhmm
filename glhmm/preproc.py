@@ -128,6 +128,7 @@ def preprocess_data(data,indices,
         fs = 1, # frequency of the data
         standardise=True, # True / False
         filter=None, # Tuple with low-pass high-pass thresholds, or None
+        dampen_extreme_peaks=None, # it can be None, True, or an int with the strength of dampening
         detrend=False, # True / False
         onpower=False, # True / False
         onphase=False, # True / False
@@ -135,7 +136,6 @@ def preprocess_data(data,indices,
         exact_pca=True, # related to how to run PCA
         ica=None, # Number of independent components, % explained variance, or None (if specified, pca is not used)
         ica_algorithm='parallel', # related to how to run PCA
-        dampen_extreme_peaks=None, # it can be None, True, or an int with the strength of dampening
         post_standardise=None, # True / False, standardise the ICA/PCA components?
         downsample=None # new frequency, or None
         ):
@@ -153,13 +153,20 @@ def preprocess_data(data,indices,
     fs : int or float, default=1
         The frequency of the input data.
 
-    standardise : bool, default=True
-        Whether to standardize the input data.
+    standardise : bool, default=True. =True if dampening is used
+        Whether to standardize the input data. 
 
     filter : tuple of length 2 or None, default=None
         The low-pass and high-pass thresholds to apply to the input data.
         If None, no filtering will be applied.
         If a tuple, the first element is the low-pass threshold and the second is the high-pass threshold.
+        
+    dampen_extreme_peaks : int, True or None, default=None
+        determines whether to dampen extreme peaks in the data and the strength of the dampening. 
+        If this is chosen, the data are standardised first.
+        If int, the strength of dampening
+        If True, the dampening is done with default value 5.
+        If None, no dampening will be applied.    
 
     detrend : bool, default=False
         Whether to detrend the input data.
@@ -187,12 +194,6 @@ def preprocess_data(data,indices,
 
     ica_algorithm : {"parallel", "deflation"}, default="parallel"
         Specify which algorithm to use for ICA (based on FastICA).     
-        
-    dampen_extreme_peaks : int, True or None, default=None
-        determines whether to dampen extreme peaks in the data and the strength of the dampening. 
-        If int, the strength of dampening
-        If True, the dampening is done with default value 5.
-        If None, no dampening will be applied.    
 
     post_standardise : bool, default=False if pca is used; =True if ica is used; =True if dampening is used
         Whether to standardize after applying PCA/ICA/dampening (recommended when using the TDE-HMM)
@@ -215,7 +216,7 @@ def preprocess_data(data,indices,
 
     data = np.copy(data)
 
-    if standardise:
+    if standardise or dampen_extreme_peaks:
         for j in range(N):
             t = np.arange(indices[j,0],indices[j,1]) 
             data[t,:] -= np.mean(data[t,:],axis=0)
@@ -233,6 +234,15 @@ def preprocess_data(data,indices,
             t = np.arange(indices[j,0],indices[j,1])
             data[t,:] = signal.sosfilt(sos, data[t,:], axis=0)
 
+    if dampen_extreme_peaks: 
+        if isistance(dampen_extreme_peaks,int):
+            strength = dampen_extreme_peaks
+        else:
+            strength = 5
+        for j in range(N):
+            t = np.arange(indices[j,0],indices[j,1]) 
+            data[t,:] = dampen_peaks(data[t,:],strength)      
+    
     if detrend:
         for j in range(N):
             t = np.arange(indices[j,0],indices[j,1]) 
@@ -264,21 +274,12 @@ def preprocess_data(data,indices,
     if ica != None:
         data = apply_ica(data,ica,ica_algorithm)
         p = data.shape[1]       
-        
-    if dampen_extreme_peaks != None: 
-        if isistance(dampen_extreme_peaks,int):
-            strength = dampen_extreme_peaks
-            data = dampen_peaks(data,strength)
-        else:
-            data = dampen_peaks(data)
-            
 
     if post_standardise is None:
-        if ica: post_standardise = True
-        elif dampen_extreme_peaks: post_standardise = True
+        if (ica or dampen_extreme_peaks): post_standardise = True
         else: post_standardise = False
 
-    if (pca or ica) and post_standardise:
+    if (pca or ica or dampen_extreme_peaks) and post_standardise:
         for j in range(N):
             t = np.arange(indices[j,0],indices[j,1]) 
             data[t,:] -= np.mean(data[t,:],axis=0)
