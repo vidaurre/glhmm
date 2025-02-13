@@ -126,9 +126,9 @@ def dampen_peaks(X,strength=5):
 
 def preprocess_data(data,indices,
         fs = 1, # frequency of the data
+        dampen_extreme_peaks=None, # it can be None, True, or an int with the strength of dampening
         standardise=True, # True / False
         filter=None, # Tuple with low-pass high-pass thresholds, or None
-        dampen_extreme_peaks=None, # it can be None, True, or an int with the strength of dampening
         detrend=False, # True / False
         onpower=False, # True / False
         onphase=False, # True / False
@@ -152,6 +152,13 @@ def preprocess_data(data,indices,
 
     fs : int or float, default=1
         The frequency of the input data.
+        
+    dampen_extreme_peaks : int, True or None, default=None
+        determines whether to dampen extreme peaks in the data and the strength of the dampening. 
+        If this is chosen, the data are centered first.
+        If int, the strength of dampening
+        If True, the dampening is done with default value 5.
+        If None, no dampening will be applied.
 
     standardise : bool, default=True. =True if dampening is used
         Whether to standardize the input data. 
@@ -159,15 +166,7 @@ def preprocess_data(data,indices,
     filter : tuple of length 2 or None, default=None
         The low-pass and high-pass thresholds to apply to the input data.
         If None, no filtering will be applied.
-        If a tuple, the first element is the low-pass threshold and the second is the high-pass threshold.
-        
-    dampen_extreme_peaks : int, True or None, default=None
-        determines whether to dampen extreme peaks in the data and the strength of the dampening. 
-        If this is chosen, the data are centered first.
-        If int, the strength of dampening
-        If True, the dampening is done with default value 5.
-        After dampening, the data will be standardised
-        If None, no dampening will be applied.    
+        If a tuple, the first element is the low-pass threshold and the second is the high-pass threshold.    
 
     detrend : bool, default=False
         Whether to detrend the input data.
@@ -216,7 +215,17 @@ def preprocess_data(data,indices,
     N = indices.shape[0]
 
     data = np.copy(data)
-
+    
+    if dampen_extreme_peaks: 
+        if isistance(dampen_extreme_peaks,int):
+            strength = dampen_extreme_peaks
+        else:
+            strength = 5
+        for j in range(N):
+            t = np.arange(indices[j,0],indices[j,1]) 
+            data[t,:] -= np.mean(data[t,:],axis=0)
+            data[t,:] = dampen_peaks(data[t,:],strength)
+            
     if standardise:
         for j in range(N):
             t = np.arange(indices[j,0],indices[j,1]) 
@@ -234,18 +243,6 @@ def preprocess_data(data,indices,
         for j in range(N):
             t = np.arange(indices[j,0],indices[j,1])
             data[t,:] = signal.sosfilt(sos, data[t,:], axis=0)
-
-    if dampen_extreme_peaks: 
-        if isistance(dampen_extreme_peaks,int):
-            strength = dampen_extreme_peaks
-        else:
-            strength = 5
-        for j in range(N):
-            t = np.arange(indices[j,0],indices[j,1]) 
-            data[t,:] -= np.mean(data[t,:],axis=0)
-            data[t,:] = dampen_peaks(data[t,:],strength)
-            data[t,:] -= np.mean(data[t,:],axis=0)
-            data[t,:] /= np.std(data[t,:],axis=0) 
     
     if detrend:
         for j in range(N):
