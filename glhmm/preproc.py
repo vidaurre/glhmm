@@ -163,9 +163,10 @@ def preprocess_data(data,indices,
         
     dampen_extreme_peaks : int, True or None, default=None
         determines whether to dampen extreme peaks in the data and the strength of the dampening. 
-        If this is chosen, the data are standardised first.
+        If this is chosen, the data are centered first.
         If int, the strength of dampening
         If True, the dampening is done with default value 5.
+        After dampening, the data will be standardised
         If None, no dampening will be applied.    
 
     detrend : bool, default=False
@@ -195,8 +196,8 @@ def preprocess_data(data,indices,
     ica_algorithm : {"parallel", "deflation"}, default="parallel"
         Specify which algorithm to use for ICA (based on FastICA).     
 
-    post_standardise : bool, default=False if pca is used; =True if ica is used; =True if dampening is used
-        Whether to standardize after applying PCA/ICA/dampening (recommended when using the TDE-HMM)
+    post_standardise : bool, default=False if pca is used; =True if ica is used; 
+        Whether to standardize after applying PCA/ICA (recommended when using the TDE-HMM)
 
     downsample : int or float or None, default=None
         The new frequency of the input data after downsampling.
@@ -216,7 +217,7 @@ def preprocess_data(data,indices,
 
     data = np.copy(data)
 
-    if standardise or dampen_extreme_peaks:
+    if standardise:
         for j in range(N):
             t = np.arange(indices[j,0],indices[j,1]) 
             data[t,:] -= np.mean(data[t,:],axis=0)
@@ -241,7 +242,10 @@ def preprocess_data(data,indices,
             strength = 5
         for j in range(N):
             t = np.arange(indices[j,0],indices[j,1]) 
-            data[t,:] = dampen_peaks(data[t,:],strength)      
+            data[t,:] -= np.mean(data[t,:],axis=0)
+            data[t,:] = dampen_peaks(data[t,:],strength)
+            data[t,:] -= np.mean(data[t,:],axis=0)
+            data[t,:] /= np.std(data[t,:],axis=0) 
     
     if detrend:
         for j in range(N):
@@ -276,10 +280,10 @@ def preprocess_data(data,indices,
         p = data.shape[1]       
 
     if post_standardise is None:
-        if (ica or dampen_extreme_peaks): post_standardise = True
+        if ica: post_standardise = True
         else: post_standardise = False
 
-    if (pca or ica or dampen_extreme_peaks) and post_standardise:
+    if (pca or ica) and post_standardise:
         for j in range(N):
             t = np.arange(indices[j,0],indices[j,1]) 
             data[t,:] -= np.mean(data[t,:],axis=0)
