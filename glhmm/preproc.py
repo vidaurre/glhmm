@@ -117,9 +117,11 @@ def dampen_peaks(X,strength=5):
     X_transformed : array-like of shape (n_samples, n_parcels)
         The transformed data after applying extreme peak dampening.
     """
+    X = X - np.mean(X,axis=1)
     x_mask = np.abs(X)>2*np.std(X)
     X_transformed = X.copy()
-    X_transformed[x_mask] = np.sign(X[x_mask])*(2*np.std(X) - np.log(2*np.std(X))/np.log(strength) + np.log(np.abs(X[x_mask]))/np.log(strength))
+    X_transformed[x_mask] = np.sign(X[x_mask])*(2*np.std(X) - np.log(2*np.std(X))/np.log(strength) + 
+                                                np.log(np.abs(X[x_mask]))/np.log(strength))
 
     return X_transformed
 
@@ -221,10 +223,7 @@ def preprocess_data(data,indices,
             strength = dampen_extreme_peaks
         else:
             strength = 5
-        for j in range(N):
-            t = np.arange(indices[j,0],indices[j,1]) 
-            data[t,:] -= np.mean(data[t,:],axis=0)
-            data[t,:] = dampen_peaks(data[t,:],strength)
+        data = dampen_peaks(data,strength)           
             
     if standardise:
         for j in range(N):
