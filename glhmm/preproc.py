@@ -31,8 +31,10 @@ def apply_pca(X,d,whitening=False, exact=True):
 
     Returns:
     --------
-    X_transformed : array-like of shape (n_samples, n_components)
+    X : array-like of shape (n_samples, n_components)
         The transformed data after applying PCA.
+    pcamodel : sklearn estimator
+        The estimated PCA model
     """
     if type(d) is np.ndarray:
         X -= np.mean(X,axis=0)
@@ -76,8 +78,10 @@ def apply_ica(X,d,algorithm='parallel'):
 
     Returns:
     --------
-    X_transformed : array-like of shape (n_samples, n_components)
+    X : array-like of shape (n_samples, n_components)
         The transformed data after applying ICA.
+    icamode : sklearn estimator
+        The estimated ICA model
     """
 
     if d < 1:
@@ -205,12 +209,16 @@ def preprocess_data(data,indices,
 
     Returns:
     --------
-    data_processed : array-like of shape (n_samples_processed, n_parcels)
+    data : array-like of shape (n_samples_processed, n_parcels)
         The preprocessed input data.
 
-    indices_processed : array-like of shape (n_sessions_processed, 2)
+    indices_new : array-like of shape (n_sessions_processed, 2)
         The start and end indices of each trial/session in the preprocessed data.
 
+    log : dict
+        Dictionary logging which preprocessing has been applied, to be passed onto the
+        glhmm object instance. This contains the variables passed to the function and (where relevant) 
+        the estimators (PCA/ICA models)
     """
     p = data.shape[1]
     N = indices.shape[0]
@@ -522,9 +530,9 @@ def build_data_tde(data,indices,lags,pca=None,standardise_pc=True):
 
     # PCA and whitening 
     if pca is not None:
-        X = apply_pca(X,pca,standardise_pc)
+        X, pcamodel = apply_pca(X,pca,standardise_pc)
 
-    return X,indices_new
+    return X,indices_new,pcamodel
 
 
 def load_files(files,I=None,do_only_indices=False):        

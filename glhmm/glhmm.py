@@ -65,6 +65,10 @@ class glhmm():
     Pistructure : array_like, optional
         Binary vector defining the allowed initial states.
         The default is a (n_states,) vector of all ones, allowing all states to be used as initial states.
+    preproclog : dict, optional
+        Log returned by preprocessing containing information about which preprocessing has been applied. 
+        This is required if you have applied a transformation (PCA/ICA) during preprocessing to backtransform states into original space.
+        Default to None
 
     Notes:
     ------
