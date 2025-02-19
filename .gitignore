@@ -6,6 +6,8 @@
 
 *.bak
 
+docs/notebooks/example_data
+
 # Standard Python ignore below
 # Byte-compiled / optimized / DLL files
 __pycache__/
