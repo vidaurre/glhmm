@@ -82,6 +82,7 @@ class glhmm():
         connectivity=None,
         Pstructure=None,
         Pistructure=None,
+        preproclog=None
     ):
 
         if (connectivity is not None) and not ((covtype == 'shareddiag') or (covtype == 'diag')):
@@ -113,6 +114,7 @@ class glhmm():
         self.Pi = None
         self.active_states = np.ones(K,dtype=bool)
         self.trained = False
+        self.preproclog = preproclog
         
     ## Private methods
 
