@@ -11,6 +11,7 @@ import warnings
 from sklearn.decomposition import PCA
 from sklearn.decomposition import FastICA
 from scipy import signal
+import scipy.io
 
 from . import auxiliary
 # import auxiliary
@@ -228,7 +229,7 @@ def preprocess_data(data,indices,
     data = np.copy(data)
     
     if dampen_extreme_peaks: 
-        if isistance(dampen_extreme_peaks,int):
+        if isinstance(dampen_extreme_peaks,int):
             strength = dampen_extreme_peaks
         else:
             strength = 5
@@ -572,7 +573,7 @@ def load_files(files,I=None,do_only_indices=False):
         if 'indices' in dat: 
             indices.append(dat['indices'])
         elif 'T' in dat:
-            indices.append(make_indices_from_T(dat['T']) + sum_T)
+            indices.append(auxiliary.make_indices_from_T(dat['T']) + sum_T)
         else:
             ind = np.zeros((1,2)).astype(int)
             ind[0,0] = 0
