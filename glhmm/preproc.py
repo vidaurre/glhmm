@@ -59,8 +59,7 @@ def apply_pca(X,d,whitening=False, exact=True):
         jj = np.where(np.abs(X[:,j]) == np.abs(np.max(X[:,j])) )[0][0]
         if X[jj,j] < 0: X[:,j] *= -1
 
-    return X
-
+    return X, pcamodel
 
 def apply_ica(X,d,algorithm='parallel'):
     """Applies ICA to the input data X.
@@ -97,7 +96,7 @@ def apply_ica(X,d,algorithm='parallel'):
         jj = np.where(np.abs(X[:,j]) == np.abs(np.max(X[:,j])) )[0][0]
         if X[jj,j] < 0: X[:,j] *= -1
 
-    return X
+    return X, icamodel
 
 def dampen_peaks(X,strength=5):
     """Applies dampening of extreme peaks to the input data X. 
@@ -215,6 +214,8 @@ def preprocess_data(data,indices,
     """
     p = data.shape[1]
     N = indices.shape[0]
+    log = {**locals()}
+    del(log["data"], log["indices"])
 
     data = np.copy(data)
     
@@ -268,12 +269,14 @@ def preprocess_data(data,indices,
         p = data.shape[1]
 
     if (pca != None) and (ica is None):
-        data = apply_pca(data,pca,exact_pca)
+        data, pcamodel = apply_pca(data,pca,exact_pca)
         p = data.shape[1]
+        log["pcamodel"] = pcamodel
 
     if ica != None:
-        data = apply_ica(data,ica,ica_algorithm)
-        p = data.shape[1]       
+        data, icamodel = apply_ica(data,ica,ica_algorithm)
+        p = data.shape[1]
+        log["icamodel"] = icamodel       
 
     if post_standardise is None:
         if ica: post_standardise = True
@@ -300,7 +303,7 @@ def preprocess_data(data,indices,
         data = data_new
     else: indices_new = indices
 
-    return data,indices_new
+    return data,indices_new,log
 
 
 def build_data_autoregressive(data,indices,autoregressive_order=1,
