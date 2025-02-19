@@ -1802,13 +1802,18 @@ class glhmm():
         return fe_terms
         
 
-    def get_covariance_matrix(self,k=0):
+    def get_covariance_matrix(self, k=0, orig_space=True):
         """Returns the covariance matrix for the specified state.
 
         Parameters:
         -----------
         k : int, optional
             The index of the state. Default=0.
+
+        orig_space : bool, optional
+            If a transformation (PCA/ICA) was applied during preprocessing, 
+            indicate whether covariance matrix should be returned in
+            original space. Default=True.
 
         Returns:
         --------
@@ -1824,16 +1829,32 @@ class glhmm():
         if not self.trained: 
             raise Exception("The model has not yet been trained") 
 
-        return self.Sigma[k]["rate"] / self.Sigma[k]["shape"]
+        covmat = self.Sigma[k]["rate"] / self.Sigma[k]["shape"]
+        if self.preproclog and self.preproclog["pcamodel"] and orig_space:
+            print('Transforming covariance matrix back into original space')
+            pcamodel = self.preproclog["pcamodel"]
+            covmat = pcamodel.components_.T@covmat@pcamodel.components_
+        
+        if self.preproclog and self.preproclog["icamodel"] and orig_space:
+            print('Transforming covariance matrix back into original space')
+            icamodel = self.preproclog["icamodel"]
+            covmat = icamodel.components_.T@covmat@icamodel.components_
+
+        return covmat
 
 
-    def get_inverse_covariance_matrix(self,k=0):
+    def get_inverse_covariance_matrix(self, k=0, orig_space=True):
         """Returns the inverse covariance matrix for the specified state.
         
         Parameters:
         -----------
         k : int, optional
             The index of the state. Default=0.
+
+        orig_space : bool, optional
+            If a transformation (PCA/ICA) was applied during preprocessing, 
+            indicate whether inverse covariance matrix should be returned in
+            original space. Default=True.
         
         Returns:
         --------
@@ -1848,8 +1869,20 @@ class glhmm():
         """
         if not self.trained: 
             raise Exception("The model has not yet been trained") 
+        
+        icovmat = self.Sigma[k]["irate"] * self.Sigma[k]["shape"]
 
-        return self.Sigma[k]["irate"] * self.Sigma[k]["shape"]
+        if self.preproclog and self.preproclog["pcamodel"] and orig_space:
+            print('Transforming inverse covariance matrix back into original space')
+            pcamodel = self.preproclog["pcamodel"]
+            icovmat = pcamodel.components_.T@icovmat@pcamodel.components_
+        
+        if self.preproclog and self.preproclog["icamodel"] and orig_space:
+            print('Transforming inverse covariance matrix back into original space')
+            icamodel = self.preproclog["icamodel"]
+            icovmat = icamodel.components_.T@icovmat@icamodel.components_
+
+        return icovmat
     
 
     def set_covariance_matrix(rate,shape,self,k=0):
@@ -1941,13 +1974,18 @@ class glhmm():
         self.beta[k]["Mu"] = beta
 
 
-    def get_mean(self,k=0):
+    def get_mean(self, k=0, orig_space=True):
         """Returns the mean for the specified state.
 
         Parameters:
         -----------
         k : int, optional, default=0
             The index of the state for which to retrieve the mean.
+
+        orig_space : bool, optional
+            If a transformation (PCA/ICA) was applied during preprocessing, 
+            indicate whether mean should be returned in original space. 
+            Default=True.
 
         Returns:
         --------
@@ -1966,12 +2004,31 @@ class glhmm():
 
         if self.hyperparameters["model_mean"] == 'no':
             raise Exception("The model has no mean")
+        
+        mu = self.mean[k]["Mu"]
 
-        return self.mean[k]["Mu"]
+        if self.preproclog and self.preproclog["pcamodel"] and orig_space:
+            print('Transforming state mean back into original space')
+            pcamodel = self.preproclog["pcamodel"]
+            mu = pcamodel.inverse_transform(mu)
+        
+        if self.preproclog and self.preproclog["icamodel"] and orig_space:
+            print('Transforming state mean back into original space')
+            icamodel = self.preproclog["icamodel"]
+            mu = icamodel.inverse_transform(mu)
+
+        return mu
     
 
-    def get_means(self):
+    def get_means(self, orig_space=True):
         """Returns the means for all states.
+
+        Parameters:
+        -----------
+        orig_space : bool, optional
+            If a transformation (PCA/ICA) was applied during preprocessing, 
+            indicate whether mean should be returned in original space. 
+            Default=True.
 
         Returns:
         --------
@@ -1994,7 +2051,16 @@ class glhmm():
         if self.hyperparameters["model_beta"] != 'no':
             q = self.beta[0]["Mu"].shape[1]
         else:
-            q = self.Sigma[0]["rate"].shape[0]
+            if self.preproclog and self.preproclog["pcamodel"] and orig_space:
+                print("Transforming state means back into original space")
+                pcamodel = self.preproclog["pcamodel"]
+                q = pcamodel.components_.shape[1]
+            elif self.preproclog and self.preproclog["icamodel"] and orig_space:
+                print("Transforming state means back into original space")
+                icamodel = self.preproclog["icamodel"]
+                q = icamodel.components_.shape[1]
+            else:
+                q = self.Sigma[0]["rate"].shape[0]
 
         K = self.hyperparameters["K"]
         means = np.zeros((q,K))
