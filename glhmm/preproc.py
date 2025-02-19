@@ -493,6 +493,8 @@ def build_data_tde(data,indices,lags,pca=None,standardise_pc=True):
         The delay-embedded timeseries data.
     indices_new : numpy array of shape (n_sessions, 2)
         The adapted indices for each segment of delay-embedded data.
+    pcamodel : sklearn estimator, optional
+        If doing PCA, the estimated PCA model
 
     PCA can be run optionally: if pca >=1, that is the number of components;
     if pca < 1, that is explained variance;
@@ -533,7 +535,10 @@ def build_data_tde(data,indices,lags,pca=None,standardise_pc=True):
     if pca is not None:
         X, pcamodel = apply_pca(X,pca,standardise_pc)
 
-    return X,indices_new,pcamodel
+    if pca is not None:
+        return X,indices_new,pcamodel
+    else:
+        return X,indices_new
 
 
 def load_files(files,I=None,do_only_indices=False):        
