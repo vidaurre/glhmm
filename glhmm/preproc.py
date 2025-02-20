@@ -11,6 +11,7 @@ import warnings
 from sklearn.decomposition import PCA
 from sklearn.decomposition import FastICA
 from scipy import signal
+import scipy.io
 
 from . import auxiliary
 # import auxiliary
@@ -31,8 +32,10 @@ def apply_pca(X,d,whitening=False, exact=True):
 
     Returns:
     --------
-    X_transformed : array-like of shape (n_samples, n_components)
+    X : array-like of shape (n_samples, n_components)
         The transformed data after applying PCA.
+    pcamodel : sklearn estimator
+        The estimated PCA model
     """
     if type(d) is np.ndarray:
         X -= np.mean(X,axis=0)
@@ -76,8 +79,10 @@ def apply_ica(X,d,algorithm='parallel'):
 
     Returns:
     --------
-    X_transformed : array-like of shape (n_samples, n_components)
+    X : array-like of shape (n_samples, n_components)
         The transformed data after applying ICA.
+    icamode : sklearn estimator
+        The estimated ICA model
     """
 
     if d < 1:
@@ -205,12 +210,16 @@ def preprocess_data(data,indices,
 
     Returns:
     --------
-    data_processed : array-like of shape (n_samples_processed, n_parcels)
+    data : array-like of shape (n_samples_processed, n_parcels)
         The preprocessed input data.
 
-    indices_processed : array-like of shape (n_sessions_processed, 2)
+    indices_new : array-like of shape (n_sessions_processed, 2)
         The start and end indices of each trial/session in the preprocessed data.
 
+    log : dict
+        Dictionary logging which preprocessing has been applied, to be passed onto the
+        glhmm object instance. This contains the variables passed to the function and (where relevant) 
+        the estimators (PCA/ICA models)
     """
     p = data.shape[1]
     N = indices.shape[0]
@@ -220,7 +229,7 @@ def preprocess_data(data,indices,
     data = np.copy(data)
     
     if dampen_extreme_peaks: 
-        if isistance(dampen_extreme_peaks,int):
+        if isinstance(dampen_extreme_peaks,int):
             strength = dampen_extreme_peaks
         else:
             strength = 5
@@ -484,6 +493,8 @@ def build_data_tde(data,indices,lags,pca=None,standardise_pc=True):
         The delay-embedded timeseries data.
     indices_new : numpy array of shape (n_sessions, 2)
         The adapted indices for each segment of delay-embedded data.
+    pcamodel : sklearn estimator, optional
+        If doing PCA, the estimated PCA model
 
     PCA can be run optionally: if pca >=1, that is the number of components;
     if pca < 1, that is explained variance;
@@ -522,9 +533,12 @@ def build_data_tde(data,indices,lags,pca=None,standardise_pc=True):
 
     # PCA and whitening 
     if pca is not None:
-        X = apply_pca(X,pca,standardise_pc)
+        X, pcamodel = apply_pca(X,pca,standardise_pc)
 
-    return X,indices_new
+    if pca is not None:
+        return X,indices_new,pcamodel
+    else:
+        return X,indices_new
 
 
 def load_files(files,I=None,do_only_indices=False):        
@@ -564,7 +578,7 @@ def load_files(files,I=None,do_only_indices=False):
         if 'indices' in dat: 
             indices.append(dat['indices'])
         elif 'T' in dat:
-            indices.append(make_indices_from_T(dat['T']) + sum_T)
+            indices.append(auxiliary.make_indices_from_T(dat['T']) + sum_T)
         else:
             ind = np.zeros((1,2)).astype(int)
             ind[0,0] = 0
