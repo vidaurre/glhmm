@@ -217,7 +217,7 @@ def preprocess_data(data,indices,
     data = np.copy(data)
     
     if dampen_extreme_peaks: 
-        if isistance(dampen_extreme_peaks,int):
+        if isinstance(dampen_extreme_peaks,int):
             strength = dampen_extreme_peaks
         else:
             strength = 5
