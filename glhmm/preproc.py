@@ -104,7 +104,7 @@ def apply_ica(X,d,algorithm='parallel'):
     return X, icamodel
 
 def dampen_peaks(X,strength=5):
-    """Applies dampening of extreme peaks to the input data X. 
+    """Applies dampening of extreme peaks to the input data X, at the group level.
     If the absolute value of X goes beyond 2 standard deviation of X, 
     it gets substituted by the logarithm of the absolute value of X.
 
@@ -121,7 +121,7 @@ def dampen_peaks(X,strength=5):
     X_transformed : array-like of shape (n_samples, n_parcels)
         The transformed data after applying extreme peak dampening.
     """
-    X = X - np.mean(X,axis=1)
+    
     x_mask = np.abs(X)>2*np.std(X)
     X_transformed = X.copy()
     X_transformed[x_mask] = np.sign(X[x_mask])*(2*np.std(X) - np.log(2*np.std(X))/np.log(strength) + 
@@ -161,12 +161,12 @@ def preprocess_data(data,indices,
         
     dampen_extreme_peaks : int, True or None, default=None
         determines whether to dampen extreme peaks in the data and the strength of the dampening. 
-        If this is chosen, the data are centered first.
+        If this is chosen, the data are centered first (per subject).
         If int, the strength of dampening
         If True, the dampening is done with default value 5.
         If None, no dampening will be applied.
 
-    standardise : bool, default=True. =True if dampening is used
+    standardise : bool, default=True. 
         Whether to standardize the input data. 
 
     filter : tuple of length 2 or None, default=None
@@ -229,6 +229,11 @@ def preprocess_data(data,indices,
     data = np.copy(data)
     
     if dampen_extreme_peaks: 
+        # center data first, per subject
+        for j in range(N):
+            t = np.arange(indices[j,0],indices[j,1]) 
+            data[t,:] -= np.mean(data[t,:],axis=0)
+        # then dampen peaks at the group level    
         if isinstance(dampen_extreme_peaks,int):
             strength = dampen_extreme_peaks
         else:
