@@ -1822,7 +1822,7 @@ class glhmm():
 
         Returns:
         --------
-        array of shape (n_parcels, n_parcels)
+        array of shape (n_variables_2, n_variables_2)
             The covariance matrix for the specified state.
 
         Raises:
@@ -1847,6 +1847,41 @@ class glhmm():
 
         return covmat
     
+    def get_covariance_matrices(self, orig_space=True):
+        """Returns the covariance matrices for all states.
+
+        Parameters:
+        ----------
+        orig_space : bool, optional
+            If a transformation (PCA/ICA) was applied during preprocessing,
+            indicate whether covariance matrices should be returned in original space.
+            Default=True
+
+        Returns:
+        -------
+        covmats : ndarray of shape (n_variables_2, n_variables_2, n_states)
+            The covariance matrices for all states
+
+        Raises:
+        -------
+        Exception
+            If the model has not yet been trained.
+        """
+
+        if not self.trained:
+            raise Exception("The model has not yet been trained")
+        
+        if self.preproclogY and orig_space:
+            q = self.preproclogY["p"]
+        else:
+            q = self.Sigma[0]["rate"].shape[0]
+
+        K = self.hyperparameters["K"]
+        covmats = np.zeros((q,q,K))
+        for k in range(K):
+            covmats[:,:,k] = self.get_covariance_matrix(k=k, orig_space=orig_space)
+
+        return covmats
 
     def get_inverse_covariance_matrix(self, k=0, orig_space=True):
         """Returns the inverse covariance matrix for the specified state.
@@ -1862,7 +1897,7 @@ class glhmm():
         
         Returns:
         --------
-        array of shape (n_parcels, n_parcels)
+        array of shape (n_variables_2, n_variables_2)
             The inverse covariance matrix for the specified state.
         
         Raises:
@@ -1887,7 +1922,42 @@ class glhmm():
             icovmat = icamodel.components_.T@icovmat@icamodel.components_
 
         return icovmat
-    
+
+    def get_inverse_covariance_matrices(self, orig_space=True):
+        """Returns the inverse covariance matrices for all states.
+
+        Parameters:
+        ----------
+        orig_space : bool, optional
+            If a transformation (PCA/ICA) was applied during preprocessing,
+            indicate whether inverse covariance matrices should be returned in original space.
+            Default=True
+
+        Returns:
+        -------
+        covmats : ndarray of shape (n_variables_2, n_variables_2, n_states)
+            The covariance matrices for all states
+
+        Raises:
+        -------
+        Exception
+            If the model has not yet been trained.
+        """
+
+        if not self.trained:
+            raise Exception("The model has not yet been trained")
+        
+        if self.preproclogY and orig_space:
+            q = self.preproclogY["p"]
+        else:
+            q = self.Sigma[0]["rate"].shape[0]
+
+        K = self.hyperparameters["K"]
+        icovmats = np.zeros((q,q,K))
+        for k in range(K):
+            icovmats[:,:,k] = self.get_inverse_covariance_matrix(k=k, orig_space=orig_space)
+
+        return icovmats   
 
     def set_covariance_matrix(rate,shape,self,k=0):
         """Sets the covariance matrix to specific values.
