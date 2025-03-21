@@ -1955,7 +1955,7 @@ def plot_p_values_bar(
         raise ValueError("The input 'pval_in' must be a one-dimensional array.")
 
     # Ensure xticklabels is set
-    if xticklabels is None or len(xticklabels) == 0:
+    if xticklabels is None or len(xticklabels) == 0 or len(xticklabels) != len(pval):
         xticklabels = [f"Var {i + 1}" for i in range(len(pval))]
 
     # Ensure p-values are within the log range
