@@ -21,16 +21,19 @@ import os
 import re
 
 def test_across_subjects(
-    D_data, R_data, method="multivariate", Nperm=0, confounds=None,  
+    D_data, R_data, method="multivariate", Nnull_samples=0, confounds=None,  
     idx_data=None,  permute_within_blocks=False, permute_between_blocks=False, dict_family=None,   
     FWER_correction=False, combine_tests=False, detect_categorical=False, category_limit=10, n_cca_components=1,  
     predictor_names=[], outcome_names=[], return_base_statistics=True, verbose=True):
     """
     Perform permutation testing across subjects.
 
-    This test examines whether differences between individuals in one dataset 
-    (e.g., time spent in a certain brain state) correspond to differences in 
-    other individual characteristics (e.g., age, memory scores, or clinical assessments).
+    
+    This test examines whether individual differences in predictors (`D`) 
+    correspond to variations in outcomes (`R`). `D` is a matrix where each 
+    row represents a subject and each column represents a predictor (e.g., 
+    brain states). `R` is a matrix where each row represents a subject and each column 
+    corresponds to an outcome variable (e.g., age, cognitive scores, clinical assessments).
         
     Parameters:
     --------------
@@ -46,16 +49,16 @@ def test_across_subjects(
         - `"multivariate"`: Examines whether multiple predictors (e.g., brain states) varies across individuals based on outcome measures (e.g., memory scores, clinical assessments).  
         - `"univariate"`: Tests each predictor individually to assess whether it differs across subjects (e.g., whether time spent in a brain state is linked to cognitive performance).  
         - 'cca': Stands for Canonical Correlation Analysis; Identifies patterns of shared variation between predictors and outcomes across subjects, returning a single p-value indicating whether they are linked overall.  
-    Nperm (int), default=0:  
-        Number of permutations to run. Set `Nperm=0` for no permutation testing.    
+    Nnull_samples (int), default=0:  
+        The number of samples used to construct the null distribution.. Set `Nnull_samples=0` for no permutation testing.    
     confounds (numpy.ndarray or None, optional), default=None:  
         Variables to control for (e.g., age, gender). These will be removed from the predictor data before analysis.  
         - Shape: `(n, c)`, where `c` is the number of confounding variables. 
     idx_data (numpy.ndarray), default=None:  
-        Only needed if `permute_within_blocks=True` and/or `permute_between_blocks=True`.  
-        Defines how subjects or trials are grouped for permutations.  
-        - 1D array: Group labels (e.g., `[1,1,1,2,2,2,...,N]`).  
-        - 2D array: Trial start and end indices per session (e.g., `[[start1, end1], ..., [startN, endN]]`).  
+        Used when `permute_within_blocks=True` and/or `permute_between_blocks=True` 
+        to define subject or session groupings for permutation.
+        - 1D array: Specifies group labels for each subject or session (e.g., `[1,1,1,2,2,2,...,N]`).  
+        - 2D array: Defines trial boundaries for each session as a list of `[start, end]` index pairs (e.g., `[[0, 50], [50, 100], [100, 150], ..., [N_start, N_end]]`).  
     permute_within_blocks (bool, optional), default=False:  
         If `True`, permutations happen **only within** predefined groups (e.g., subjects or sessions).  
     permute_between_blocks (bool, optional), default=False:  
@@ -69,29 +72,21 @@ def test_across_subjects(
     FWER_correction (bool, optional), default=False:  
         If `True`, applies family-wise error rate (FWER) correction using the MaxT method to reduce false positives.      
     combine_tests (bool or str, optional), default=False:  
-        Summarizes multiple p-values into a single result using the Non-Parametric Combination (NPC) method:  
-        - `"across_rows"`: One p-value per outcome (`1 × q`).  
-        - `"across_columns"`: One p-value per predictor (`1 × p`).  
-        - `True`: A single p-value summarizing the entire test (`1 × 1`).    
-        The effect of test combination depends on the chosen method:
-        - When method="multivariate"::
-            - `True`: Produces a single p-value (`1 × 1`).
-            - `"across_columns"`: Condenses across columns (q outcomes), producing a single p-value (`1 × 1`).
-        - When method="univariate":
-            - `True`: Produces a single p-value (`1 × 1`).
-            - `"across_rows"`: Condenses across rows (p predictors), producing one p-value per outcome (`1 × q`).
-            - `"across_columns"`: Condenses across columns (q outcomes), producing one p-value per predictor (`1 × p`).
-    detect_categorical (bool or list or numpy.ndarray, optional), default=False: 
-        If `True`, automatically identify categorical columns in `R_data` and apply the appropriate test for each column:
-        - 't_stat_independent_cols': Binary variables (t-test).
-        - 'f_anova_cols': Categorical variables (F-test/ANOVA).
-        - 'f_reg_cols': Continuous variables (F-regression). 
-    category_limit (int or None), default=10
+        Summarises multiple p-values using the Non-Parametric Combination (NPC) method 
+        for multivariate and univariate tests.
+        - `True`: Returns a single p-value summarizing the entire test (`1 × 1`).
+        - `"across_rows"`: Returns one p-value per outcome (`1 × q`).
+        - `"across_columns"`: Returns one p-value per predictor (`1 × p`), only for univariate tests.
+    detect_categorical (bool), default=False:  
+        If `True`, automatically detects categorical columns in `R_data` and applies the appropriate statistical test:  
+        - Binary categorical variables: Independent t-test.  
+        - Multiclass categorical variables: ANOVA (F-test).  
+        - Continuous variables:  F-regression for multivariate tests, Pearson’s t-test for univariate tests.
+    category_limit (int), default=10
         Maximum number of unique values allowed to decide whether to use F-ANOVA or F-regression in the F-test.
         Prevents integer-valued variables (e.g., age) from being misclassified as categorical.
     n_cca_components (int), default=1:
         Number of Canonical Correlation Analysis (CCA) components to compute. 
-        Increasing this allows for capturing additional modes of covariance between `Din` and `Rin`.
     predictor_names (list of str, optional):  
         Names of the predictor variables in `D_data` (should match column order).  
     outcome_names (list of str, optional):  
@@ -109,33 +104,36 @@ def test_across_subjects(
             - `"multivariate"`: `(q,)`
             - `"univariate"`: `(p, q)`
             - `"cca"`: `(1)`
-        `base_stat_permutations`: Test statistics from permutations, with the first row containing the test statistics for the unpermuted  (`None` if `return_base_statistics=False`):
-            - `"multivariate"`: `(Nperm, q)`
-            - `"univariate"`: `(Nperm, p, q)`
-            - `"cca"`: `(Nperm, 1)`
-        'base_statistics': Test statistics from original (unpermuted) data.
+        'base_statistics': Test statistics computed from the original (uNnull_samplesuted) data.
+        `base_stat_permutations`:  Test statistics from permutations, where the first row corresponds to the uNnull_samplesuted data.
+            - `"multivariate"`: `(Nnull_samples, q)`
+            - `"univariate"`: `(Nnull_samples, p, q)`
+            - `"cca"`: `(Nnull_samples, 1)`
+        'statistical_measures': Dictionary specifying the units used for each column in \texttt{test\_statistics}.
         'test_type': `"test_across_subjects"`.
-        'method': Chosen statistical method (`"multivariate"`, `"univariate"`, or `"cca"`).
+        'method': Analytical approach used (e.g., 'multivariate', 'univariate', 'CCA').
+        'combine_tests': Whether multiple tests were applied
         'max_correction': Whether FWER correction was applied (`True`/`False`).
-        'Nperm': Number of permutations performed.
-        'test_summary': Summary of test results.
-        'pval_f_multivariate' *(only if `method="multivariate"` and `Nperm > 1`)*: P-values from the F-test in the multivariate analysis.
-        'pval_t_multivariate' *(only if `method="multivariate"` and `Nperm > 1`)*: P-values from the t-tests in the multivariate analysis.
+        'Nnull_samples': Number of permutations performed.
+        'test_summary': Dictionary summarising test results based on the selected method.
+        'pval_f_multivariate' *(only if `method="multivariate"` and `Nnull_samples > 1`)*: P-values from the F-test in the multivariate analysis.
+        'pval_t_multivariate' *(only if `method="multivariate"` and `Nnull_samples > 1`)*: P-values from the t-tests in the multivariate analysis.
+
     """
     # Initialize variables
     test_type = 'test_across_subjects'
     method = method.lower()
     
-    # Ensure Nperm is at least 1
-    if Nperm == 0:
-        Nperm = 1
+    # Ensure Nnull_samples is at least 1
+    if Nnull_samples == 0:
+        Nnull_samples = 1
         # Set flag for identifying categories without permutation
         detect_categorical = False if method=="univariate" and detect_categorical==False else True
-        if method == 'cca' and Nperm == 1:
-            raise ValueError("CCA does not support parametric statistics. The number of permutations ('Nperm') cannot be set to 1. "
+        if method == 'cca' and Nnull_samples == 1:
+            raise ValueError("CCA does not support parametric statistics. The number of permutations ('Nnull_samples') cannot be set to 1. "
                             "Please increase the number of permutations to perform a valid analysis.")
-    elif Nperm ==1:
-        Nperm=2 # perform a single permutation
+    elif Nnull_samples ==1:
+        Nnull_samples=2 # perform a single permutation
     # Check validity of method and data_type
     valid_methods = ["multivariate", "univariate", "cca"]
     validate_condition(method.lower() in valid_methods, "Invalid option specified for 'method'. Must be one of: " + ', '.join(valid_methods))
@@ -170,7 +168,9 @@ def test_across_subjects(
        # Raise an exception and stop function execution
         raise ValueError("'FWER_correction' is set to True and 'combine_tests' is either True, 'columns', or 'rows'. \n"
                          "Please set 'FWER_correction' to False if you want to apply 'combine_tests' or set 'combine_tests' to False if you want to run 'FWER_correction'.")
-        
+
+    if not isinstance(detect_categorical,bool):
+        raise TypeError("detect_categorical must be a boolean value (True or False)") 
     if (permute_within_blocks or permute_between_blocks) and idx_data is None:
         # Raise an exception and stop function execution
         raise ValueError("Cannot perform within-block or between-block permutation without 'idx_data'.\n"
@@ -194,7 +194,7 @@ def test_across_subjects(
     # Note for convension we wrote (T, p, q) => (n_T, n_p, n_q)
     
     # Identify categorical columns in R_data
-    category_columns = categorize_columns_by_statistical_method(R_data, method, Nperm, detect_categorical, category_limit, combine_tests=combine_tests) 
+    category_columns = categorize_columns_by_statistical_method(R_data, method, Nnull_samples, detect_categorical, category_limit, combine_tests=combine_tests) 
 
     if category_columns["t_stat_independent_cols"]!=[] or category_columns["f_anova_cols"]!=[] or category_columns["f_reg_cols"]!=[]:
         if FWER_correction and (len(category_columns.get('t_stat_independent_cols')) != R_data.shape[-1] or len(category_columns.get('f_anova_cols')) != R_data.shape[-1] or len(category_columns.get('f_reg_cols')) != R_data.shape[-1]):
@@ -205,11 +205,11 @@ def test_across_subjects(
     # Crate the family structure by looking at the dictionary 
     if dict_family is not None:
         # process dictionary of family structure
-        dict_mfam=process_family_structure(dict_family, Nperm) 
+        dict_mfam=process_family_structure(dict_family, Nnull_samples) 
         
     
     # Initialize arrays based on shape of data shape and defined options
-    pval, base_statistics, test_statistics_list, F_stats_list, t_stats_list, R2_stats_list = initialize_arrays(n_p, n_q, n_T, method, Nperm, return_base_statistics, combine_tests, n_cca_components)
+    pval, base_statistics, test_statistics_list, F_stats_list, t_stats_list, R2_stats_list = initialize_arrays(n_p, n_q, n_T, method, Nnull_samples, return_base_statistics, combine_tests, n_cca_components)
     
     # Custom variable names
     if combine_tests is not False:
@@ -229,19 +229,19 @@ def test_across_subjects(
         
     elif idx_array is None:
         # Get indices for permutation across subjects
-        permutation_matrix = permutation_matrix_across_subjects(Nperm, R_data)
+        permutation_matrix = permutation_matrix_across_subjects(Nnull_samples, R_data)
         
     elif idx_array is not None:
         if permute_within_blocks:
             if permute_between_blocks:
                 # Permutation within and between blocks/groups
-                permutation_matrix = permutation_matrix_within_and_between_groups(Nperm, R_data, idx_array)
+                permutation_matrix = permutation_matrix_within_and_between_groups(Nnull_samples, R_data, idx_array)
             else:
                 # Permutation within trials across sessions (within blocks/groups only)
-                permutation_matrix = permutation_matrix_across_trials_within_session(Nperm, R_data, idx_array)
+                permutation_matrix = permutation_matrix_across_trials_within_session(Nnull_samples, R_data, idx_array)
         elif permute_between_blocks:
             # Permutation across sessions (between blocks/groups only)
-            permutation_matrix = permutation_matrix_within_subject_across_sessions(Nperm, R_data, idx_array)
+            permutation_matrix = permutation_matrix_within_subject_across_sessions(Nnull_samples, R_data, idx_array)
 
     for t in tqdm(range(n_T)) if n_T > 1 & verbose ==True else range(n_T):
         # If confounds exist, perform confound regression on the dependent variables
@@ -259,20 +259,20 @@ def test_across_subjects(
             permutation_matrix_update = permutation_matrix.copy()
         
         # Create test_statistics based on method
-        test_statistics, reg_pinv = initialize_permutation_matrices(method, Nperm, n_p, n_q, D_t, combine_tests, category_columns=category_columns, n_cca_components=n_cca_components)
+        test_statistics, reg_pinv = initialize_permutation_matrices(method, Nnull_samples, n_p, n_q, D_t, combine_tests, category_columns=category_columns, n_cca_components=n_cca_components)
 
-        for perm in tqdm(range(Nperm)) if n_T == 1 & verbose==True else range(Nperm):
+        for perm in tqdm(range(Nnull_samples)) if n_T == 1 & verbose==True else range(Nnull_samples):
             # Perform permutation on R_t
             Rin = R_t[permutation_matrix_update[:, perm]]
             # Calculate the permutation distribution
-            stats_results = test_statistics_calculations(D_t, Rin, perm, test_statistics, reg_pinv, method, category_columns,combine_tests, Nperm=Nperm, n_cca_components=n_cca_components)
+            stats_results = test_statistics_calculations(D_t, Rin, perm, test_statistics, reg_pinv, method, category_columns,combine_tests, Nnull_samples=Nnull_samples, n_cca_components=n_cca_components)
             base_statistics[t, :] = stats_results["base_statistics"] if perm == 0 and stats_results["base_statistics"] is not None else base_statistics[t, :] 
             pval[t, :] = stats_results["pval_matrix"] if perm == 0 and stats_results["pval_matrix"] is not None else pval[t, :]
             F_stats_list[t, perm, :] = stats_results["F_stats"] if stats_results["F_stats"] is not None else F_stats_list[t, perm, :]
             t_stats_list[t, perm, :] = stats_results["t_stats"] if stats_results["t_stats"] is not None else t_stats_list[t, perm, :]
-        if Nperm>1:
+        if Nnull_samples>1:
             # Calculate p-values
-            pval = get_pval(test_statistics, Nperm, method, t, pval, FWER_correction)
+            pval = get_pval(test_statistics, Nnull_samples, method, t, pval, FWER_correction)
 
         # Output test statistics if it is set to True can be hard for memory otherwise
         if return_base_statistics==True:
@@ -284,15 +284,15 @@ def test_across_subjects(
         category_columns = {key: [] for key in category_columns}
         category_columns['z_score'] = combine_tests
 
-    if test_statistics_list is not None or test_statistics_list.shape[0]==n_T and test_statistics_list.shape[1]==Nperm:
+    if test_statistics_list is not None or test_statistics_list.shape[0]==n_T and test_statistics_list.shape[1]==Nnull_samples:
         test_statistics_list =np.squeeze(test_statistics_list,axis=0) 
 
     # Get f and t states when doing a multivariate test
-    f_t_stats = get_f_t_stats(D_data, R_data, F_stats_list, t_stats_list, Nperm, n_T) if method =='multivariate' else None
+    f_t_stats = get_f_t_stats(D_data, R_data, F_stats_list, t_stats_list, Nnull_samples, n_T) if method =='multivariate' else None
     # Create report summary
-    test_summary =create_test_summary(R_data, base_statistics, pval, predictor_names, outcome_names, method, f_t_stats,n_T, n_N, n_p,n_q, Nperm, category_columns, combine_tests)
-    # Change the output to say Nperm=0
-    Nperm = 0 if Nperm==1 else Nperm    
+    test_summary =create_test_summary(R_data, base_statistics, pval, predictor_names, outcome_names, method, f_t_stats,n_T, n_N, n_p,n_q, Nnull_samples, category_columns, combine_tests)
+    # Change the output to say Nnull_samples=0
+    Nnull_samples = 0 if Nnull_samples==1 else Nnull_samples    
     category_columns = {key: value for key, value in category_columns.items() if value}
     if len(category_columns)==1:
         category_columns[next(iter(category_columns))]='all_columns'
@@ -318,16 +318,16 @@ def test_across_subjects(
         'method': method,
         'combine_tests': combine_tests,
         'max_correction':FWER_correction,
-        'Nperm': Nperm,
+        'Nnull_samples': Nnull_samples,
         'test_summary':test_summary}
-    if method =='multivariate' and Nperm>1:
+    if method =='multivariate' and Nnull_samples>1:
         result['pval_F_multivariate'] = f_t_stats['perm_p_values_F']
         result['pval_t_multivariate'] = f_t_stats['perm_p_values_t']
     return result
 
 
 
-def test_across_trials(D_data, R_data, idx_data, method="multivariate", Nperm=0, confounds=None, 
+def test_across_trials(D_data, R_data, idx_data, method="multivariate", Nnull_samples=0, confounds=None, 
                        FWER_correction=False, combine_tests=False, detect_categorical=False, category_limit=10, n_cca_components=1,
                        predictor_names=[], outcome_names=[], return_base_statistics=True, verbose=True):
     """
@@ -346,15 +346,15 @@ def test_across_trials(D_data, R_data, idx_data, method="multivariate", Nperm=0,
         Outcome data representing behavioral responses or other dependent measures.  
         - 2D: `(n, q)`, where `n` is the number of trials and `q` is the number of outcome variables.  
     idx_data (numpy.ndarray):  
-        Defines how trials are grouped (e.g., trial type labels or session indices).  
-        - 1D array: Labels indicating which session each trial belongs to (e.g., `[1,1,1,2,2,2,...]`, where all trials labeled `1` belong to one session, all trials labeled `2` belong to another, and so on).
-        - 2D array: Trial start and end indices for each session (e.g., `[[start1, end1], ..., [startN, endN]]`).       
+        Defines how trials are grouped into different sessions (e.g., trial type labels or session indices). 
+        - 1D array: Specifies group labels for each subject or session (e.g., `[1,1,1,2,2,2,...,N]`).  
+        - 2D array: Defines trial boundaries for each session as a list of `[start, end]` index pairs (e.g., `[[0, 50], [50, 100], [100, 150], ..., [N_start, N_end]]`).    
     method (str, optional), default="multivariate": 
         The statistical method to use for the permutation test. Valid options are:
         - `"multivariate"`: Examines whether multiple predictors (e.g., brain states) varies across trial types.  
         - `"univariate"`: Tests each predictor individually to assess whether it differs between trial types (e.g., whether specific brain states are different across conditions).  
         - 'cca': Stands for Canonical Correlation Analysis; Identifies patterns of shared variation between predictors and outcomes across trials, returning a single p-value indicating whether they are linked overall.
-    Nperm (int), default=0: 
+    Nnull_samples (int), default=0: 
         Number of permutations to perform. 
     FWER_correction (bool, optional), default=False:  
         If `True`, applies family-wise error rate (FWER) correction using the MaxT method to reduce false positives.       
@@ -362,32 +362,22 @@ def test_across_trials(D_data, R_data, idx_data, method="multivariate", Nperm=0,
         The confounding variables to be controlled for, i.e. regressed out from the input data.
         The array should have a shape (n, c), where n is the number of trials and c is the number of confounding variables. 
         Each column represents a different confound to be controlled for in the analysis.
-        FWER_correction (bool, optional), default=False:  
-        If `True`, applies family-wise error rate (FWER) correction to reduce false positives.   
     combine_tests (bool or str, optional), default=False:  
-        Summarizes multiple p-values into a single result using the Non-Parametric Combination (NPC) method:  
-        - `"across_rows"`: One p-value per outcome (`1 × q`).  
-        - `"across_columns"`: One p-value per predictor (`1 × p`).  
-        - `True`: A single p-value summarizing the entire test (`1 × 1`).    
-        The effect of test combination depends on the chosen method:
-        - When method="multivariate"::
-            - `True`: Produces a single p-value (`1 × 1`).
-            - `"across_columns"`: Condenses across columns (q outcomes), producing a single p-value (`1 × 1`).
-        - When method="univariate":
-            - `True`: Produces a single p-value (`1 × 1`).
-            - `"across_rows"`: Condenses across rows (p predictors), producing one p-value per outcome (`1 × q`).
-            - `"across_columns"`: Condenses across columns (q outcomes), producing one p-value per predictor (`1 × p`).
-    detect_categorical (bool or list or numpy.ndarray, optional), default=False: 
-        If `True`, automatically identify categorical columns in `R_data` and apply the appropriate test for each column:
-        - 't_stat_independent_cols': Binary variables (t-test).
-        - 'f_anova_cols': Categorical variables (F-test/ANOVA).
-        - 'f_reg_cols': Continuous variables (F-regression). 
-    category_limit (int or None), default=10
+        Summarises multiple p-values using the Non-Parametric Combination (NPC) method 
+        for multivariate and univariate tests.
+        - `True`: Returns a single p-value summarizing the entire test (`1 × 1`).
+        - `"across_rows"`: Returns one p-value per outcome (`1 × q`).
+        - `"across_columns"`: Returns one p-value per predictor (`1 × p`), only for univariate tests.
+    detect_categorical (bool), default=False:  
+        If `True`, automatically detects categorical columns in `R_data` and applies the appropriate statistical test:  
+        - Binary categorical variables: Independent t-test.  
+        - Multiclass categorical variables: ANOVA (F-test).  
+        - Continuous variables:  F-regression for multivariate tests, Pearson’s t-test for univariate tests.
+    category_limit (int), default=10
         Maximum number of unique values allowed to decide whether to use F-ANOVA or F-regression in the F-test.
         Prevents integer-valued variables (e.g., age) from being misclassified as categorical.
     n_cca_components (int), default=1:
         Number of Canonical Correlation Analysis (CCA) components to compute. 
-        Increasing this allows for capturing additional modes of covariance between `Din` and `Rin`.
     predictor_names (list of str, optional):  
         Names of the predictor variables in `D_data` (should match column order).  
     outcome_names (list of str, optional):  
@@ -405,18 +395,18 @@ def test_across_trials(D_data, R_data, idx_data, method="multivariate", Nperm=0,
             - `"multivariate"`: `(T, q)`
             - `"univariate"`: `(T, p, q)`
             - `"cca"`: `(T, 1)`
-        `base_stat_permutations`: Test statistics from permutations, with the first row containing the test statistics for the unpermuted  (`None` if `return_base_statistics=False`):
-            - `"multivariate"`: `(T, Nperm, q)`
-            - `"univariate"`: `(T, Nperm, p, q)`
-            - `"cca"`: `(T, Nperm, 1)`
-        'base_statistics': Test statistics from original (unpermuted) data.
+        `base_stat_permutations`: Test statistics from permutations, with the first row containing the test statistics for the uNnull_samplesuted  (`None` if `return_base_statistics=False`):
+            - `"multivariate"`: `(T, Nnull_samples, q)`
+            - `"univariate"`: `(T, Nnull_samples, p, q)`
+            - `"cca"`: `(T, Nnull_samples, 1)`
+        'base_statistics': Test statistics from original (uNnull_samplesuted) data.
         'test_type': `"test_across_trials"`.
         'method': Chosen statistical method (`"multivariate"`, `"univariate"`, or `"cca"`).
         'max_correction': Whether FWER correction was applied (`True`/`False`).
-        'Nperm': Number of permutations performed.
+        'Nnull_samples': Number of permutations performed.
         'test_summary': Summary of test results.
-        'pval_f_multivariate' *(only if `method="multivariate"` and `Nperm > 1`)*: P-values from the F-test in the multivariate analysis.
-        'pval_t_multivariate' *(only if `method="multivariate"` and `Nperm > 1`)*: P-values from the t-tests in the multivariate analysis.
+        'pval_f_multivariate' *(only if `method="multivariate"` and `Nnull_samples > 1`)*: P-values from the F-test in the multivariate analysis.
+        'pval_t_multivariate' *(only if `method="multivariate"` and `Nnull_samples > 1`)*: P-values from the t-tests in the multivariate analysis.
 
     """
     # Initialize variable
@@ -424,13 +414,13 @@ def test_across_trials(D_data, R_data, idx_data, method="multivariate", Nperm=0,
     test_type =  'test_across_trials'
     method = method.lower()
     
-    # Ensure Nperm is at least 1
-    if Nperm <= 1:
-        Nperm = 1
+    # Ensure Nnull_samples is at least 1
+    if Nnull_samples <= 1:
+        Nnull_samples = 1
         # Set flag for identifying categories without permutation
         detect_categorical = True
-        if method == 'cca' and Nperm == 1:
-            raise ValueError("CCA does not support parametric statistics. The number of permutations ('Nperm') cannot be set to 1.\n "
+        if method == 'cca' and Nnull_samples == 1:
+            raise ValueError("CCA does not support parametric statistics. The number of permutations ('Nnull_samples') cannot be set to 1.\n "
                             "Please increase the number of permutations to perform a valid analysis.")
 
     # Check validity of method and data_type
@@ -457,7 +447,8 @@ def test_across_trials(D_data, R_data, idx_data, method="multivariate", Nperm=0,
     # Check validity of method
     valid_combine_tests = [False, True, "across_columns", "across_rows"]
     validate_condition(combine_tests in valid_combine_tests, "Invalid option specified for 'combine_tests'. Must be one of: " + ', '.join(map(str, valid_combine_tests)))
-    
+    if not isinstance(detect_categorical,bool):
+        raise TypeError("detect_categorical must be a boolean value (True or False)")
     if method=="multivariate" and combine_tests is valid_combine_tests[-1]:
             raise ValueError("method is set to 'multivariate' and 'combine_tests' is set to 'across_rows.\n"
                             "The multivariate test will return (1-by-q) p-values, so the test combination can only be across_rows which is one in this case to single p-value.\n"
@@ -473,7 +464,7 @@ def test_across_trials(D_data, R_data, idx_data, method="multivariate", Nperm=0,
     n_T, n_N, n_p, n_q, D_data, R_data = get_input_shape(D_data, R_data, verbose)
     time_FLAG = 0 if n_T ==1 else 1
     # Identify categorical columns in R_data
-    category_columns = categorize_columns_by_statistical_method(R_data, method, Nperm, detect_categorical, category_limit, combine_tests=combine_tests)
+    category_columns = categorize_columns_by_statistical_method(R_data, method, Nnull_samples, detect_categorical, category_limit, combine_tests=combine_tests)
 
     if category_columns["t_stat_independent_cols"]!=[] or category_columns["f_anova_cols"]!=[] or category_columns["f_reg_cols"]!=[]:
         if FWER_correction and (len(category_columns.get('t_stat_independent_cols')) != R_data.shape[-1] or len(category_columns.get('f_anova_cols')) != R_data.shape[-1] or len(category_columns.get('f_reg_cols')) != R_data.shape[-1]):
@@ -488,7 +479,7 @@ def test_across_trials(D_data, R_data, idx_data, method="multivariate", Nperm=0,
         idx_array =idx_data.copy()        
 
     # Initialize arrays based on shape of data shape and defined options
-    pval, base_statistics, test_statistics_list, F_stats_list, t_stats_list, R2_stats_list = initialize_arrays(n_p, n_q, n_T, method, Nperm, return_base_statistics, combine_tests, n_cca_components)
+    pval, base_statistics, test_statistics_list, F_stats_list, t_stats_list, R2_stats_list = initialize_arrays(n_p, n_q, n_T, method, Nnull_samples, return_base_statistics, combine_tests, n_cca_components)
     
     # Custom variable names
     if combine_tests is not False:
@@ -500,7 +491,7 @@ def test_across_trials(D_data, R_data, idx_data, method="multivariate", Nperm=0,
     predictor_names = [f"State {i+1}" for i in range(n_p)] if predictor_names==[] or len(predictor_names)!=n_p else predictor_names
     outcome_names = [f"Regressor {i+1}" for i in range(n_q)] if outcome_names==[] or len(outcome_names)!=n_q else outcome_names
     
-    permutation_matrix = permutation_matrix_across_trials_within_session(Nperm,R_data, idx_array)
+    permutation_matrix = permutation_matrix_across_trials_within_session(Nnull_samples,R_data, idx_array)
     Flag_matrix = 0
     for t in tqdm(range(n_T)) if n_T > 1 & verbose ==True else range(n_T):
         # If confounds exist, perform confound regression on the dependent variables
@@ -518,9 +509,9 @@ def test_across_trials(D_data, R_data, idx_data, method="multivariate", Nperm=0,
             permutation_matrix_update = permutation_matrix.copy()
         
         # Create test_statistics and the regularized pseudo-inverse of D_data
-        test_statistics, reg_pinv = initialize_permutation_matrices(method, Nperm, n_p, n_q, D_t, combine_tests, category_columns=category_columns, n_cca_components=n_cca_components)
+        test_statistics, reg_pinv = initialize_permutation_matrices(method, Nnull_samples, n_p, n_q, D_t, combine_tests, category_columns=category_columns, n_cca_components=n_cca_components)
        
-        for perm in range(Nperm):
+        for perm in range(Nnull_samples):
             # Perform permutation on R_t
             Rin = R_t[permutation_matrix_update[:, perm]]
             # Calculate the permutation distribution
@@ -531,24 +522,24 @@ def test_across_trials(D_data, R_data, idx_data, method="multivariate", Nperm=0,
             t_stats_list[t, perm, :] = stats_results["t_stats"] if stats_results["t_stats"] is not None else t_stats_list[t, perm, :]
             
 
-        if Nperm>1:
+        if Nnull_samples>1:
             # Calculate p-values
-            pval = get_pval(test_statistics, Nperm, method, t, pval, FWER_correction)
+            pval = get_pval(test_statistics, Nnull_samples, method, t, pval, FWER_correction)
             
             # Output test statistics if it is set to True can be hard for memory otherwise
             if return_base_statistics==True:
                 test_statistics_list[t,:] = test_statistics
 
-    if Nperm >1 and combine_tests is not False:
+    if Nnull_samples >1 and combine_tests is not False:
         # Set all values to empty lists (except for cases like "all_columns")
         category_columns = {key: [] for key in category_columns}
         category_columns['z_score'] = combine_tests
     
     # Get f and t states when doing a multivariate test
-    f_t_stats = get_f_t_stats(D_data, R_data, F_stats_list, t_stats_list, Nperm, n_T) if method =='multivariate' else None
+    f_t_stats = get_f_t_stats(D_data, R_data, F_stats_list, t_stats_list, Nnull_samples, n_T) if method =='multivariate' else None
     # Create report summary
-    test_summary =create_test_summary(R_data, base_statistics,pval, predictor_names, outcome_names, method, f_t_stats,n_T, n_N, n_p,n_q, Nperm, category_columns, combine_tests)
-    Nperm = 0 if Nperm==1 else Nperm    
+    test_summary =create_test_summary(R_data, base_statistics,pval, predictor_names, outcome_names, method, f_t_stats,n_T, n_N, n_p,n_q, Nnull_samples, category_columns, combine_tests)
+    Nnull_samples = 0 if Nnull_samples==1 else Nnull_samples    
     category_columns = {key: value for key, value in category_columns.items() if value}
     if len(category_columns)==1:
         category_columns[next(iter(category_columns))]='all_columns'
@@ -571,14 +562,14 @@ def test_across_trials(D_data, R_data, idx_data, method="multivariate", Nperm=0,
         'method': method,
         'combine_tests': combine_tests,
         'max_correction':FWER_correction,
-        'Nperm': Nperm,
+        'Nnull_samples': Nnull_samples,
         'test_summary':test_summary}
-    if method =='multivariate' and Nperm>1:
+    if method =='multivariate' and Nnull_samples>1:
         result['pval_F_multivariate'] = f_t_stats['perm_p_values_F']
         result['pval_t_multivariate'] = f_t_stats['perm_p_values_t']
     return result
 
-def test_across_sessions_within_subject(D_data, R_data, idx_data, method="multivariate", Nperm=0, confounds=None, 
+def test_across_sessions_within_subject(D_data, R_data, idx_data, method="multivariate", Nnull_samples=0, confounds=None, 
                                         FWER_correction=False, combine_tests=False, detect_categorical=False, category_limit=10, n_cca_components=1,
                                         predictor_names=[], outcome_names=[], return_base_statistics=True, verbose = True):
     """
@@ -596,48 +587,38 @@ def test_across_sessions_within_subject(D_data, R_data, idx_data, method="multiv
         Outcome data representing behavioral responses or other dependent measures.  
         - 2D: `(n, q)`, where `n` is the number of trials and `q` is the number of outcome variables.  
     idx_data (numpy.ndarray):  
-        Defines how trials are grouped (e.g., trial type labels or session indices).  
-        - 1D array: Labels indicating which session each trial belongs to (e.g., `[1,1,1,2,2,2,...]`, where all trials labeled `1` belong to one session, all trials labeled `2` belong to another, and so on).
-        - 2D array: Trial start and end indices for each session (e.g., `[[start1, end1], ..., [startN, endN]]`).       
+        Defines how trials are grouped into different sessions (e.g., trial type labels or session indices). 
+        - 1D array: Specifies group labels for each subject or session (e.g., `[1,1,1,2,2,2,...,N]`).  
+        - 2D array: Defines trial boundaries for each session as a list of `[start, end]` index pairs (e.g., `[[0, 50], [50, 100], [100, 150], ..., [N_start, N_end]]`).   
     method (str, optional), default="multivariate": 
         The statistical method used to compare differences across sessions. Valid options are:
         - `"multivariate"`: Examines whether multiple predictors (e.g., brain states) changes across sessions.   
         - `"univariate"`: Tests each predictor individually to assess whether it varies across sessions (e.g., whether specific brain states when doing the same task changes across session).  
         - 'cca': Stands for Canonical Correlation Analysis; Identifies patterns of shared variation between predictors and outcomes across sessions, returning a single p-value indicating whether they are linked overall.
-    Nperm (int), default=0: 
+    Nnull_samples (int), default=0: 
         Number of permutations to perform. 
     FWER_correction (bool, optional), default=False:  
         If `True`, applies family-wise error rate (FWER) correction using the MaxT method to reduce false positives.       
     confounds (numpy.ndarray or None, optional), default=None: 
         The confounding variables to be controlled for, i.e. regressed out from the input data.
         The array should have a shape (n, c), where n is the number of trials and c is the number of confounding variables. 
-        Each column represents a different confound to be controlled for in the analysis.
-        FWER_correction (bool, optional), default=False:  
-        If `True`, applies family-wise error rate (FWER) correction to reduce false positives.   
+        Each column represents a different confound to be controlled for in the analysis. 
     combine_tests (bool or str, optional), default=False:  
-        Summarizes multiple p-values into a single result using the Non-Parametric Combination (NPC) method:  
-        - `"across_rows"`: One p-value per outcome (`1 × q`).  
-        - `"across_columns"`: One p-value per predictor (`1 × p`).  
-        - `True`: A single p-value summarizing the entire test (`1 × 1`).    
-        The effect of test combination depends on the chosen method:
-        - When method="multivariate"::
-            - `True`: Produces a single p-value (`1 × 1`).
-            - `"across_columns"`: Condenses across columns (q outcomes), producing a single p-value (`1 × 1`).
-        - When method="univariate":
-            - `True`: Produces a single p-value (`1 × 1`).
-            - `"across_rows"`: Condenses across rows (p predictors), producing one p-value per outcome (`1 × q`).
-            - `"across_columns"`: Condenses across columns (q outcomes), producing one p-value per predictor (`1 × p`).
-    detect_categorical (bool or list or numpy.ndarray, optional), default=False: 
-        If `True`, automatically identify categorical columns in `R_data` and apply the appropriate test for each column:
-        - 't_stat_independent_cols': Binary variables (t-test).
-        - 'f_anova_cols': Categorical variables (F-test/ANOVA).
-        - 'f_reg_cols': Continuous variables (F-regression). 
-    category_limit (int or None), default=10
+        Summarises multiple p-values using the Non-Parametric Combination (NPC) method 
+        for multivariate and univariate tests.
+        - `True`: Returns a single p-value summarizing the entire test (`1 × 1`).
+        - `"across_rows"`: Returns one p-value per outcome (`1 × q`).
+        - `"across_columns"`: Returns one p-value per predictor (`1 × p`), only for univariate tests.
+    detect_categorical (bool), default=False:  
+        If `True`, automatically detects categorical columns in `R_data` and applies the appropriate statistical test:  
+        - Binary categorical variables: Independent t-test.  
+        - Multiclass categorical variables: ANOVA (F-test).  
+        - Continuous variables:  F-regression for multivariate tests, Pearson’s t-test for univariate tests.
+    category_limit (int), default=10
         Maximum number of unique values allowed to decide whether to use F-ANOVA or F-regression in the F-test.
         Prevents integer-valued variables (e.g., age) from being misclassified as categorical.
     n_cca_components (int), default=1:
         Number of Canonical Correlation Analysis (CCA) components to compute. 
-        Increasing this allows for capturing additional modes of covariance between `Din` and `Rin`.
     predictor_names (list of str, optional):  
         Names of the predictor variables in `D_data` (should match column order).  
     outcome_names (list of str, optional):  
@@ -655,18 +636,18 @@ def test_across_sessions_within_subject(D_data, R_data, idx_data, method="multiv
             - `"multivariate"`: `(T, q)`
             - `"univariate"`: `(T, p, q)`
             - `"cca"`: `(T, 1)`
-        `base_stat_permutations`: Test statistics from permutations, with the first row containing the test statistics for the unpermuted  (`None` if `return_base_statistics=False`):
-            - `"multivariate"`: `(T, Nperm, q)`
-            - `"univariate"`: `(T, Nperm, p, q)`
-            - `"cca"`: `(T, Nperm, 1)`
-        'base_statistics': Test statistics from original (unpermuted) data.
+        `base_stat_permutations`: Test statistics from permutations, with the first row containing the test statistics for the uNnull_samplesuted  (`None` if `return_base_statistics=False`):
+            - `"multivariate"`: `(T, Nnull_samples, q)`
+            - `"univariate"`: `(T, Nnull_samples, p, q)`
+            - `"cca"`: `(T, Nnull_samples, 1)`
+        'base_statistics': Test statistics from original (uNnull_samplesuted) data.
         'test_type': `"test_across_trials"`.
         'method': Chosen statistical method (`"multivariate"`, `"univariate"`, or `"cca"`).
         'max_correction': Whether FWER correction was applied (`True`/`False`).
-        'Nperm': Number of permutations performed.
+        'Nnull_samples': Number of permutations performed.
         'test_summary': Summary of test results.
-        'pval_f_multivariate' *(only if `method="multivariate"` and `Nperm > 1`)*: P-values from the F-test in the multivariate analysis.
-        'pval_t_multivariate' *(only if `method="multivariate"` and `Nperm > 1`)*: P-values from the t-tests in the multivariate analysis.       
+        'pval_f_multivariate' *(only if `method="multivariate"` and `Nnull_samples > 1`)*: P-values from the F-test in the multivariate analysis.
+        'pval_t_multivariate' *(only if `method="multivariate"` and `Nnull_samples > 1`)*: P-values from the t-tests in the multivariate analysis.       
     """ 
     # Initialize variable
     category_columns = []  
@@ -674,16 +655,17 @@ def test_across_sessions_within_subject(D_data, R_data, idx_data, method="multiv
     method = method.lower()
     permute_beta = True # For across session test we are permuting the beta coefficients for each session
      
-    # Ensure Nperm is at least 1
-    if Nperm <= 1:
-        Nperm = 1
+    # Ensure Nnull_samples is at least 1
+    if Nnull_samples <= 1:
+        Nnull_samples = 1
         # Set flag for identifying categories without permutation
         detect_categorical = True
-        if method == 'cca' and Nperm == 1:
-            raise ValueError("CCA does not support parametric statistics. The number of permutations ('Nperm') cannot be set to 1. "
+        if method == 'cca' and Nnull_samples == 1:
+            raise ValueError("CCA does not support parametric statistics. The number of permutations ('Nnull_samples') cannot be set to 1. "
                             "Please increase the number of permutations to perform a valid analysis.")
 
-     
+    if not isinstance(detect_categorical,bool):
+        raise TypeError("detect_categorical must be a boolean value (True or False)")
     # Check validity of method and data_type
     valid_methods = ["multivariate", "univariate", "cca"]
     validate_condition(method.lower() in valid_methods, "Invalid option specified for 'method'. Must be one of: " + ', '.join(valid_methods))
@@ -726,7 +708,7 @@ def test_across_sessions_within_subject(D_data, R_data, idx_data, method="multiv
     max_permutations = math.factorial(len(np.unique(idx_array)))
     # Using scientific notation format with string formatting
     exp_notation = "{:.2e}".format(max_permutations)
-    if Nperm > max_permutations:
+    if Nnull_samples > max_permutations:
         warnings.warn(f"Maximum number of permutations with {len(np.unique(idx_array))} sessions is: {exp_notation}. \n"
                     "Reduce the number of permutations to the maximum number of permutations to run the test properly.")
     if verbose:
@@ -736,10 +718,10 @@ def test_across_sessions_within_subject(D_data, R_data, idx_data, method="multiv
     n_T, n_N, n_p, n_q, D_data, R_data = get_input_shape(D_data, R_data, verbose)
 
     # Identify categorical columns in R_data
-    category_columns = categorize_columns_by_statistical_method(R_data, method, Nperm, detect_categorical, category_limit, permute_beta, combine_tests)
+    category_columns = categorize_columns_by_statistical_method(R_data, method, Nnull_samples, detect_categorical, category_limit, permute_beta, combine_tests)
 
     # Initialize arrays based on shape of data shape and defined options
-    pval, base_statistics, test_statistics_list, F_stats_list, t_stats_list, R2_stats_list = initialize_arrays(n_p, n_q, n_T, method, Nperm, return_base_statistics, combine_tests, n_cca_components)
+    pval, base_statistics, test_statistics_list, F_stats_list, t_stats_list, R2_stats_list = initialize_arrays(n_p, n_q, n_T, method, Nnull_samples, return_base_statistics, combine_tests, n_cca_components)
 
     # Custom variable names
     if combine_tests is not False:
@@ -781,36 +763,36 @@ def test_across_sessions_within_subject(D_data, R_data, idx_data, method="multiv
         # Update indices
         idx_data_update =update_indices(nan_mask, idx_data) if np.any(nan_mask) else idx_data.copy()
         # Create test_statistics and pval_perms based on method
-        test_statistics, reg_pinv = initialize_permutation_matrices(method, Nperm, n_p, n_q, D_t, combine_tests, permute_beta, category_columns, n_cca_components=n_cca_components)
+        test_statistics, reg_pinv = initialize_permutation_matrices(method, Nnull_samples, n_p, n_q, D_t, combine_tests, permute_beta, category_columns, n_cca_components=n_cca_components)
         
         # Calculate the beta coefficient of each session
         beta, _, _ = calculate_beta_session(reg_pinv, R_t, idx_data_update, permute_beta, category_limit, test_indices_list_update, train_indices_list_update)
 
-        for perm in range(Nperm):
+        for perm in range(Nnull_samples):
             # Calculate the permutation distribution
-            stats_results = test_statistics_calculations(D_t, R_t, perm, test_statistics, reg_pinv, method, category_columns, combine_tests, None, permute_beta, beta, test_indices_list_update, Nperm=Nperm, n_cca_components=n_cca_components)
+            stats_results = test_statistics_calculations(D_t, R_t, perm, test_statistics, reg_pinv, method, category_columns, combine_tests, None, permute_beta, beta, test_indices_list_update, Nnull_samples=Nnull_samples, n_cca_components=n_cca_components)
             base_statistics[t, :] = stats_results["base_statistics"] if perm == 0 and stats_results["base_statistics"] is not None else base_statistics[t, :] 
             pval[t, :] = stats_results["pval_matrix"] if perm == 0 and stats_results["pval_matrix"] is not None else pval[t, :]
             F_stats_list[t, perm, :] = stats_results["F_stats"] if stats_results["F_stats"] is not None else F_stats_list[t, perm, :]
             t_stats_list[t, perm, :] = stats_results["t_stats"] if stats_results["t_stats"] is not None else t_stats_list[t, perm, :]
-        if Nperm>1:
+        if Nnull_samples>1:
             # Calculate p-values
-            pval = get_pval(test_statistics, Nperm, method, t, pval, FWER_correction)
+            pval = get_pval(test_statistics, Nnull_samples, method, t, pval, FWER_correction)
             
             # Output test statistics if it is set to True can be hard for memory otherwise
             if return_base_statistics==True:
                 test_statistics_list[t,:] = test_statistics
     
-    if Nperm >1 and combine_tests is not False:
+    if Nnull_samples >1 and combine_tests is not False:
         # Set all values to empty lists (except for cases like "all_columns")
         category_columns = {key: [] for key in category_columns}
         category_columns['z_score'] = combine_tests
   
     # Get f and t states when doing a multivariate test
-    f_t_stats = get_f_t_stats(D_data, R_data, F_stats_list, t_stats_list, Nperm, n_T) if method =='multivariate' else None
+    f_t_stats = get_f_t_stats(D_data, R_data, F_stats_list, t_stats_list, Nnull_samples, n_T) if method =='multivariate' else None
     # Create report summary
-    test_summary =create_test_summary(R_data, base_statistics,pval, predictor_names, outcome_names, method, f_t_stats,n_T, n_N, n_p,n_q, Nperm, category_columns, combine_tests)
-    Nperm = 0 if Nperm==1 else Nperm    
+    test_summary =create_test_summary(R_data, base_statistics,pval, predictor_names, outcome_names, method, f_t_stats,n_T, n_N, n_p,n_q, Nnull_samples, category_columns, combine_tests)
+    Nnull_samples = 0 if Nnull_samples==1 else Nnull_samples    
     category_columns = {key: value for key, value in category_columns.items() if value}
     if len(category_columns)==1:
         category_columns[next(iter(category_columns))]='all_columns'
@@ -835,9 +817,9 @@ def test_across_sessions_within_subject(D_data, R_data, idx_data, method="multiv
         'combine_tests': combine_tests,
         'max_correction':FWER_correction,
         'statistical_measures': category_columns,
-        'Nperm': Nperm,
+        'Nnull_samples': Nnull_samples,
         'test_summary':test_summary}
-    if method =='multivariate' and Nperm>1:
+    if method =='multivariate' and Nnull_samples>1:
         result['pval_F_multivariate'] = f_t_stats['perm_p_values_F']
         result['pval_t_multivariate'] = f_t_stats['perm_p_values_t']
     return result
@@ -885,12 +867,12 @@ def test_across_state_visits(D_data, R_data , method="multivariate", Nsamples=0,
         - `"smaller"`: Tests whether the state has a smaller signal than the rest.
     FWER_correction (bool, optional), default=False:  
         If `True`, applies family-wise error rate (FWER) correction using the MaxT method to reduce false positives.     
-    detect_categorical (bool or list or numpy.ndarray, optional), default=False: 
-        If `True`, automatically identify categorical columns in `R_data` and apply the appropriate test for each column:
-        - 't_stat_independent_cols': Binary variables (t-test).
-        - 'f_anova_cols': Categorical variables (F-test/ANOVA).
-        - 'f_reg_cols': Continuous variables (F-regression). 
-    category_limit (int or None), default=10
+    detect_categorical (bool), default=False:  
+        If `True`, automatically detects categorical columns in `R_data` and applies the appropriate statistical test:  
+        - Binary categorical variables: Independent t-test.  
+        - Multiclass categorical variables: ANOVA (F-test).  
+        - Continuous variables:  F-regression for multivariate tests, Pearson’s t-test for univariate tests.
+    category_limit (int), default=10
         Maximum number of unique values allowed to decide whether to use F-ANOVA or F-regression in the F-test.
         Prevents integer-valued variables (e.g., age) from being misclassified as categorical.
     vpath_surrogates (numpy.ndarray, optional):  
@@ -915,13 +897,13 @@ def test_across_state_visits(D_data, R_data , method="multivariate", Nsamples=0,
             - `"cca"`: `(1)`
             - `"osa"`: `(q,)`
             - `"osr"`: `(p, p)`
-        `base_stat_permutations`: Test statistics computed from the permuted data, with the first row containing the test statistics for the unpermuted  (`None` if `return_base_statistics=False`):
+        `base_stat_permutations`: Test statistics computed from the permuted data, with the first row containing the test statistics for the uNnull_samplesuted  (`None` if `return_base_statistics=False`):
             - `"multivariate"`: `(Nsamples, q)`
             - `"univariate"`: `(Nsamples, p, q)`
             - `"cca"`: `(Nsamples, 1)`
             - `"osa"`: `(Nsamples, len(pairwise_comparisons), q)`
             - `"osr"`: `(Nsamples, p, q)`
-        'base_statistics': Test statistics from original (unpermuted) data.
+        'base_statistics': Test statistics from original (uNnull_samplesuted) data.
         'test_type': `"test_state_subjects"`.
         'method': Chosen statistical method (`"multivariate"`, `"univariate"`,`"cca"`, `"osa"` or `"osr"`).
         'max_correction': Whether FWER correction was applied (`True`/`False`).
@@ -945,6 +927,9 @@ def test_across_state_visits(D_data, R_data , method="multivariate", Nsamples=0,
         if method == 'cca' or method =='osr' or method =='osa' and Nsamples == 1:
             raise ValueError("'cca', 'osr' and 'osa' does not support parametric statistics. The number of Monto Carlo samples ('Nsamples') cannot be set to 1. "
                             "Please increase the number of Monto Carlo samples to perform a valid analysis.")
+    if not isinstance(detect_categorical,bool):
+        raise TypeError("detect_categorical must be a boolean value (True or False)")
+    
     if method == "cca" and FWER_correction:
         raise ValueError(
             "FWER correction using MaxT is not applicable when performing CCA, "
@@ -1253,7 +1238,7 @@ def get_input_shape(D_data, R_data, verbose):
     
     return n_T, n_ST, n_p, n_q, D_data, R_data
 
-def process_family_structure(dict_family, Nperm):
+def process_family_structure(dict_family, Nnull_samples):
     """
     Process a dictionary containing family structure information.
 
@@ -1268,7 +1253,7 @@ def process_family_structure(dict_family, Nperm):
                         Defaults to False.
         EE (bool, optional): A flag indicating whether to assume exchangeable errors, which allows permutation.
                         Defaults to True.             
-    Nperm (int): Number of permutations.
+    Nnull_samples (int): Number of permutations.
 
     Returns:
     ----------  
@@ -1286,14 +1271,14 @@ def process_family_structure(dict_family, Nperm):
     """
     
     # dict_family: dictionary of family structure
-    # Nperm: number of permutations
+    # Nnull_samples: number of permutations
 
     default_values = {
         'file_location' : 'None',
         'M': 'None',
         'CMC': 'False',
         'EE': 'False',
-        'nP': Nperm
+        'nP': Nnull_samples
     }
     dict_mfam =dict_family.copy()
 
@@ -1315,14 +1300,14 @@ def process_family_structure(dict_family, Nperm):
     # Set default values for M, CMC, and EE
     del dict_mfam['file_location']
     dict_mfam['EB'] = EB
-    dict_mfam['nP'] = Nperm
+    dict_mfam['nP'] = Nnull_samples
     dict_mfam.setdefault('M', default_values['M'])
     dict_mfam.setdefault('CMC', default_values['CMC'])
     dict_mfam.setdefault('EE', default_values['EE'])
     
     return dict_mfam
 
-def initialize_arrays(n_p, n_q, n_T, method, Nperm, return_base_statistics, combine_tests=False, n_cca_components=None):
+def initialize_arrays(n_p, n_q, n_T, method, Nnull_samples, return_base_statistics, combine_tests=False, n_cca_components=None):
     """
     Initializes arrays for permutation testing based on the selected method and test parameters.
 
@@ -1336,7 +1321,7 @@ def initialize_arrays(n_p, n_q, n_T, method, Nperm, return_base_statistics, comb
         Number of timepoints.
     method (str): 
         Statistical testing method. Valid options: "multivariate", "cca", "univariate", "osa", "osr".
-    Nperm (int): 
+    Nnull_samples (int): 
         Number of permutations.
     return_base_statistics (bool): 
         If True, returns test statistics values.
@@ -1365,22 +1350,22 @@ def initialize_arrays(n_p, n_q, n_T, method, Nperm, return_base_statistics, comb
 
     test_statistics_list (numpy.ndarray or None): 
         Test statistic values, only returned if `return_base_statistics=True`. 
-        - Shape (n_T, Nperm, 1), (n_T, Nperm, n_p), or (n_T, Nperm, n_q) based on `combine_tests` for univariate tests.
-        - Shape (n_T, Nperm, n_q) for multivariate tests.
-        - Shape (n_T, Nperm, 1) for CCA.
-        - Shape (n_T, Nperm, len(pairwise_comparisons), n_q) for OSA.
-        - Shape (n_T, Nperm, n_p, n_q) for OSR.
+        - Shape (n_T, Nnull_samples, 1), (n_T, Nnull_samples, n_p), or (n_T, Nnull_samples, n_q) based on `combine_tests` for univariate tests.
+        - Shape (n_T, Nnull_samples, n_q) for multivariate tests.
+        - Shape (n_T, Nnull_samples, 1) for CCA.
+        - Shape (n_T, Nnull_samples, len(pairwise_comparisons), n_q) for OSA.
+        - Shape (n_T, Nnull_samples, n_p, n_q) for OSR.
         - None if `return_base_statistics=False`.
 
     F_stats_list (numpy.ndarray): 
-        F-statistics for permutation tests. Shape: (n_T, Nperm, n_q).
+        F-statistics for permutation tests. Shape: (n_T, Nnull_samples, n_q).
 
     t_stats_list (numpy.ndarray): 
-        t-statistics for permutation tests. Shape: (n_T, Nperm, n_p, n_q).
+        t-statistics for permutation tests. Shape: (n_T, Nnull_samples, n_p, n_q).
 
     R2_stats_list (numpy.ndarray or None): 
         R² statistics for permutation tests, only available for "multivariate" tests. 
-        Shape: (n_T, Nperm, n_q) if `method="multivariate"`, otherwise None.
+        Shape: (n_T, Nnull_samples, n_q) if `method="multivariate"`, otherwise None.
 
     """
     
@@ -1389,7 +1374,7 @@ def initialize_arrays(n_p, n_q, n_T, method, Nperm, return_base_statistics, comb
         if combine_tests in [True, "across_columns"]: 
             pval = np.zeros((n_T, 1))
             if return_base_statistics:
-                test_statistics_list = np.zeros((n_T, Nperm, 1))
+                test_statistics_list = np.zeros((n_T, Nnull_samples, 1))
             else:
                 test_statistics_list= None
             base_statistics= np.zeros((n_T, 1, 1))
@@ -1397,7 +1382,7 @@ def initialize_arrays(n_p, n_q, n_T, method, Nperm, return_base_statistics, comb
             pval = np.zeros((n_T, n_q))
         
             if return_base_statistics:
-                test_statistics_list = np.zeros((n_T, Nperm, n_q))
+                test_statistics_list = np.zeros((n_T, Nnull_samples, n_q))
             else:
                 test_statistics_list= None
             base_statistics= np.zeros((n_T, 1, n_q))
@@ -1405,7 +1390,7 @@ def initialize_arrays(n_p, n_q, n_T, method, Nperm, return_base_statistics, comb
     elif  method == "cca":
         pval = np.zeros((n_T, n_cca_components))
         if return_base_statistics:
-            test_statistics_list = np.zeros((n_T, Nperm, n_cca_components))
+            test_statistics_list = np.zeros((n_T, Nnull_samples, n_cca_components))
         else:
             test_statistics_list= None
         base_statistics= np.zeros((n_T, n_cca_components))        
@@ -1415,7 +1400,7 @@ def initialize_arrays(n_p, n_q, n_T, method, Nperm, return_base_statistics, comb
             pval = np.zeros(pval_shape)
             base_statistics = pval.copy()
             if return_base_statistics:
-                test_statistics_list_shape = (n_T, Nperm, 1) if combine_tests == True else (n_T, Nperm, n_p) if combine_tests == "across_columns" else (n_T, Nperm, n_q)
+                test_statistics_list_shape = (n_T, Nnull_samples, 1) if combine_tests == True else (n_T, Nnull_samples, n_p) if combine_tests == "across_columns" else (n_T, Nnull_samples, n_q)
                 test_statistics_list = np.zeros(test_statistics_list_shape)
             else:
                 test_statistics_list = None
@@ -1423,31 +1408,31 @@ def initialize_arrays(n_p, n_q, n_T, method, Nperm, return_base_statistics, comb
             pval = np.zeros((n_T, n_p, n_q))
             base_statistics = pval.copy()
             if return_base_statistics:    
-                test_statistics_list = np.zeros((n_T, Nperm, n_p, n_q))
+                test_statistics_list = np.zeros((n_T, Nnull_samples, n_p, n_q))
             else:
                 test_statistics_list= None
     elif method == "osa":
         pval = np.zeros((n_T, n_p, n_p, n_q))
         pairwise_comparisons = list(combinations(range(1, n_p + 1), 2))
         if return_base_statistics:    
-            test_statistics_list = np.zeros((n_T, Nperm, len(pairwise_comparisons), n_q))
+            test_statistics_list = np.zeros((n_T, Nnull_samples, len(pairwise_comparisons), n_q))
         else:
             test_statistics_list= None
         base_statistics= np.zeros((n_T, 1, len(pairwise_comparisons), n_q))
     elif method == "osr":
         pval = np.zeros((n_T, 1, n_p, n_q))
         if return_base_statistics:
-            test_statistics_list = np.zeros((n_T, Nperm, n_p, n_q))
+            test_statistics_list = np.zeros((n_T, Nnull_samples, n_p, n_q))
         else:
             test_statistics_list= None
         base_statistics= np.zeros((n_T, 1, n_p, n_q))
 
     # Create the data to store the t-stats
-    t_stats_list = np.zeros((n_T, Nperm, n_p, n_q))
+    t_stats_list = np.zeros((n_T, Nnull_samples, n_p, n_q))
     # Create the data to store the F-stats
-    F_stats_list = np.zeros((n_T, Nperm, n_q))
+    F_stats_list = np.zeros((n_T, Nnull_samples, n_q))
     # Create the data to store the R2-stats
-    R2_stats_list = np.zeros((n_T, Nperm, n_q)) if method == "multivariate" else None
+    R2_stats_list = np.zeros((n_T, Nnull_samples, n_q)) if method == "multivariate" else None
 
     return pval, base_statistics, test_statistics_list, F_stats_list, t_stats_list, R2_stats_list
 
@@ -1655,7 +1640,7 @@ def deconfound_values(D_data, R_data, confounds=None):
         R_t = R_data_centered if R_data is not None else R_data
     return D_t, R_t
 
-def initialize_permutation_matrices(method, Nperm, n_p, n_q, D_data, combine_tests=False, permute_beta=False, category_columns=None, n_cca_components=1):
+def initialize_permutation_matrices(method, Nnull_samples, n_p, n_q, D_data, combine_tests=False, permute_beta=False, category_columns=None, n_cca_components=1):
     """
     Initializes the permutation matrices and prepare the regularized pseudo-inverse of D_data.
 
@@ -1663,7 +1648,7 @@ def initialize_permutation_matrices(method, Nperm, n_p, n_q, D_data, combine_tes
     --------------
     method (str): 
         The method to use for permutation testing.
-    Nperm (int): 
+    Nnull_samples (int): 
         The number of permutations.
     n_p (int): 
         The number of features.
@@ -1692,11 +1677,11 @@ def initialize_permutation_matrices(method, Nperm, n_p, n_q, D_data, combine_tes
     # Initialize the permutation matrices based on the selected method
     if method in {"univariate"}:
         if combine_tests in [True, "across_columns", "across_rows"]: 
-            test_statistics_shape = (Nperm, 1) if combine_tests == True else (Nperm, n_p) if combine_tests == "across_columns" else (Nperm, n_q)
+            test_statistics_shape = (Nnull_samples, 1) if combine_tests == True else (Nnull_samples, n_p) if combine_tests == "across_columns" else (Nnull_samples, n_q)
             test_statistics = np.zeros(test_statistics_shape)
         else:
             # Initialize test statistics output matrix based on the selected method
-            test_statistics = np.zeros((Nperm, n_p, n_q))
+            test_statistics = np.zeros((Nnull_samples, n_p, n_q))
         if permute_beta or category_columns['f_reg_cols']!=[]:
             if np.isnan(D_data).any():
                 # Impute NaN values with column-wise mean
@@ -1722,7 +1707,7 @@ def initialize_permutation_matrices(method, Nperm, n_p, n_q, D_data, combine_tes
 
     elif method =="cca":
         # Initialize test statistics output matrix based on the selected method
-        test_statistics = np.zeros((Nperm, n_cca_components))
+        test_statistics = np.zeros((Nnull_samples, n_cca_components))
         # Define regularization parameter
         regularization_parameter = 0.001
         # Create a regularization matrix (identity matrix scaled by the regularization parameter)
@@ -1732,14 +1717,14 @@ def initialize_permutation_matrices(method, Nperm, n_p, n_q, D_data, combine_tes
 
     elif method =="osr":
         # Initialize test statistics output matrix based on the selected method
-        test_statistics = np.zeros((Nperm, n_p, n_q))
+        test_statistics = np.zeros((Nnull_samples, n_p, n_q))
     else:
         # multivariate
         if combine_tests in [True, "across_columns", "across_rows"]:
-            test_statistics = np.zeros((Nperm, 1))
+            test_statistics = np.zeros((Nnull_samples, 1))
         else:
             # Regression got a N by q matrix 
-            test_statistics = np.zeros((Nperm, n_q))
+            test_statistics = np.zeros((Nnull_samples, n_q))
 
         # Define regularization parameter
         regularization_parameter = 0.001
@@ -1751,13 +1736,13 @@ def initialize_permutation_matrices(method, Nperm, n_p, n_q, D_data, combine_tes
 
     return test_statistics, np.array(reg_pinv)
 
-def permutation_matrix_across_subjects(Nperm, R_data):
+def permutation_matrix_across_subjects(Nnull_samples, R_data):
     """
     Generates a normal permutation matrix with the assumption that each index is independent across subjects. 
 
     Parameters:
     --------------
-    Nperm (int): 
+    Nnull_samples (int): 
         The number of permutations.
     R_data (numpy.ndarray): 
         R-matrix at timepoint 't'
@@ -1765,21 +1750,21 @@ def permutation_matrix_across_subjects(Nperm, R_data):
     Returns:
     ----------  
     permutation_matrix (numpy.ndarray): 
-        Permutation matrix of subjects it got a shape (n_ST, Nperm)
+        Permutation matrix of subjects it got a shape (n_ST, Nnull_samples)
     """
     # Count the maximum column with non-Nan values
     non_nan_count = np.sum(~np.isnan(R_data), axis=0)
     max_length_idx = np.argmax(non_nan_count) 
     max_length = non_nan_count[max_length_idx]
-    permutation_matrix = np.zeros((max_length,Nperm), dtype=int)
-    for perm in range(Nperm):
+    permutation_matrix = np.zeros((max_length,Nnull_samples), dtype=int)
+    for perm in range(Nnull_samples):
         if perm == 0:
             permutation_matrix[:,perm] = np.arange(max_length)
         else:
             permutation_matrix[:,perm] = np.random.permutation(max_length)
     return permutation_matrix
 
-def get_pval(test_statistics, Nperm, method, t, pval, FWER_correction=False):
+def get_pval(test_statistics, Nnull_samples, method, t, pval, FWER_correction=False):
     """
     Computes p-values from the test statistics.
     # Ref: https://github.com/OHBA-analysis/HMM-MAR/blob/master/utils/testing/permtest_aux.m
@@ -1790,7 +1775,7 @@ def get_pval(test_statistics, Nperm, method, t, pval, FWER_correction=False):
         The permutation array.
     pval_perms (numpy.ndarray): 
         The p-value permutation array.
-    Nperm (int): 
+    Nnull_samples (int): 
         The number of permutations.
     method (str): 
         The method used for permutation testing.
@@ -1808,23 +1793,23 @@ def get_pval(test_statistics, Nperm, method, t, pval, FWER_correction=False):
         if FWER_correction:
             # Perform family-wise permutation correction
             # Compute the maximum statistic for each permutation (excluding the first row)
-            max_test_statistics = np.max(test_statistics[1:], axis=1)  # Shape: (Nperm,)
+            max_test_statistics = np.max(test_statistics[1:], axis=1)  # Shape: (Nnull_samples,)
 
             # Count how many times MaxT statistics exceed or equal each observed statistic
             # Adding 1 to numerator and denominator for bias correction
-            pval[t, :] = (np.sum(max_test_statistics[:, np.newaxis] >= test_statistics[0, :], axis=0) + 1) / (Nperm + 1)
+            pval[t, :] = (np.sum(max_test_statistics[:, np.newaxis] >= test_statistics[0, :], axis=0) + 1) / (Nnull_samples + 1)
             
         else:
             # Count how many times test_statistics exceed or equal each observed statistic
             # Adding 1 for bias correction
-            pval[t, :] = (np.sum(test_statistics[:] >= test_statistics[0,:], axis=0)) / (Nperm+ 1)
+            pval[t, :] = (np.sum(test_statistics[:] >= test_statistics[0,:], axis=0)) / (Nnull_samples+ 1)
         
     elif method == "univariate" or method =="cca":
         if FWER_correction:
             # Perform family-wise permutation correction
             # Calculate the MaxT statistics for each permutation (excluding the observed)
             # The empirical distribution of the maximum test statistics does not include the observed statistics
-            maxT_statistics = np.max(np.abs(test_statistics[1:, :, :]), axis=(1, 2))  # Shape: (Nperm - 1,)
+            maxT_statistics = np.max(np.abs(test_statistics[1:, :, :]), axis=(1, 2))  # Shape: (Nnull_samples - 1,)
 
             # Extract the observed test statistics (first row)
             observed_test_stats = np.abs(test_statistics[0, :, :])  # Shape: (p_dim, q_dim)
@@ -1832,20 +1817,20 @@ def get_pval(test_statistics, Nperm, method, t, pval, FWER_correction=False):
             # Use broadcasting to compare observed statistics against MaxT statistics
             # Expand dimensions for broadcasting
             observed_expanded = observed_test_stats[np.newaxis, :, :]  # Shape: (1, p_dim, q_dim)
-            maxT_expanded = maxT_statistics[:, np.newaxis, np.newaxis]  # Shape: (Nperm - 1, 1, 1)
+            maxT_expanded = maxT_statistics[:, np.newaxis, np.newaxis]  # Shape: (Nnull_samples - 1, 1, 1)
 
             # Count how many times MaxT statistics exceed or equal each observed statistic
             # Adding 1 to numerator and denominator for bias correction
-            pval[t, :, :] = (np.sum(maxT_expanded >= observed_expanded, axis=0) + 1) / (Nperm + 1)  # Shape: (p_dim, q_dim)
+            pval[t, :, :] = (np.sum(maxT_expanded >= observed_expanded, axis=0) + 1) / (Nnull_samples + 1)  # Shape: (p_dim, q_dim)
             
         else:    
             # Count how many times test_statistics exceed or equal each observed statistic
             # Adding 1 for bias correction
-            pval[t, :] = (np.sum(test_statistics[:] >= test_statistics[0,:], axis=0)) / (Nperm+ 1)
+            pval[t, :] = (np.sum(test_statistics[:] >= test_statistics[0,:], axis=0)) / (Nnull_samples+ 1)
     
     return pval
 
-def get_f_t_stats(D_data, R_data, F_stats_list, t_stats_list, Nperm, n_T):
+def get_f_t_stats(D_data, R_data, F_stats_list, t_stats_list, Nnull_samples, n_T):
     """
     Compute F and t statistics along with permutation-based p-values and confidence intervals.
 
@@ -1863,12 +1848,12 @@ def get_f_t_stats(D_data, R_data, F_stats_list, t_stats_list, Nperm, n_T):
         - `n` is the number of samples.  
         - `q` is the number of outcome variables.  
     F_stats_list (numpy.ndarray):  
-        Array of F-statistics across permutations, with shape `(n_T, Nperm + 1, q)`.  
+        Array of F-statistics across permutations, with shape `(n_T, Nnull_samples + 1, q)`.  
         The first index (`[:, 0, :]`) contains observed statistics, while remaining indices contain permuted values.  
     t_stats_list (numpy.ndarray):  
-        Array of t-statistics across permutations, with shape `(n_T, Nperm + 1, p, q)`.  
+        Array of t-statistics across permutations, with shape `(n_T, Nnull_samples + 1, p, q)`.  
         The first index (`[:, 0, :, :]`) contains observed statistics, while remaining indices contain permuted values.  
-    Nperm (int):  
+    Nnull_samples (int):  
         Number of permutations used in the test.  
     n_T (int):  
         Number of timepoints or conditions.  
@@ -1888,7 +1873,7 @@ def get_f_t_stats(D_data, R_data, F_stats_list, t_stats_list, Nperm, n_T):
         - `'F_stats'` (numpy.ndarray): Observed F-statistics, with shape `(n_T, q)`.  
         - `'t_stats'` (numpy.ndarray): Observed t-statistics, with shape `(n_T, p, q)`.  
     """
-    if Nperm >1:
+    if Nnull_samples >1:
         n_q = R_data.shape[-1]
         n_p = D_data.shape[-1]
         if n_T>1 and (n_p==1 or n_q==1) :
@@ -1900,8 +1885,8 @@ def get_f_t_stats(D_data, R_data, F_stats_list, t_stats_list, Nperm, n_T):
             F_stats =[]
             t_stats =[]
             for t in range(n_T):
-                perm_p_values_F[t,:] = (np.sum(F_stats_list[t,:] >= F_stats_list[t,0,:], axis=0)) / (Nperm+ 1)
-                perm_p_values_t[t,:] = (np.sum(t_stats_list[t,:] >= t_stats_list[t,0,:], axis=0)) / (Nperm+ 1)
+                perm_p_values_F[t,:] = (np.sum(F_stats_list[t,:] >= F_stats_list[t,0,:], axis=0)) / (Nnull_samples+ 1)
+                perm_p_values_t[t,:] = (np.sum(t_stats_list[t,:] >= t_stats_list[t,0,:], axis=0)) / (Nnull_samples+ 1)
                 perm_ci_lower[t,:] = np.percentile(t_stats_list[t,1:], 2.5, axis=0)
                 perm_ci_upper[t,:] = np.percentile(t_stats_list[t,1:], 97.5, axis=0)
                 F_stats.append(F_stats_list[t,0])
@@ -1909,8 +1894,8 @@ def get_f_t_stats(D_data, R_data, F_stats_list, t_stats_list, Nperm, n_T):
             F_stats = np.squeeze(np.array(F_stats))
             t_stats = np.array(t_stats)
         else: 
-            perm_p_values_F = (np.sum(F_stats_list[0,1:] >= F_stats_list[0,0], axis=0)) / (Nperm+ 1)
-            perm_p_values_t = (np.sum(t_stats_list[0,1:] >= t_stats_list[0,0], axis=0)) / (Nperm+ 1)
+            perm_p_values_F = (np.sum(F_stats_list[0,1:] >= F_stats_list[0,0], axis=0)) / (Nnull_samples+ 1)
+            perm_p_values_t = (np.sum(t_stats_list[0,1:] >= t_stats_list[0,0], axis=0)) / (Nnull_samples+ 1)
             perm_ci_lower = (np.percentile(t_stats_list[0,1:], 2.5, axis=0))
             perm_ci_upper = (np.percentile(t_stats_list[0,1:], 97.5, axis=0))
             F_stats = F_stats_list[0,0]
@@ -1933,13 +1918,13 @@ def get_f_t_stats(D_data, R_data, F_stats_list, t_stats_list, Nperm, n_T):
 
     return f_t_stats
 
-def permutation_matrix_across_trials_within_session(Nperm, R_data, idx_array, trial_timepoints=None):
+def permutation_matrix_across_trials_within_session(Nnull_samples, R_data, idx_array, trial_timepoints=None):
     """
     Generates permutation matrix of within-session across-trial data based on given indices.
 
     Parameters:
     --------------
-    Nperm (int): 
+    Nnull_samples (int): 
         The number of permutations.
     R_data (numpy.ndarray): 
         The preprocessed data array.
@@ -1951,17 +1936,17 @@ def permutation_matrix_across_trials_within_session(Nperm, R_data, idx_array, tr
     Returns:
     ----------  
     permutation_matrix (numpy.ndarray): 
-        Permutation matrix of subjects it got a shape (n_ST, Nperm)
+        Permutation matrix of subjects it got a shape (n_ST, Nnull_samples)
     """
     # Perform within-session between-trial permutation based on the given indices
 
     R_t = R_data.copy()
     
-    permutation_matrix = np.zeros((R_t.shape[0], Nperm), dtype=int)
+    permutation_matrix = np.zeros((R_t.shape[0], Nnull_samples), dtype=int)
     idx_array = idx_array-1 if np.min(idx_array)==1 else idx_array
     unique_indices = np.unique(idx_array)
 
-    for perm in range(Nperm):
+    for perm in range(Nnull_samples):
         if perm == 0:
             permutation_matrix[:,perm] = np.arange(R_t.shape[0])
         else:
@@ -2047,13 +2032,13 @@ def permute_subject_trial_idx(idx_array, unique_values=None, value_counts=None):
     return permuted_array
 
 
-def permutation_matrix_within_subject_across_sessions(Nperm, R_data, idx_array):
+def permutation_matrix_within_subject_across_sessions(Nnull_samples, R_data, idx_array):
     """
     Generates permutation matrix of within-session across-session data based on given indices.
 
     Parameters:
     --------------
-    Nperm (int): 
+    Nnull_samples (int): 
         The number of permutations.
     R_data (numpy.ndarray): 
         The preprocessed data array.
@@ -2070,7 +2055,7 @@ def permutation_matrix_within_subject_across_sessions(Nperm, R_data, idx_array):
     non_nan_count = np.sum(~np.isnan(R_data), axis=0)
     max_length_idx = np.argmax(non_nan_count) 
     max_length = non_nan_count[max_length_idx]
-    permutation_matrix = np.zeros((max_length,Nperm), dtype=int)
+    permutation_matrix = np.zeros((max_length,Nnull_samples), dtype=int)
     idx_array_update = idx_array[~np.isnan(R_data[:,max_length_idx])] -1 if np.min(idx_array)==1 else idx_array[~np.isnan(R_data[:,max_length_idx])]
     # Get unique values and their counts
     unique_values, value_counts = np.unique(idx_array_update, return_counts=True)
@@ -2096,7 +2081,7 @@ def permutation_matrix_within_subject_across_sessions(Nperm, R_data, idx_array):
     print(f"Total possible permutations: {exp_notation}")
 
 
-    for perm in range(Nperm):
+    for perm in range(Nnull_samples):
         if perm == 0:
             permutation_matrix[:,perm] = np.arange(max_length)
         else:
@@ -2106,13 +2091,13 @@ def permutation_matrix_within_subject_across_sessions(Nperm, R_data, idx_array):
             permutation_matrix[:,perm] = np.concatenate(positions_permute,axis=0)
     return permutation_matrix
 
-def permutation_matrix_within_and_between_groups(Nperm, R_data, idx_array):
+def permutation_matrix_within_and_between_groups(Nnull_samples, R_data, idx_array):
     """
     Generates a permutation matrix with permutations within and between groups.
     
     Parameters:
     --------------
-    Nperm (int): 
+    Nnull_samples (int): 
         The number of permutations.
     R_data (numpy.ndarray): 
         The R_data array used for generating the within-group permutation matrix.
@@ -2129,20 +2114,20 @@ def permutation_matrix_within_and_between_groups(Nperm, R_data, idx_array):
     non_nan_count = np.sum(~np.isnan(R_data), axis=0)
     max_length_idx = np.argmax(non_nan_count) 
     max_length = non_nan_count[max_length_idx]
-    permutation_matrix = np.zeros((max_length,Nperm), dtype=int)
+    permutation_matrix = np.zeros((max_length,Nnull_samples), dtype=int)
     idx_array_update = idx_array[~np.isnan(R_data[:,max_length_idx])] -1 if np.min(idx_array)==1 else idx_array[~np.isnan(R_data[:,max_length_idx])]
     unique_indices = np.unique(idx_array_update)
 
     R_t = R_data[~np.isnan(R_data)[:,max_length_idx],:] # Getting the max rows when encounting for NaN values
     # Generate the within-group permutation matrix
     permutation_matrix_within_group = permutation_matrix_across_trials_within_session(
-        Nperm, R_t, idx_array_update)
+        Nnull_samples, R_t, idx_array_update)
     
     # Initialize the permutation matrix for within and between groups
     permutation_within_and_between_group = permutation_matrix_within_group.copy()
     # Get unique values and their counts
     unique_values, value_counts = np.unique(idx_array_update, return_counts=True)
-    for perm in range(Nperm):
+    for perm in range(Nnull_samples):
         if perm == 0:
             # The first column is just the identity permutation (no change)
             permutation_within_and_between_group[:, perm] = np.arange(R_t.shape[0])
@@ -2224,14 +2209,14 @@ def surrogate_state_time(perm, viterbi_path,n_states):
     return viterbi_path_surrogate
 
 
-def surrogate_state_time_matrix(Nperm, vpath_data, n_states):
+def surrogate_state_time_matrix(Nnull_samples, vpath_data, n_states):
     """
     Generate a matrix of surrogate Viterbi paths by permuting state assignments 
     while ensuring that all states are represented in each permutation.
 
     Parameters:
     --------------
-    Nperm (int):
+    Nnull_samples (int):
         The number of surrogate permutations to generate.
     vpath_data (numpy.ndarray):
         The original Viterbi path data, representing the state sequence.
@@ -2241,13 +2226,13 @@ def surrogate_state_time_matrix(Nperm, vpath_data, n_states):
     Returns:
     ----------  
     vpath_surrogates (numpy.ndarray):
-        A 2D array of shape (len(vpath_data), Nperm), where each column is a 
+        A 2D array of shape (len(vpath_data), Nnull_samples), where each column is a 
         surrogate Viterbi path that maintains the segment structure and 
         ensures all states are included.
     """  
     vpath_array=generate_vpath_1D(vpath_data)
-    vpath_surrogates = np.zeros((len(vpath_array),Nperm), dtype=np.int8)
-    for perm in tqdm(range(Nperm)):
+    vpath_surrogates = np.zeros((len(vpath_array),Nnull_samples), dtype=np.int8)
+    for perm in tqdm(range(Nnull_samples)):
         while True:
             vpath_surrogates[:,perm] = surrogate_state_time(perm, vpath_array, n_states)
             if len(np.unique(vpath_surrogates[:,perm])) == n_states:
@@ -2404,7 +2389,7 @@ def calculate_statepair_difference(vpath_array, R_data, state_1, state_2, stat):
     difference = state_1_R_data - state_2_R_data
     return difference
 
-def test_statistics_calculations(Din, Rin, perm, test_statistics, reg_pinv, method, category_columns=[], combine_tests=False, idx_data=None, permute_beta=False, beta = None, test_indices=None, Nperm=None, n_cca_components = 1):
+def test_statistics_calculations(Din, Rin, perm, test_statistics, reg_pinv, method, category_columns=[], combine_tests=False, idx_data=None, permute_beta=False, beta = None, test_indices=None, Nnull_samples=None, n_cca_components = 1):
     """
     Computes test statistics and p-values based on permutation testing.
 
@@ -2438,7 +2423,7 @@ def test_statistics_calculations(Din, Rin, perm, test_statistics, reg_pinv, meth
         - `q`: Number of dependent variables.
     test_indices (numpy.ndarray), default=None:
         Indices marking test-set data points for each session.
-    Nperm (int), default=None:
+    Nnull_samples (int), default=None:
         Total number of permutations (if needed for normalization).
     n_cca_components (int), default=1:
         Number of Canonical Correlation Analysis (CCA) components to compute. 
@@ -2477,13 +2462,13 @@ def test_statistics_calculations(Din, Rin, perm, test_statistics, reg_pinv, meth
                 if combine_tests_flag:
                     if permute_beta:
                         if len(test_indices) ==1:
-                            R2_stats, F_stats, t_stats, pval_matrix =ols_regression_sessions(Rin[test_indices_con,:], Din[test_indices_con,:], idx_data, beta[0], perm, permute_beta, regression_statistics=True, Nperm=Nperm)
+                            R2_stats, F_stats, t_stats, pval_matrix =ols_regression_sessions(Rin[test_indices_con,:], Din[test_indices_con,:], idx_data, beta[0], perm, permute_beta, regression_statistics=True, Nnull_samples=Nnull_samples)
                         else:
                             for col in range(len(test_indices)):
                                 idx_data =get_indices_from_list(test_indices[col])
                                 test_indices_con = np.concatenate(test_indices[col], axis=0)
                                 # calculate beta coefficients
-                                _, _, _, pval_matrix[col] =ols_regression_sessions(Rin[test_indices_con,col], Din[test_indices_con,:], idx_data, beta[col], perm, permute_beta, regression_statistics=True, Nperm=Nperm, nan_values=nan_values,no_t_stats=True)
+                                _, _, _, pval_matrix[col] =ols_regression_sessions(Rin[test_indices_con,col], Din[test_indices_con,:], idx_data, beta[col], perm, permute_beta, regression_statistics=True, Nnull_samples=Nnull_samples, nan_values=nan_values,no_t_stats=True)
                         base_statistics, pval_matrix = calculate_combined_z_scores(pval_matrix, combine_tests)
                         test_statistics[perm] =abs(base_statistics) 
                     else: 
@@ -2498,7 +2483,7 @@ def test_statistics_calculations(Din, Rin, perm, test_statistics, reg_pinv, meth
                     for col, test_index in enumerate(test_indices):
                         idx_data =get_indices_from_list(test_index)
                         test_indices_con = np.concatenate(test_index, axis=0)
-                        _, F_stats[col], t_stat, pval_matrix[col] =ols_regression_sessions(Rin[test_indices_con,col], Din[test_indices_con,:], idx_data, beta[col], perm, permute_beta, regression_statistics=True, Nperm=Nperm, nan_values=nan_values)
+                        _, F_stats[col], t_stat, pval_matrix[col] =ols_regression_sessions(Rin[test_indices_con,col], Din[test_indices_con,:], idx_data, beta[col], perm, permute_beta, regression_statistics=True, Nnull_samples=Nnull_samples, nan_values=nan_values)
                         t_stats[:,col] = t_stat.flatten() if t_stat.ndim==2 else t_stat 
                         base_statistics[col] = F_stats[col].copy()
                     test_statistics[perm] =(base_statistics)       
@@ -2514,13 +2499,13 @@ def test_statistics_calculations(Din, Rin, perm, test_statistics, reg_pinv, meth
                     if permute_beta:
                         if len(test_indices) ==1:
                             # calculate beta coefficients
-                            R2_stats, F_stats, t_stats, pval_matrix =ols_regression_sessions(Rin[test_indices_con,:], Din[test_indices_con,:], idx_data, beta[0], perm, permute_beta, regression_statistics=True, Nperm=Nperm)
+                            R2_stats, F_stats, t_stats, pval_matrix =ols_regression_sessions(Rin[test_indices_con,:], Din[test_indices_con,:], idx_data, beta[0], perm, permute_beta, regression_statistics=True, Nnull_samples=Nnull_samples)
                         else:
                             for col in range(len(test_indices)):
                                 idx_data =get_indices_from_list(test_indices[col])
                                 test_indices_con = np.concatenate(test_indices[col], axis=0)
                                 # calculate beta coefficients
-                                R2_stats[col], F_stats[col], t_stat, pval_matrix[col] =ols_regression_sessions(Rin[test_indices_con,col], Din[test_indices_con,:], idx_data, beta[col], perm, permute_beta, regression_statistics=True, Nperm=Nperm)
+                                R2_stats[col], F_stats[col], t_stat, pval_matrix[col] =ols_regression_sessions(Rin[test_indices_con,col], Din[test_indices_con,:], idx_data, beta[col], perm, permute_beta, regression_statistics=True, Nnull_samples=Nnull_samples)
                                 t_stats[:,col] = t_stat.flatten() if t_stat.ndim==2 else t_stat
                     base_statistics = F_stats #r_squared
                 else:
@@ -2543,14 +2528,14 @@ def test_statistics_calculations(Din, Rin, perm, test_statistics, reg_pinv, meth
             if permute_beta: 
                 if len(test_indices) ==1: 
                     # calculate beta coefficients
-                    F_stats, t_stats, pval_matrix =calculate_anova_f_test(Din[test_indices_con,:], Rin[test_indices_con,:], idx_data, permute_beta, perm, nan_values, beta=beta[0], Nperm=Nperm)  
+                    F_stats, t_stats, pval_matrix =calculate_anova_f_test(Din[test_indices_con,:], Rin[test_indices_con,:], idx_data, permute_beta, perm, nan_values, beta=beta[0], Nnull_samples=Nnull_samples)  
                     base_statistics = F_stats
                     test_statistics[perm] =(base_statistics) 
                 else:
                     for col in range(len(test_indices)):
                         idx_data =get_indices_from_list(test_indices[col])
                         test_indices_con = np.concatenate(test_indices[col], axis=0)
-                        F_stats[col], t_stat, pval_matrix[col] =calculate_anova_f_test(Din[test_indices_con,:], Rin[test_indices_con,col], idx_data, permute_beta, perm, nan_values, beta=beta[col], Nperm=Nperm)  
+                        F_stats[col], t_stat, pval_matrix[col] =calculate_anova_f_test(Din[test_indices_con,:], Rin[test_indices_con,col], idx_data, permute_beta, perm, nan_values, beta=beta[col], Nnull_samples=Nnull_samples)  
                         t_stats[:,col] = t_stat.flatten() if t_stat.ndim==2 else t_stat
                     base_statistics = F_stats
                     test_statistics[perm] =(base_statistics) 
@@ -2591,7 +2576,7 @@ def test_statistics_calculations(Din, Rin, perm, test_statistics, reg_pinv, meth
                             # Calculate base statistics per column
                             idx_data =get_indices_from_list(test_indices[col])
                             test_indices_con = np.concatenate(test_indices[col], axis=0)
-                            F_stats[col], t_stat, pval_matrix[col] =calculate_anova_f_test(Din[test_indices_con,:], Rin[test_indices_con,col], idx_data, permute_beta, perm, nan_values, beta=beta[col], Nperm=Nperm)  
+                            F_stats[col], t_stat, pval_matrix[col] =calculate_anova_f_test(Din[test_indices_con,:], Rin[test_indices_con,col], idx_data, permute_beta, perm, nan_values, beta=beta[col], Nnull_samples=Nnull_samples)  
                         else:
                             # Then we need to calculate beta
                             F_stats[col], t_stat, pval_matrix[col]=calculate_anova_f_test(Din, R_column, idx_data, permute_beta, perm, nan_values)
@@ -2606,7 +2591,7 @@ def test_statistics_calculations(Din, Rin, perm, test_statistics, reg_pinv, meth
                             # Calculate base statistics per column
                             idx_data =get_indices_from_list(test_indices[col])
                             test_indices_con = np.concatenate(test_indices[col], axis=0)
-                            _, F_stats[col], t_stat, pval_matrix[col] =ols_regression_sessions(Rin[test_indices_con,col], Din[test_indices_con,:], idx_data, beta[col], perm, permute_beta, regression_statistics=True, Nperm=Nperm, nan_values=nan_values)
+                            _, F_stats[col], t_stat, pval_matrix[col] =ols_regression_sessions(Rin[test_indices_con,col], Din[test_indices_con,:], idx_data, beta[col], perm, permute_beta, regression_statistics=True, Nnull_samples=Nnull_samples, nan_values=nan_values)
                             # Calculate f statistics
                         else:
                             R2_stats[col], F_stats[col], t_stat, pval_matrix[col] = calculate_regression_statistics(Din, R_column, reg_pinv, nan_values=nan_values)
@@ -3118,17 +3103,17 @@ def pval_correction(result_dic=None, pval=None, method='fdr_bh', alpha=0.05, inc
     # Return the corrected p-values and boolean values indicating significant p-values
     return pval_corrected, significant
 
-def pval_FWER_correction(result_dic=None, test_statistics=None, Nperm=None, method=None):
+def pval_FWER_correction(result_dic=None, test_statistics=None, Nnull_samples=None, method=None):
     """
     Compute Family-Wise Error Rate (FWER) corrected p-values for multivariate or univariate methods.
 
     Parameters:
     --------------
     result_dic (dict, default None:
-        A dictionary containing "base_stat_permutations", "Nperm", and "method".
+        A dictionary containing "base_stat_permutations", "Nnull_samples", and "method".
     test_statistics (numpy.ndarray), default None:
         The permutation array, where the first row/element contains observed statistics.
-    Nperm (int), default None:
+    Nnull_samples (int), default None:
         The number of permutations.
     method (str), default None:
         The method used for permutation testing. Can be "multivariate" or "univariate".
@@ -3141,54 +3126,54 @@ def pval_FWER_correction(result_dic=None, test_statistics=None, Nperm=None, meth
     # Use the dictionary values if provided
     if result_dic is not None:
         test_statistics = result_dic["base_stat_permutations"]
-        Nperm = result_dic['Nperm']
+        Nnull_samples = result_dic['Nnull_samples']
         method = result_dic['method']
 
-    if test_statistics is None or Nperm is None or method is None:
-        raise ValueError("Missing required parameters: test_statistics, Nperm, or method.")
+    if test_statistics is None or Nnull_samples is None or method is None:
+        raise ValueError("Missing required parameters: test_statistics, Nnull_samples, or method.")
 
     if method == "multivariate":
-        if test_statistics.shape[0] == Nperm:  # Case 1: Without timepoints
+        if test_statistics.shape[0] == Nnull_samples:  # Case 1: Without timepoints
             test_statistics = np.expand_dims(test_statistics, axis=1) if test_statistics.ndim == 1 else test_statistics
             # Compute the maximum statistic for each permutation
-            max_stats = np.max(test_statistics[1:], axis=1)  # Shape: (Nperm - 1,)
+            max_stats = np.max(test_statistics[1:], axis=1)  # Shape: (Nnull_samples - 1,)
 
-            # Get the observed (unpermuted) statistics (first permutation)
+            # Get the observed (uNnull_samplesuted) statistics (first permutation)
             observed_stats = test_statistics[0, :]  # Shape: (F,)
 
             # Compute FWER-corrected p-values for each feature
-            pval_FWER = (np.sum(max_stats[:, np.newaxis] >= observed_stats, axis=0) + 1) / (Nperm + 1)  # Shape: (F,)
+            pval_FWER = (np.sum(max_stats[:, np.newaxis] >= observed_stats, axis=0) + 1) / (Nnull_samples + 1)  # Shape: (F,)
         else:  # Case 2: With timepoints
             n_T = test_statistics.shape[0]
             test_statistics = np.expand_dims(test_statistics, axis=2) if test_statistics[0, :].ndim == 1 else test_statistics
             # Compute the maximum statistic for each timepoint and permutation
-            max_stats = np.max(test_statistics[:, 1:, :], axis=2)  # Shape: (T, Nperm - 1)
+            max_stats = np.max(test_statistics[:, 1:, :], axis=2)  # Shape: (T, Nnull_samples - 1)
 
-            # Get the observed (unpermuted) statistics (first permutation for each timepoint)
+            # Get the observed (uNnull_samplesuted) statistics (first permutation for each timepoint)
             observed_stats = test_statistics[:, 0, :]  # Shape: (T, F)
 
             # Compute FWER-corrected p-values for each timepoint and feature
-            pval_FWER = (np.sum(max_stats[:, :, np.newaxis] >= observed_stats[:, np.newaxis, :], axis=1) + 1) / (Nperm + 1)  # Shape: (T, F)
+            pval_FWER = (np.sum(max_stats[:, :, np.newaxis] >= observed_stats[:, np.newaxis, :], axis=1) + 1) / (Nnull_samples + 1)  # Shape: (T, F)
 
     elif method == "univariate":
-        if test_statistics.shape[0] == Nperm:  # Case 1: Without timepoints
+        if test_statistics.shape[0] == Nnull_samples:  # Case 1: Without timepoints
             test_statistics = np.expand_dims(test_statistics, axis=2) if test_statistics[0, :].ndim == 1 else test_statistics
-            maxT_statistics = np.max(np.abs(test_statistics[1:, :, :]), axis=(1, 2))  # Shape: (Nperm - 1,)
+            maxT_statistics = np.max(np.abs(test_statistics[1:, :, :]), axis=(1, 2))  # Shape: (Nnull_samples - 1,)
             observed_test_stats = np.abs(test_statistics[0])  # Shape: (p, q)
 
             # Use broadcasting to compare observed statistics against MaxT statistics - Get a comparison for every combination of permutation, feature, and outcome.
-            pval_FWER = (np.sum(maxT_statistics[:, np.newaxis, np.newaxis] >= observed_test_stats, axis=0) + 1) / (Nperm + 1)  # Shape: (p, q)
+            pval_FWER = (np.sum(maxT_statistics[:, np.newaxis, np.newaxis] >= observed_test_stats, axis=0) + 1) / (Nnull_samples + 1)  # Shape: (p, q)
         else:  # Case 2: With timepoints
             n_T = test_statistics.shape[0]
             test_statistics = np.expand_dims(test_statistics, axis=3) if test_statistics[0, :].ndim == 2 else test_statistics
             pval_FWER = np.zeros((n_T, test_statistics.shape[-2], test_statistics.shape[-1]))  # Shape: (T, p, q)
 
             for t in range(n_T):
-                maxT_statistics = np.max(np.abs(test_statistics[t, 1:, :, :]), axis=(1, 2))  # Shape: (Nperm - 1,)
+                maxT_statistics = np.max(np.abs(test_statistics[t, 1:, :, :]), axis=(1, 2))  # Shape: (Nnull_samples - 1,)
                 observed_test_stats = np.abs(test_statistics[t, 0])  # Shape: (p, q)
 
                 # Use broadcasting to compare observed statistics against MaxT statistics - Get a comparison for every combination of permutation, feature, and outcome.
-                pval_FWER[t, :, :] = (np.sum(maxT_statistics[:, np.newaxis, np.newaxis] >= observed_test_stats, axis=0) + 1) / (Nperm + 1)
+                pval_FWER[t, :, :] = (np.sum(maxT_statistics[:, np.newaxis, np.newaxis] >= observed_test_stats, axis=0) + 1) / (Nnull_samples + 1)
 
     else:
         raise ValueError("Invalid method. Must be 'multivariate' or 'univariate'.")
@@ -3242,27 +3227,27 @@ def pval_cluster_based_correction(result_dic = None, test_statistics=[], pval=No
             std_h0 = np.std(test_statistics[:,:,p_i], axis=1)
 
             # Initialize array to store maximum cluster sums for each permutation
-            Nperm = test_statistics[:,:,p_i].shape[1]
+            Nnull_samples = test_statistics[:,:,p_i].shape[1]
             # Not including the first permuation
-            max_cluster_sums = np.zeros(Nperm-1)
+            max_cluster_sums = np.zeros(Nnull_samples-1)
 
             # Define zval_thresh threshold based on alpha
             zval_thresh = norm.ppf(1 - alpha)
             
             # Iterate over permutations to find maximum cluster sums
-            for perm in range(Nperm-1):
+            for perm in range(Nnull_samples-1):
                 # Take each permutation map and transform to Z
-                thresh_nperm = (test_statistics[:,perm+1,p_i])
-                if np.sum(thresh_nperm)!=0:
-                    #thresh_nperm = permmaps[perm, :]
-                    thresh_nperm = (thresh_nperm - np.mean(thresh_nperm)) / np.std(thresh_nperm)
+                thresh_Nnull_samples = (test_statistics[:,perm+1,p_i])
+                if np.sum(thresh_Nnull_samples)!=0:
+                    #thresh_Nnull_samples = permmaps[perm, :]
+                    thresh_Nnull_samples = (thresh_Nnull_samples - np.mean(thresh_Nnull_samples)) / np.std(thresh_Nnull_samples)
                     # Threshold line at p-value
-                    thresh_nperm[np.abs(thresh_nperm) < zval_thresh] = 0
+                    thresh_Nnull_samples[np.abs(thresh_Nnull_samples) < zval_thresh] = 0
 
                     # Find clusters
-                    cluster_label = label(thresh_nperm > 0)
+                    cluster_label = label(thresh_Nnull_samples > 0)
                     if len(np.unique(cluster_label)) > 1:
-                        temp_cluster_sums = [np.sum(thresh_nperm[cluster_label == label]) for label in range(1, len(np.unique(cluster_label)))]
+                        temp_cluster_sums = [np.sum(thresh_Nnull_samples[cluster_label == label]) for label in range(1, len(np.unique(cluster_label)))]
                         if temp_cluster_sums:
                             max_cluster_sums[perm] = max(temp_cluster_sums)
                         else:
@@ -3295,26 +3280,26 @@ def pval_cluster_based_correction(result_dic = None, test_statistics=[], pval=No
         std_h0 = np.std(test_statistics, axis=1)
 
         # Initialize array to store maximum cluster sums for each permutation
-        Nperm = test_statistics.shape[1]
+        Nnull_samples = test_statistics.shape[1]
         # Not including the first permuation
-        max_cluster_sums = np.zeros(Nperm-1)
+        max_cluster_sums = np.zeros(Nnull_samples-1)
 
         # Define zval_thresh threshold based on alpha
         zval_thresh = norm.ppf(1 - alpha)
         
         # Iterate over permutations to find maximum cluster sums
-        for perm in range(Nperm-1):
+        for perm in range(Nnull_samples-1):
             # when test_statistics is 4D
             if test_statistics.ndim==4:
-                thresh_nperm = np.squeeze(test_statistics[:, perm+1, :])
-                thresh_nperm = (thresh_nperm - mean_h0) / std_h0
+                thresh_Nnull_samples = np.squeeze(test_statistics[:, perm+1, :])
+                thresh_Nnull_samples = (thresh_Nnull_samples - mean_h0) / std_h0
 
                 # Threshold image at p-value
-                thresh_nperm[np.abs(thresh_nperm) < zval_thresh] = 0
+                thresh_Nnull_samples[np.abs(thresh_Nnull_samples) < zval_thresh] = 0
 
                 # Find clusters using connected components labeling
-                cluster_label = label(thresh_nperm > 0)
-                regions = regionprops(cluster_label, intensity_image=thresh_nperm)
+                cluster_label = label(thresh_Nnull_samples > 0)
+                regions = regionprops(cluster_label, intensity_image=thresh_Nnull_samples)
                 if regions:
                     # Sum values inside each cluster
                     temp_cluster_sums = [np.sum(region.intensity_image) for region in regions]
@@ -3327,19 +3312,19 @@ def pval_cluster_based_correction(result_dic = None, test_statistics=[], pval=No
             # Otherwise it is a 3D matrix
             else: 
                 # Take each permutation map and transform to Z
-                thresh_nperm = (test_statistics[:,perm+1])
-                if np.sum(thresh_nperm)!=0:
-                    #thresh_nperm = permmaps[perm, :]
-                    thresh_nperm = (thresh_nperm - np.mean(thresh_nperm)) / np.std(thresh_nperm)
+                thresh_Nnull_samples = (test_statistics[:,perm+1])
+                if np.sum(thresh_Nnull_samples)!=0:
+                    #thresh_Nnull_samples = permmaps[perm, :]
+                    thresh_Nnull_samples = (thresh_Nnull_samples - np.mean(thresh_Nnull_samples)) / np.std(thresh_Nnull_samples)
                     # Threshold line at p-value
-                    thresh_nperm[np.abs(thresh_nperm) < zval_thresh] = 0
+                    thresh_Nnull_samples[np.abs(thresh_Nnull_samples) < zval_thresh] = 0
 
                     # Find clusters
-                    cluster_label = label(thresh_nperm > 0)
+                    cluster_label = label(thresh_Nnull_samples > 0)
 
                     if len(np.unique(cluster_label)>0) or np.sum(cluster_label)==0:
                         # Sum values inside each cluster
-                        temp_cluster_sums = [np.sum(thresh_nperm[cluster_label == label]) for label in range(1, len(np.unique(cluster_label)))]
+                        temp_cluster_sums = [np.sum(thresh_Nnull_samples[cluster_label == label]) for label in range(1, len(np.unique(cluster_label)))]
                         if temp_cluster_sums:
                             # Store the sum of values for the biggest cluster
                             max_cluster_sums[perm] = max(temp_cluster_sums)
@@ -3973,7 +3958,7 @@ def get_event_epochs(input_data, index_data, filtered_R_data, event_markers,
     # Return the processed data
     return epoch_data, epoch_indices, epoch_R_data
 
-def categorize_columns_by_statistical_method(R_data, method, Nperm, detect_categorical=False, category_limit=None,permute_beta=False, combine_tests=False, comparison_statistic=False):
+def categorize_columns_by_statistical_method(R_data, method, Nnull_samples, detect_categorical=False, category_limit=None,permute_beta=False, comparison_statistic=False):
     """
     Detects categorical columns in R_data and categorizes them for later statistical testing (t-tests, F-tests, etc.).
     This function helps identify which columns are binary or categorical, and applies permutation inference based on the test statistics.
@@ -3993,8 +3978,6 @@ def categorize_columns_by_statistical_method(R_data, method, Nperm, detect_categ
         continuous variables (like age) as categorical.
     permute_beta : bool, optional (default=False)
         Determines whether to use permutation testing on regression beta values.
-    combine_tests : bool, optional (default=False)
-        If True, combination testing (e.g., z-scores) is applied.
     comparison_statistic : str, optional (default="mean")
         The statistic used in pairwise comparisons for methods like "osr" or "osa". 
         Supported values are "mean" or "median".
@@ -4014,62 +3997,44 @@ def categorize_columns_by_statistical_method(R_data, method, Nperm, detect_categ
     # This checks if detect_categorical is either True or a list/ndarray
     if method=="cca":
         pass
-    elif detect_categorical == True or isinstance(detect_categorical, (list,np.ndarray)) :
+    elif detect_categorical == True:
         # Initialize variable
-        if detect_categorical==True:
-        # If detect_categorical is True, the function will automatically identify binary columns
-            if method!="multivariate" and not permute_beta:
-                category_columns["t_stat_independent_cols"] = [col for col in range(R_data.shape[-1]) if np.unique(R_data[~np.isnan(R_data[:, col]), col]).size == 2]
-            if category_limit != None:
-                # If method is not "multivariate" or permute_beta is True, identify binary columns in R_data
-                #if method == "multivariate" :
-                #if method == "multivariate" and not permute_beta:    
-                if method == "multivariate":
-                    category_columns["f_anova_cols"] = [
-                                        col for col in range(R_data.shape[-1]) 
-                                        if (np.unique(R_data[~np.isnan(R_data[:, col]), col]).size > 2)  # Ignore NaNs
-                                        and (np.unique(R_data[~np.isnan(R_data[:, col]), col]).size < category_limit)
-                                    ]
-                    
-                else:
-                    category_columns["f_anova_cols"] = [col for col in range(R_data.shape[-1]) 
-                                                    if np.unique(R_data[~np.isnan(R_data[:, col]), col]).size > 2  # Check if more than 2 unique values
-                                                    and np.unique(R_data[~np.isnan(R_data[:, col]), col]).size < category_limit] # Check if the data type is above category_limit
-                # idx_test is a list of all binary and categorical columns
-                idx_test = category_columns["t_stat_independent_cols"]+category_columns["f_anova_cols"]
-                # The remaining columns, which are not binary or categorical, are treated as continuous
-                if permute_beta or Nperm==1 and method=="multivariate":
-                    category_columns["f_reg_cols"] = idx_cols[~np.isin(idx_cols,idx_test)].tolist()
-                elif method=="multivariate" and all(not v for v in category_columns.values())==False:
-                    category_columns["f_reg_cols"] = idx_cols[~np.isin(idx_cols,idx_test)].tolist()
-                elif permute_beta is False and method=="univariate":
-                    category_columns["t_stat_pearson_cols"] = idx_cols[~np.isin(idx_cols,idx_test)].tolist() 
+        if method!="multivariate" and not permute_beta:
+            category_columns["t_stat_independent_cols"] = [col for col in range(R_data.shape[-1]) if np.unique(R_data[~np.isnan(R_data[:, col]), col]).size == 2]
+        if category_limit != None:
+            # If method is not "multivariate" or permute_beta is True, identify binary columns in R_data
+            #if method == "multivariate" :
+            #if method == "multivariate" and not permute_beta:    
+            if method == "multivariate":
+                category_columns["f_anova_cols"] = [
+                                    col for col in range(R_data.shape[-1]) 
+                                    if (np.unique(R_data[~np.isnan(R_data[:, col]), col]).size > 2)  # Ignore NaNs
+                                    and (np.unique(R_data[~np.isnan(R_data[:, col]), col]).size < category_limit)
+                                ]
+                
+            else:
+                category_columns["f_anova_cols"] = [col for col in range(R_data.shape[-1]) 
+                                                if np.unique(R_data[~np.isnan(R_data[:, col]), col]).size > 2  # Check if more than 2 unique values
+                                                and np.unique(R_data[~np.isnan(R_data[:, col]), col]).size < category_limit] # Check if the data type is above category_limit
+            # idx_test is a list of all binary and categorical columns
+            idx_test = category_columns["t_stat_independent_cols"]+category_columns["f_anova_cols"]
+            # The remaining columns, which are not binary or categorical, are treated as continuous
+            if permute_beta or Nnull_samples==1 and method=="multivariate":
+                category_columns["f_reg_cols"] = idx_cols[~np.isin(idx_cols,idx_test)].tolist()
+            elif method=="multivariate" and all(not v for v in category_columns.values())==False:
+                category_columns["f_reg_cols"] = idx_cols[~np.isin(idx_cols,idx_test)].tolist()
+            elif permute_beta is False and method=="univariate":
+                category_columns["t_stat_pearson_cols"] = idx_cols[~np.isin(idx_cols,idx_test)].tolist() 
 
-            else:
-                unique_counts = [np.unique(R_data[0, :, col]).size for col in range(R_data.shape[-1])]
-                if max(unique_counts) > category_limit:
-                    warnings.warn(
-                        f"Detected more than {category_limit} unique numbers in column {idx_cols[np.array(unique_counts)>category_limit]} dataset. "
-                        f"If this is not intended as categorical data, you can ignore this warning. "
-                        f"Otherwise, consider defining 'category_limit' to set the maximum allowed categories or specifying the indices of categorical columns."
-                    )
-                 
         else:
-            # Identify user-defined binary columns
-            if method!="multivariate" or permute_beta:
-                # Customize columns defined by the user
-                category_columns["t_stat_independent_cols"] = [col for col in detect_categorical if np.unique(R_data[0,:, col]).size == 2]
-            # Remove binary columns from the provided categorical columns to get non-binary columns
-            detect_categorical_filtered = [value for value in detect_categorical if value not in category_columns["t_stat_independent_cols"]]
-            if category_limit != None:
-                # If category_limit is provided, add columns with unique values between 2 and category_limit to 'f_anova_cols'
-                category_columns["f_anova_cols"] = [col for col in detect_categorical_filtered 
-                                                   if np.unique(R_data[0,:, col]).size > 2 
-                                                   and np.unique(R_data[0,:, col]).size < category_limit]
-            else:
-                # Otherwise, add columns with more than 2 unique values
-                category_columns["f_anova_cols"] = [col for col in detect_categorical_filtered 
-                                                   if np.unique(R_data[0,:, col]).size > 2]
+            unique_counts = [np.unique(R_data[0, :, col]).size for col in range(R_data.shape[-1])]
+            if max(unique_counts) > category_limit:
+                warnings.warn(
+                    f"Detected more than {category_limit} unique numbers in column {idx_cols[np.array(unique_counts)>category_limit]} dataset. "
+                    f"If this is not intended as categorical data, you can ignore this warning. "
+                    f"Otherwise, consider defining 'category_limit' to set the maximum allowed categories or specifying the indices of categorical columns."
+                )
+                 
     # Handling cases where no categorical detection is requested
     else:
         # If method is either osr or osa, apply the chosen comparison_statistic (mean or median)
@@ -4213,7 +4178,7 @@ def calculate_regression_statistics(Din, Rin, reg_pinv, nan_values=False, no_t_s
         p_value = np.expand_dims(p_value,axis=0)
     return R2_stats, F_stats, t_stats, p_value
 
-def ols_regression_stats(Din, Rin, R_pred, Nperm, no_t_stats, valid_indices=None):
+def ols_regression_stats(Din, Rin, R_pred, Nnull_samples, no_t_stats, valid_indices=None):
     """
     Compute regression statistics (R-squared, F-statistics, and t-statistics) for ordinary least squares (OLS) regression 
     across multiple sessions.
@@ -4228,7 +4193,7 @@ def ols_regression_stats(Din, Rin, R_pred, Nperm, no_t_stats, valid_indices=None
         where q is the number of dependent variables.  
     R_pred (numpy.ndarray): 
         The predicted response matrix. Shape: (n, q).
-    Nperm (numpy.ndarray): 
+    Nnull_samples (numpy.ndarray): 
         Number of permutations
     Returns:
     ----------
@@ -4278,7 +4243,7 @@ def ols_regression_stats(Din, Rin, R_pred, Nperm, no_t_stats, valid_indices=None
 
         # Center the data
         Din_centered = Din - Din.mean(axis=0)
-        R_centered = R_pred - R_pred.mean(axis=0) if Nperm >1 else Rin - Rin.mean(axis=0)
+        R_centered = R_pred - R_pred.mean(axis=0) if Nnull_samples >1 else Rin - Rin.mean(axis=0)
 
         # Compute correlation coefficients efficiently
         numerator = Din_centered.T @ R_centered
@@ -4320,7 +4285,7 @@ def preprocess_response(Rin):
 
     return Rin
 
-def calculate_anova_f_test(Din, Rin, idx_data=None, permute_beta=False, perm=0, nan_values=False, beta= None, no_t_stats=False, Nperm=False, method=None):
+def calculate_anova_f_test(Din, Rin, idx_data=None, permute_beta=False, perm=0, nan_values=False, beta= None, no_t_stats=False, Nnull_samples=False, method=None):
     """
     Calculate the f-test values for the regression of each dependent variable
     in Rin on the independent variables in Din, while handling NaN values column-wise.
@@ -4370,7 +4335,7 @@ def calculate_anova_f_test(Din, Rin, idx_data=None, permute_beta=False, perm=0, 
                 R_pred = np.expand_dims(R_pred, axis=1) 
             # Center the data
             Din_centered = Din - Din.mean(axis=0) 
-            R_centered = R_pred - R_pred.mean(axis=0) if Nperm >1 else np.expand_dims(Rin, axis=1)  - np.expand_dims(Rin, axis=1).mean(axis=0)
+            R_centered = R_pred - R_pred.mean(axis=0) if Nnull_samples >1 else np.expand_dims(Rin, axis=1)  - np.expand_dims(Rin, axis=1).mean(axis=0)
             if len(Din_centered)!=len(R_centered): 
                 Din_centered= Din_centered[valid_indices]
 
@@ -4734,7 +4699,7 @@ def train_test_update_indices(train_indices_list, test_indices_list, nan_indices
     ]
     return train_indices_list_update, test_indices_list_update
 
-def ols_regression_sessions(Rin, Din, idx_data, beta, perm, permute_beta=False, nan_values=False,  valid_indices=None, regression_statistics=False, Nperm=False, no_t_stats= False):
+def ols_regression_sessions(Rin, Din, idx_data, beta, perm, permute_beta=False, nan_values=False,  valid_indices=None, regression_statistics=False, Nnull_samples=False, no_t_stats= False):
     """
     Calculate predictions for ordinary least squares regression for across sessions test.
 
@@ -4786,7 +4751,7 @@ def ols_regression_sessions(Rin, Din, idx_data, beta, perm, permute_beta=False, 
         if regression_statistics == False:
             return R_pred
         else:
-            R2_stats, F_stats, t_stats, p_value = ols_regression_stats(Din, Rin, R_pred, Nperm, no_t_stats, valid_indices)
+            R2_stats, F_stats, t_stats, p_value = ols_regression_stats(Din, Rin, R_pred, Nnull_samples, no_t_stats, valid_indices)
             return R2_stats, F_stats, t_stats, p_value
     
     elif Rin.ndim==2: 
@@ -4806,7 +4771,7 @@ def ols_regression_sessions(Rin, Din, idx_data, beta, perm, permute_beta=False, 
         if regression_statistics == False:
             return R_pred
         else:
-            R2_stats, F_stats, t_stats, p_value = ols_regression_stats(Din, Rin, R_pred, Nperm, no_t_stats)
+            R2_stats, F_stats, t_stats, p_value = ols_regression_stats(Din, Rin, R_pred, Nnull_samples, no_t_stats)
             return R2_stats, F_stats, t_stats, p_value
     else:
         # Column wise calculation
@@ -4819,7 +4784,7 @@ def ols_regression_sessions(Rin, Din, idx_data, beta, perm, permute_beta=False, 
         if regression_statistics == False:
             return R_pred
         else:
-            R2_stats, F_stats, t_stats, p_value = ols_regression_stats(Din, Rin, R_pred, Nperm, no_t_stats)
+            R2_stats, F_stats, t_stats, p_value = ols_regression_stats(Din, Rin, R_pred, Nnull_samples, no_t_stats)
             return R2_stats, F_stats, t_stats, p_value
 
 
@@ -5192,7 +5157,7 @@ def update_indices(nan_mask, idx_data):
     return idx_data_update
 
 
-def create_test_summary(Rin, base_statistics,pval, predictor_names, outcome_names, method, f_t_stats ,n_T, n_N, n_p, n_q, Nperm, category_columns=None, combine_tests=False, test_indices_list=None):
+def create_test_summary(Rin, base_statistics,pval, predictor_names, outcome_names, method, f_t_stats ,n_T, n_N, n_p, n_q, Nnull_samples, category_columns=None, combine_tests=False, test_indices_list=None):
     """
     Create a summary report for the test.
 
@@ -5213,9 +5178,9 @@ def create_test_summary(Rin, base_statistics,pval, predictor_names, outcome_name
         - "multivariate": For regression analysis with multiple predictors and outcomes.
         - Other: For other tests
     F_stats_list (numpy.ndarray): 
-        Array of F-statistics across permutations (shape: n_T x Nperm x n_q for time-dependent data, or Nperm x n_q for time-independent data).
+        Array of F-statistics across permutations (shape: n_T x Nnull_samples x n_q for time-dependent data, or Nnull_samples x n_q for time-independent data).
     t_stats_list (numpy.ndarray): 
-        Array of t-statistics across permutations (shape: n_T x Nperm x n_p x n_q for time-dependent data, or Nperm x n_p x n_q for time-independent data).
+        Array of t-statistics across permutations (shape: n_T x Nnull_samples x n_p x n_q for time-dependent data, or Nnull_samples x n_p x n_q for time-independent data).
     n_T (int): 
         Number of timepoints (set to 1 for time-independent data).
     n_N (int): 
@@ -5230,7 +5195,7 @@ def create_test_summary(Rin, base_statistics,pval, predictor_names, outcome_name
         A dictionary containing the summary report of the test
     """
 
-    if method=="multivariate" and Nperm >1 and combine_tests==False:
+    if method=="multivariate" and Nnull_samples >1 and combine_tests==False:
         # Default when we are doing f-regression
         if category_columns["f_anova_cols"] == []:
             df1 = n_p
@@ -5332,7 +5297,7 @@ def create_test_summary(Rin, base_statistics,pval, predictor_names, outcome_name
             "Timepoints": n_T
         }
 
-    elif method=="multivariate" and Nperm <=1 and combine_tests==False:
+    elif method=="multivariate" and Nnull_samples <=1 and combine_tests==False:
         # Default when we are doing f-regression
         if category_columns["f_anova_cols"] == []:
             df1 = n_p
@@ -5528,8 +5493,8 @@ def display_test_summary(result_dict, output="both", timepoint=0, return_tables=
     outcomes = result_dict['test_summary']['Outcome']
     if result_dict["test_type"]== 'test_across_state_visits':
         result_dict["combine_tests"] = False
-        result_dict["Nperm"] = result_dict["Nsamples"]
-    if result_dict["method"] == "multivariate" and result_dict["combine_tests"] == False and result_dict["Nperm"] > 1:
+        result_dict["Nnull_samples"] = result_dict["Nsamples"]
+    if result_dict["method"] == "multivariate" and result_dict["combine_tests"] == False and result_dict["Nnull_samples"] > 1:
         t_stats = result_dict["test_summary"]["T-stat"]
         n_predictors = t_stats.shape[-2]
         model_summary = coef_table = None
@@ -5605,7 +5570,7 @@ def display_test_summary(result_dict, output="both", timepoint=0, return_tables=
                 return model_summary
             elif output == "coef":
                 return coef_table           
-    elif result_dict["method"] == "multivariate" and result_dict["combine_tests"] == False and result_dict["Nperm"] < 1:
+    elif result_dict["method"] == "multivariate" and result_dict["combine_tests"] == False and result_dict["Nnull_samples"] < 1:
         t_stats = result_dict["test_summary"]["T-stat"]
         n_predictors = t_stats.shape[-2]
         model_summary = coef_table = None
@@ -5704,7 +5669,7 @@ def display_test_summary(result_dict, output="both", timepoint=0, return_tables=
                     "Base statistics": result_dict['base_statistics'][0,0,:].round(4),
                     "p-value": result_dict['pval'][0,:].round(4),
                     "Unit": "Z-score",
-                    "Nperm": result_dict["Nperm"]
+                    "Nnull_samples": result_dict["Nnull_samples"]
                 })
                 if not return_tables:
                     print(f"\nCoefficients Table{combine_test_str}:")
@@ -5719,7 +5684,7 @@ def display_test_summary(result_dict, output="both", timepoint=0, return_tables=
                     "Base statistics": result_dict['base_statistics'][timepoint,0,:].round(4),
                     "p-value": result_dict['pval'][timepoint,:].round(4),
                     "Unit": "Z-score",
-                    "Nperm": result_dict["Nperm"]
+                    "Nnull_samples": result_dict["Nnull_samples"]
                 })
                 if not return_tables:
                     print(f"\nCoefficients Table{combine_test_str} (timepoint {timepoint}):")
@@ -5750,7 +5715,7 @@ def display_test_summary(result_dict, output="both", timepoint=0, return_tables=
         if output in ["both", "model"]:
             model_summary = pd.DataFrame({
                 "Unit": [f"{unit_key}-diff"],  
-                "Nperm": [result_dict["Nperm"]],  
+                "Nnull_samples": [result_dict["Nnull_samples"]],  
                 "Max Statistic": [max_stat], 
                 "Min P-value": [min_pval],  
 
@@ -5797,7 +5762,7 @@ def display_test_summary(result_dict, output="both", timepoint=0, return_tables=
             if output in ["both", "model"]:     
                 model_summary = pd.DataFrame({
                     "Unit": [f"{unit_key}-diff"],  
-                    "Nperm": [result_dict["Nperm"]],  
+                    "Nnull_samples": [result_dict["Nnull_samples"]],  
                 })
             if not return_tables:
                 print(f"\nModel Summary (OSA)):")
@@ -5850,7 +5815,7 @@ def display_test_summary(result_dict, output="both", timepoint=0, return_tables=
 
                 if 'z_score' in result_dict["statistical_measures"]:
                     if output=="model":
-                        print("Model summary export is not possible when combining tests with Nperm set to 0.")  
+                        print("Model summary export is not possible when combining tests with Nnull_samples set to 0.")  
 
                 else:
                     model_summary = pd.DataFrame({
@@ -5858,7 +5823,7 @@ def display_test_summary(result_dict, output="both", timepoint=0, return_tables=
                         "Max Statistic": [max_stat] if np.isscalar(max_stat) else max_stat,
                         "Min P-value": [min_pval] if np.isscalar(min_pval) else min_pval,
                         "Unit": [unit_key] if isinstance(unit_key, str) else unit_key,
-                        "Nperm": [result_dict["Nperm"]] if np.isscalar(result_dict["Nperm"]) else result_dict["Nperm"]
+                        "Nnull_samples": [result_dict["Nnull_samples"]] if np.isscalar(result_dict["Nnull_samples"]) else result_dict["Nnull_samples"]
                     })
                     
                     if not return_tables:
@@ -5921,7 +5886,7 @@ def display_test_summary(result_dict, output="both", timepoint=0, return_tables=
                 # Apply the function to each value
                 model_summary = pd.DataFrame({
                     "Unit": 'z_score',
-                    "Nperm": ensure_list(result_dict["Nperm"])
+                    "Nnull_samples": ensure_list(result_dict["Nnull_samples"])
                 })
                 if not return_tables:
                     if result_dict["test_summary"]['Timepoints'] == 1:
@@ -5934,7 +5899,7 @@ def display_test_summary(result_dict, output="both", timepoint=0, return_tables=
                 # Apply the function to each value
                 model_summary = pd.DataFrame({
                     "Unit": 'cca',
-                    "Nperm": ensure_list(result_dict["Nperm"])
+                    "Nnull_samples": ensure_list(result_dict["Nnull_samples"])
                 })
                 if not return_tables:
 
@@ -5947,7 +5912,7 @@ def display_test_summary(result_dict, output="both", timepoint=0, return_tables=
                         
             else:
                 expanded_unit_key =unit_key if len(ensure_list(unit_key))==len(ensure_list(max_stat)) else np.repeat(ensure_list(unit_key),len(min_pval))
-                expanded_Nperm = result_dict["Nperm"] if isinstance(result_dict["Nperm"], int) and len(ensure_list(max_stat))==1 else np.repeat(result_dict["Nperm"],len(min_pval))
+                expanded_Nnull_samples = result_dict["Nnull_samples"] if isinstance(result_dict["Nnull_samples"], int) and len(ensure_list(max_stat))==1 else np.repeat(result_dict["Nnull_samples"],len(min_pval))
 
                 # Apply the function to each value
                 model_summary = pd.DataFrame({
@@ -5955,7 +5920,7 @@ def display_test_summary(result_dict, output="both", timepoint=0, return_tables=
                     "Max Statistic": ensure_list(np.squeeze(max_stat)),
                     "Min P-value": ensure_list(min_pval),
                     "Unit": ensure_list(expanded_unit_key),
-                    "Nperm": ensure_list(expanded_Nperm)
+                    "Nnull_samples": ensure_list(expanded_Nnull_samples)
                 })
                 if not return_tables:
                     if result_dict["test_summary"]['Timepoints'] == 1:
