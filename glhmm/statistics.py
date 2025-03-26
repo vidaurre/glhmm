@@ -80,7 +80,7 @@ def test_across_subjects(
     detect_categorical (bool), default=False:  
         If `True`, automatically detects categorical columns in `R_data` and applies the appropriate statistical test:  
         - Binary categorical variables: Independent t-test.  
-        - Multiclass categorical variables: ANOVA (F-test).  
+        - Multiclass categorical variables: MANOVA for multivariate tests, ANOVA (F-test) for univariate test.  
         - Continuous variables:  F-regression for multivariate tests, Pearson’s t-test for univariate tests.
     category_limit (int), default=10
         Maximum number of unique values allowed to decide whether to use F-ANOVA or F-regression in the F-test.
@@ -360,7 +360,7 @@ def test_across_trials(D_data, R_data, idx_data, method="multivariate", Nnull_sa
     detect_categorical (bool), default=False:  
         If `True`, automatically detects categorical columns in `R_data` and applies the appropriate statistical test:  
         - Binary categorical variables: Independent t-test.  
-        - Multiclass categorical variables: ANOVA (F-test).  
+        - Multiclass categorical variables: MANOVA for multivariate tests, ANOVA (F-test) for univariate test.  
         - Continuous variables:  F-regression for multivariate tests, Pearson’s t-test for univariate tests.
     category_limit (int), default=10
         Maximum number of unique values allowed to decide whether to use F-ANOVA or F-regression in the F-test.
@@ -860,7 +860,7 @@ def test_across_state_visits(D_data, R_data , method="multivariate", Nnull_sampl
     detect_categorical (bool), default=False:  
         If `True`, automatically detects categorical columns in `R_data` and applies the appropriate statistical test:  
         - Binary categorical variables: Independent t-test.  
-        - Multiclass categorical variables: ANOVA (F-test).  
+        - Multiclass categorical variables: MANOVA for multivariate tests, ANOVA (F-test) for univariate test.  
         - Continuous variables:  F-regression for multivariate tests, Pearson’s t-test for univariate tests.
     category_limit (int), default=10
         Maximum number of unique values allowed to decide whether to use F-ANOVA or F-regression in the F-test.
@@ -2597,7 +2597,7 @@ def test_statistics_calculations(Din, Rin, perm, test_statistics, reg_pinv, meth
 
     if method == 'multivariate':
         nan_values = np.isnan(Rin).any() 
-        if category_columns["t_stat_independent_cols"]==[] and category_columns["f_anova_cols"]==[] and category_columns["f_reg_cols"]==[] or category_columns["f_reg_cols"]=="all_columns":
+        if category_columns["t_stat_independent_cols"]==[] and category_columns["f_manova_cols"]==[] and category_columns["f_anova_cols"]==[] and category_columns["f_reg_cols"]==[] or category_columns["f_reg_cols"]=="all_columns":
             if nan_values:
                 # NaN values are detected
                 if combine_tests_flag:
@@ -2665,6 +2665,14 @@ def test_statistics_calculations(Din, Rin, perm, test_statistics, reg_pinv, meth
                     # Store the R^2 values in the test_statistics array
                     base_statistics = F_stats
                     test_statistics[perm] = (base_statistics)
+        elif category_columns["f_manova_cols"]=="all_columns" and nan_values == False:
+            # Then we need to calculate beta
+            F_stats, t_stats, pval_matrix=calculate_manova_f_test(Din, Rin, nan_values)
+            # Store statistics
+            #t_stats =t_stat.flatten() if t_stat.ndim==2 and t_stat.shape[1]!=1 else t_stat
+            base_statistics = F_stats.copy()
+            test_statistics[perm] =(base_statistics) 
+
         elif category_columns["f_anova_cols"]=="all_columns" and nan_values == False:
             if permute_beta: 
                 if len(test_indices) ==1: 
@@ -2711,6 +2719,15 @@ def test_statistics_calculations(Din, Rin, perm, test_statistics, reg_pinv, meth
                     R_column = Rin[:, col]
                     # Calculate f-statistics of columns of interest 
                     nan_values = np.sum(np.isnan(Rin[:,col]))>0 
+                    if col in category_columns["f_manova_cols"]:
+                        # Then we need to calculate beta
+                        F_stats[col], t_stat, pval_matrix[col]=calculate_manova_f_test(Din, R_column, True)
+                        # Store statistics
+                        t_stats[:,col] =t_stat.flatten() if t_stat.ndim==2 else t_stat
+                        base_statistics[col] = F_stats[col].copy()
+                        if not combine_tests_flag: # Only assign if combine_tests_flag is False
+                            test_statistics[perm,col] = base_statistics[col]    
+
                     if col in category_columns["f_anova_cols"]:
                         # Nan values
                         if permute_beta:
@@ -2746,8 +2763,9 @@ def test_statistics_calculations(Din, Rin, perm, test_statistics, reg_pinv, meth
                     test_statistics[perm] =(base_statistics) 
     # Calculate for univariate tests              
     elif method == "univariate":
+        nan_values = np.isnan(Din).any() or np.isnan(Rin).any()
         if category_columns["t_stat_independent_cols"]==[] and category_columns["f_anova_cols"]==[]and category_columns["f_reg_cols"]==[]:
-            nan_values = np.isnan(Din).any() or np.isnan(Rin).any()
+
             # Only calcuating the correlation matrix, since there is no need for t- or f-test
             if combine_tests_flag: 
                 if permute_beta:
@@ -2806,10 +2824,11 @@ def test_statistics_calculations(Din, Rin, perm, test_statistics, reg_pinv, meth
         elif "all_columns" in category_columns.values() and nan_values == False:
             # No need for a columnwise operation
             if category_columns["t_stat_independent_cols"]=="all_columns":
-                base_statistics, pval = calculate_nan_t_test(Din, Rin, nan_values=nan_values)
+                base_statistics, pval_matrix = calculate_nan_t_test(Din, Rin, nan_values=nan_values)
+                test_statistics[perm,:] =abs(base_statistics)
             elif category_columns["f_anova_cols"]=="all_columns":
-                print("DEBUG FOR ONLY SESSIONS DATA")
-                base_statistics, pval = calculate_anova_f_test(Din, Rin, method=method)
+                base_statistics, t_stats, pval_matrix = calculate_anova_f_test(Din, Rin, method=method)
+                test_statistics[perm] =base_statistics
         else: 
             pval_matrix = np.zeros((Din.shape[-1],Rin.shape[-1]))
             base_statistics = np.zeros((Din.shape[-1],Rin.shape[-1]))
@@ -2818,7 +2837,8 @@ def test_statistics_calculations(Din, Rin, perm, test_statistics, reg_pinv, meth
                 nan_values = True if np.sum(np.isnan(Din))>0 or np.sum(np.isnan(Rin))>0 else False
                 if col in category_columns["t_stat_independent_cols"]:
                     # Perform  t-statistics per column if nan_values=True 
-                    base_stat, pval = calculate_nan_t_test(Din, Rin[:, col], nan_values=nan_values)    
+                    base_stat, pval = calculate_nan_t_test(Din, Rin[:, col], nan_values=nan_values) 
+                    base_stat = abs(base_stat)   
                 elif col in category_columns["f_anova_cols"]:
                     if permute_beta==False:
                         # Perform f-statistics
@@ -4134,7 +4154,7 @@ def categorize_columns_by_statistical_method(R_data, method, Nnull_samples, dete
         - 'f_reg_cols': Columns to apply F-regression on (continuous variables).
         - Other keys depending on method, such as 'r_squared', 'corr_coef', or 'z_score' for different tests.
     """
-    category_columns = {'t_stat_independent_cols': [], 'f_anova_cols': [], 'f_reg_cols': [], 'z_score': []} 
+    category_columns = {'t_stat_independent_cols': [], 'f_anova_cols': [], 'f_manova_cols': [], 'f_reg_cols': [], 'z_score': []} 
     idx_cols =np.arange(R_data.shape[-1])
     # Perform categorical detection based on detect_categorical input
     # This checks if detect_categorical is either True or a list/ndarray
@@ -4148,8 +4168,8 @@ def categorize_columns_by_statistical_method(R_data, method, Nnull_samples, dete
             # If method is not "multivariate" or permute_beta is True, identify binary columns in R_data
             #if method == "multivariate" :
             #if method == "multivariate" and not permute_beta:    
-            if method == "multivariate":
-                category_columns["f_anova_cols"] = [
+            if method == "multivariate" and not permute_beta:
+                category_columns["f_manova_cols"] = [
                                     col for col in range(R_data.shape[-1]) 
                                     if (np.unique(R_data[~np.isnan(R_data[:, col]), col]).size > 2)  # Ignore NaNs
                                     and (np.unique(R_data[~np.isnan(R_data[:, col]), col]).size < category_limit)
@@ -4160,7 +4180,7 @@ def categorize_columns_by_statistical_method(R_data, method, Nnull_samples, dete
                                                 if np.unique(R_data[~np.isnan(R_data[:, col]), col]).size > 2  # Check if more than 2 unique values
                                                 and np.unique(R_data[~np.isnan(R_data[:, col]), col]).size < category_limit] # Check if the data type is above category_limit
             # idx_test is a list of all binary and categorical columns
-            idx_test = category_columns["t_stat_independent_cols"]+category_columns["f_anova_cols"]
+            idx_test = category_columns["t_stat_independent_cols"]+category_columns["f_anova_cols"]+category_columns["f_manova_cols"]
             # The remaining columns, which are not binary or categorical, are treated as continuous
             if permute_beta or Nnull_samples==1 and method=="multivariate":
                 category_columns["f_reg_cols"] = idx_cols[~np.isin(idx_cols,idx_test)].tolist()
@@ -4530,16 +4550,16 @@ def calculate_anova_f_test(Din, Rin, idx_data=None, permute_beta=False, perm=0, 
                 Rin_column = Rin[:, q_j]
                 # Remove NaNs from both D and R
                 valid_indices = ~np.isnan(Din_column) & ~np.isnan(Rin_column)
-                #Din_filtered = Din_column[valid_indices]
+                Din_filtered = Din_column[valid_indices]
                 Rin_filtered = Rin_column[valid_indices]
-                # Get unique non-NaN groups
+                # Get unique group labels from Rin
                 unique_groups = np.unique(Rin_filtered)
-                # Split into groups based on R values
-                groups = [Rin_filtered == group for group in unique_groups]
+                # Group Din values according to Rin categories
+                groups = [Din_filtered[Rin_filtered == group] for group in unique_groups]
                 f_statistic[p_i, q_j], p_value[p_i, q_j] = f_oneway(*groups)
     else:
         # Valid indices for the dependent variable
-        valid_indices = ~np.isnan(Rin)
+        valid_indices = np.squeeze(~np.isnan(Rin))  # for multicolumn Rin (one-hot)
         # Compute observed F-ANOVA statistic based on groups
         groups = [Rin[valid_indices] == group for group in unique_groups]
         # Compute the global F-ANOVA statistic
@@ -4550,17 +4570,163 @@ def calculate_anova_f_test(Din, Rin, idx_data=None, permute_beta=False, perm=0, 
             # Expand Rin, if it is 1D
             if Rin.ndim == 1:
                 Rin = np.expand_dims(Rin, axis=1) 
-            # Center the data
-            Din_centered = Din[valid_indices] - Din[valid_indices].mean(axis=0)
-            Rin_centered = Rin[valid_indices] - Rin[valid_indices].mean(axis=0)
+            # Center the data - already centered
+            # Din_centered = Din[valid_indices] - Din[valid_indices].mean(axis=0)
+            # Rin_centered = Rin[valid_indices] - Rin[valid_indices].mean(axis=0)
             # Compute correlation coefficients efficiently
-            numerator = Din_centered.T @ Rin_centered
-            denom_x = np.sqrt(np.sum(Din_centered**2, axis=0))[:, np.newaxis]
-            denom_y = np.sqrt(np.sum(Rin_centered**2, axis=0))
+            numerator = Din.T @ Rin
+            denom_x = np.sqrt(np.sum(Din**2, axis=0))[:, np.newaxis]
+            denom_y = np.sqrt(np.sum(Rin**2, axis=0))
             correlation_matrix = numerator / (denom_x @ denom_y[np.newaxis, :])
             # Convert correlation coefficients to t-statistics
             t_stats = correlation_matrix * np.sqrt(n - 2) / np.sqrt(1 - correlation_matrix**2)
     return f_statistic, t_stats, p_value
+
+def calculate_manova_f_test(Din, Rin, nan_values, no_t_stats=False):
+    """
+    Calculate the f-test values for the regression of each dependent variable
+    in Rin on the independent variables in Din, while handling NaN values column-wise.
+
+    Parameters:
+    --------------
+    Din (numpy.ndarray): 
+        Input data matrix for the independent variables.
+    Rin (numpy.ndarray): 
+        Input data matrix for the dependent variables.
+    idx_data (numpy.ndarray): 
+        Marks the indices for each trial within the session.
+        It is a 2D array where each row represents the start and end index for a session.       
+    permute_beta (bool, optional): 
+        A flag indicating whether to permute beta coefficients.
+    perm (int): 
+        The permutation index.
+    nan_values (bool, optional), default=False:: 
+        A flag indicating whether there are NaN values.
+    beta (numpy.ndarray):
+    
+    Returns:
+    ----------  
+        R2_test (numpy.ndarray): Array of f-test values for each regression.
+    """
+    if nan_values:
+        Rin = np.squeeze(Rin)
+        if Rin.ndim == 1:
+            Rin = Rin[:, np.newaxis]  # shape (n, q)
+        n, p = Din.shape
+        q = Rin.shape[1]  # number of categorical variables
+        p_values = np.zeros(q)
+        f_statistics = np.zeros(q)
+        t_stats = np.zeros((p,q))
+        for q_i in range(q):
+            # Filter out NaNs in Rin
+            valid_indices = np.squeeze(~np.isnan(Rin[:,q_i]))  # for multicolumn Rin (one-hot)
+            Rin_valid = Rin[valid_indices, q_i]
+            Din_valid = Din[valid_indices]
+            # One-hot encode categorical variable
+            unique_vals, Rin_numeric = np.unique(Rin_valid, return_inverse=True)
+            Rin_onehot = np.eye(len(unique_vals))[Rin_numeric]
+            q_one = Rin_onehot.shape[1] # shape of the one-hot encoded matrix
+            # ⚠️ NOTE:
+            # In MANOVA, we model the continuous data (Din) as the **dependent variable**,
+            # and the group labels (Rin_onehot) as the **independent variable**.
+            # So we are fitting: Din = Rin_onehot @ beta + error
+
+            # Fit model (predict Din from group membership)
+            beta = np.linalg.pinv(Rin_onehot) @ Din_valid  # shape (q, p)
+            Din_pred = Rin_onehot @ beta  # shape (n, p)
+
+            # Compute residual and hypothesis matrices
+            E = Din_valid - Din_pred                          # residuals
+            H = Din_pred - Din_valid.mean(axis=0)            # model (hypothesis) component
+
+            E_cov = E.T @ E  # Error SSCP
+            H_cov = H.T @ H  # Hypothesis SSCP
+
+            # Wilks’ lambda
+            wilks_lambda = np.linalg.det(E_cov) / np.linalg.det(E_cov + H_cov)
+
+            # Convert to approximate F-statistic and p-value
+            df1 = q_one * p
+            df2 = n - 0.5 * (p + q_one + 1)
+            f_statistics[q_i] = ((1 - wilks_lambda) / wilks_lambda) * (df2 / df1)
+            p_values[q_i] = f.sf(f_statistics[q_i], df1, df2)
+            
+
+            if not no_t_stats:
+                Rin_column = Rin[:,q_i][:, np.newaxis]
+                # Center the data
+                ## Rember that Din and Rin are already centered, so no need to center it again
+                # Compute correlation coefficients
+                numerator = Din.T @ Rin_column
+                denom_x = np.sqrt(np.sum(Din**2, axis=0))[:, np.newaxis]  # shape (p, 1)
+                denom_y = np.sqrt(np.sum(Rin_column**2, axis=0))                    # shape (q,)
+                correlation_matrix = numerator / (denom_x @ denom_y[np.newaxis, :])  # shape (p, q)
+
+                # Convert to t-stats
+                t_stat= correlation_matrix * np.sqrt(n - 2) / np.sqrt(1 - correlation_matrix**2)
+                t_stats[:,q_i] =t_stat.ravel()
+            else:
+                t_stats= None
+    else:
+        Rin = np.squeeze(Rin)
+        if Rin.ndim == 1:
+            Rin = Rin[:, np.newaxis]  # shape (n, q)
+        n, p = Din.shape
+        q = Rin.shape[1]  # number of categorical variables
+        p_values = np.zeros(q)
+        f_statistics = np.zeros(q)
+        t_stats = np.zeros((p,q))
+
+        for q_i in range(q):
+            col = Rin[:, q_i]
+            unique_vals, encoded = np.unique(col, return_inverse=True)
+            Rin_onehot = np.zeros((n, len(unique_vals)))
+            Rin_onehot[np.arange(n), encoded] = 1
+            q_one = Rin_onehot.shape[1]
+
+            # ⚠️ NOTE:
+            # In MANOVA, we model the continuous data (Din) as the **dependent variable**,
+            # and the group labels (Rin_onehot) as the **independent variable**.
+            # So we are fitting: Din = Rin_onehot @ beta + error
+            # Fit model (predict Din from group membership)
+            beta = np.linalg.pinv(Rin_onehot) @ Din
+            Din_pred = Rin_onehot @ beta
+
+            # Residual and hypothesis matrices
+            E = Din - Din_pred  # residuals
+            H = Din_pred - Din.mean(axis=0) # model (hypothesis) component
+            E_cov = E.T @ E
+            H_cov = H.T @ H
+
+            # Add small regularization to avoid singular matrices
+            eps = np.finfo(float).eps
+            E_cov += eps * np.eye(E_cov.shape[0]) # Error SSCP
+            H_cov += eps * np.eye(H_cov.shape[0]) # Hypothesis SSCP
+
+            # Wilks’ lambda
+            wilks_lambda = np.linalg.det(E_cov) / np.linalg.det(E_cov + H_cov)
+            df1 = q_one * p
+            df2 = n - 0.5 * (p + q_one + 1)
+            f_statistics[q_i] = ((1 - wilks_lambda) / wilks_lambda) * (df2 / df1)
+            p_values[q_i] = f.sf(f_statistics[q_i], df1, df2)
+
+            # Optional t-stats
+            if not no_t_stats:
+                # Center the data
+                ## Rember that Din and Rin are already centered, so no need to center it again
+                # Compute correlation coefficients
+                Rin_column = Rin[:,q_i][:, np.newaxis]
+                numerator = Din.T @ Rin_column
+                denom_x = np.sqrt(np.sum(Din**2, axis=0))[:, np.newaxis]  # shape (p, 1)
+                denom_y = np.sqrt(np.sum(Rin_column**2, axis=0))                    # shape (q,)
+                correlation_matrix = numerator / (denom_x @ denom_y[np.newaxis, :])  # shape (p, q)
+                # Convert to t-stats
+                t_stat= correlation_matrix * np.sqrt(n - 2) / np.sqrt(1 - correlation_matrix**2)
+                t_stats[:,q_i] =t_stat.ravel()
+            else:
+                t_stats= None
+
+    return f_statistics, t_stats, p_values
 
 def calculate_beta_session(reg_pinv, Rin, Din, test_indices_list, train_indices_list):
     """
@@ -5080,7 +5246,7 @@ def geometric_pvalue(p_values, combine_tests):
     return corr_combination
 
 
-def calculate_nan_t_test(Din, R_column, nan_values=False):
+def calculate_nan_t_test(Din, Rin, nan_values=False):
     """
     Calculate the t-statistics between paired independent (D_data) and dependent (R_data) variables, while handling NaN values column by column without removing entire rows.
         - The function handles NaN values for each feature in D_data without removing entire rows.
@@ -5100,31 +5266,42 @@ def calculate_nan_t_test(Din, R_column, nan_values=False):
         t-statistics for each feature in D_data against the binary categories in R_data.
  
     """
+
     if nan_values:
         # Initialize a matrix to store t-statistics
-        p = Din.shape[1]
-        t_test = np.zeros(p)
-        pval_array = np.zeros(p)
-        # Extract non-NaN values for each group
-        groups = np.unique(R_column)
-        # Calculate t-statistic for each pair of columns (D_column, R_data)
-        for i in range(p):
-            D_column = Din[:, i][:,np.newaxis]
-                
-            # Find rows where both D_column and R_data are non-NaN
-            # valid_indices = np.all(~np.isnan(D_column) & ~np.isnan(R_data), axis=1)
-            # Omit NaN rows in single columns - nan_policy='omit'    
-            t_stat, pval = ttest_ind(D_column[R_column == groups[0]], D_column[R_column == groups[1]], nan_policy='omit')
+        p, q = Din.shape[1], Rin.shape[1]
+        t_stats = np.zeros((p, q))
+        p_values = np.zeros((p, q))
 
-            # Store the t-statistic in the matrix
-            t_test[i] = t_stat
-            pval_array[i] = pval  
+        for q_i in range(q):
+            R_column = Rin[:, q_i]
+            group0, group1 = np.unique(R_column)
+
+            for p_i in range(p):
+                D_column = Din[:, p_i]
+
+                # Mask for valid (non-NaN) data
+                valid_mask = ~np.isnan(D_column) & ~np.isnan(R_column)
+
+                group0_vals = D_column[(R_column == group0) & valid_mask]
+                group1_vals = D_column[(R_column == group1) & valid_mask]
+
+                t_stat, pval = ttest_ind(group0_vals, group1_vals, nan_policy='omit')
+                # Store the t-statistic in the matrix
+                t_stats[p_i, q_i] = t_stat
+                p_values[p_i, q_i] = pval
     else:
-        # Get the t-statistic if there are no NaN values
-        t_test_group = np.unique(R_column)
-        # Get the t-statistic
-        t_test, pval_array = ttest_ind(Din[R_column == t_test_group[0]], Din[R_column == t_test_group[1]]) 
-    return t_test, pval_array
+        t_stats = np.zeros((Din.shape[1], Rin.shape[1]))
+        p_values = np.zeros((Din.shape[1], Rin.shape[1]))
+        for p_i in range(Rin.shape[1]):
+            R_column = Rin[:, p_i]
+            # Get the t-statistic if there are no NaN values
+            t_test_group = np.unique(R_column)
+            # Get the t-statistic
+            t_test, pval_array = ttest_ind(Din[R_column == t_test_group[0]], Din[R_column == t_test_group[1]]) 
+            t_stats[:, p_i] = t_test.ravel()
+            p_values[:, p_i] = pval_array.ravel()
+    return t_stats, p_values
 
 
 def calculate_regression_f_stat_univariate(Din, Rin, idx_data, beta, perm, reg_pinv, permute_beta=False, test_indices=None):
