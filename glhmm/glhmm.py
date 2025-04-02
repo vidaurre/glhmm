@@ -1485,13 +1485,13 @@ class glhmm():
         diagonal_covmat = (self.hyperparameters["covtype"] == 'shareddiag') or \
                         (self.hyperparameters["covtype"] == 'diag')  
 
-        if len(np.zeros(100).shape)==1: # T
+        if len(size.shape)==1: # T
             T = size
             indices = auxiliary.make_indices_from_T(T)
         else: # indices
             indices = size
-            if len(indices.shape) == 1: 
-                indices = np.expand_dims(indices,axis=0)
+            # if len(indices.shape) == 1: 
+            #     indices = np.expand_dims(indices,axis=0)
             T = size[:,1] - size[:,0]
 
         N = indices.shape[0]
