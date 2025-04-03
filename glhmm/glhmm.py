@@ -1485,17 +1485,20 @@ class glhmm():
         diagonal_covmat = (self.hyperparameters["covtype"] == 'shareddiag') or \
                         (self.hyperparameters["covtype"] == 'diag')  
 
-        if len(np.zeros(100).shape)==1: # T
+        if len(size.shape)==1: # T
             T = size
             indices = auxiliary.make_indices_from_T(T)
         else: # indices
             indices = size
-            if len(indices.shape) == 1: 
-                indices = np.expand_dims(indices,axis=0)
+            # if len(indices.shape) == 1: 
+            #     indices = np.expand_dims(indices,axis=0)
             T = size[:,1] - size[:,0]
 
         N = indices.shape[0]
-        q = self.Sigma[0]["rate"].shape[0]
+        if self.preproclogY:
+            q = self.preproclogY["p"]
+        else:
+            q = self.Sigma[0]["rate"].shape[0]
         
         if Gamma is None:
             Gamma = self.sample_Gamma(size)
@@ -1503,21 +1506,26 @@ class glhmm():
         rng = np.random.default_rng()
 
         if (self.hyperparameters["model_beta"] != 'no') and (X is None):
-            p = self.beta[0]["Mu"].shape[0]
+            beta = self.get_beta(0)
+            p = beta.shape[0]
             X = np.random.normal(size=(np.sum(T),p))
 
         # Y, mean
         Y = np.zeros((np.sum(T),q))
         if self.hyperparameters["model_mean"] == 'shared':
-            Y += np.expand_dims(self.mean[0]['Mu'],axis=0)
+            mean = self.get_mean(0)
+            Y += np.expand_dims(mean,axis=0)
         if self.hyperparameters["model_beta"] == 'shared':
-            Y += X @ self.beta[0]["Mu"]
+            beta = self.get_beta(0)
+            Y += X @ beta
             
         for k in range(K):
             if self.hyperparameters["model_mean"] == 'state': 
-                Y += np.expand_dims(self.mean[k]["Mu"],axis=0) * np.expand_dims(Gamma[:,k],axis=1)
+                mean = self.get_mean(k)
+                Y += np.expand_dims(mean,axis=0) * np.expand_dims(Gamma[:,k],axis=1)
             if self.hyperparameters["model_beta"] == 'state':
-                Y += (X @ self.beta[k]["Mu"]) * np.expand_dims(Gamma[:,k],axis=1)
+                beta = self.get_beta(k)
+                Y += (X @ beta) * np.expand_dims(Gamma[:,k],axis=1)
 
         # Y, covariance
         if shared_covmat:
