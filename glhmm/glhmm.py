@@ -2474,10 +2474,12 @@ class glhmm():
             fe_it = np.sum(self.get_fe(X,Y,Gamma,Xi,scale,indices))
             fe = np.append(fe, fe_it) 
 
-            if it > 1:
-                chgFrEn = abs((fe[-1]-fe[-2]) / (fe[-1]-fe[0]))
-                if np.abs(chgFrEn) < options["tol"]: cyc_to_go -= 1
-                else: cyc_to_go = options["cyc_to_go_under_th"]
+            if it > 1 and np.all(np.isfinite([fe[-1], fe[-2], fe[0]])):
+                chgFrEn = abs((fe[-1] - fe[-2]) / (fe[-1] - fe[0]))
+                if np.abs(chgFrEn) < options["tol"]:
+                    cyc_to_go -= 1
+                else:
+                    cyc_to_go = options["cyc_to_go_under_th"]
                 if options["verbose"]: 
                     print("Cycle " + str(it+1) + ", free energy = " + str(fe_it) + \
                         ", relative change = " + str(chgFrEn))
@@ -2485,7 +2487,8 @@ class glhmm():
                     if options["verbose"]: print("Reached early convergence")
                     break
             else:
-                if options["verbose"]: print("Cycle " + str(it+1) + " free energy = " + str(fe_it))
+                if options["verbose"]:
+                    print("Cycle " + str(it+1) + " free energy = " + str(fe_it))
 
             # M-step
             if options["updateDyn"]:

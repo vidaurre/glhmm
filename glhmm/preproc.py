@@ -42,7 +42,7 @@ def apply_pca(X,d,whitening=False, exact=True):
         X = X @ d
         whitening = True
         if whitening: X /= np.std(X,axis=0)
-        return X
+        return X, None
 
     svd_solver = 'full' if exact else 'auto'
     if d >= 1: 
