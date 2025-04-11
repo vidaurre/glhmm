@@ -442,3 +442,80 @@ def prepare_data_directory(PATH_DATA: Path, zenodo_url: str = "https://zenodo.or
     print(f"Removed temporary zip file: {zip_path}.")
 
     return PATH_DATA
+
+
+def resolve_figure_directory(save_figures, filename, default_folder="Figures"):
+    """
+    Resolves the output directory and base filename for figure saving.
+
+    Parameters:
+    ----------------
+    save_figures (bool):
+        Whether figures are to be saved.
+    filename (str or None):
+        Optional filename or path prefix for saved outputs.
+    default_folder (str):
+        Default folder name if no filename is provided.
+
+    Returns:
+    ----------------
+    output_dir (str):
+        Path to the folder where figures will be saved.
+    base_filename (str):
+        Base name used to generate individual filenames.
+    """
+        
+    if not save_figures:
+        return None, None
+
+    if filename:
+        filename = Path(filename)
+        output_dir = filename.parent if filename.parent != Path('.') else Path(default_folder)
+        base_filename = filename.stem
+    else:
+        output_dir = Path(default_folder)
+        base_filename = "figure"
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    return output_dir, base_filename
+
+def generate_filename(base, index, extension):
+    """
+    Generate a sequential filename with a numeric suffix.
+
+    Parameters
+    ----------
+    base (str)
+        Base string for the filename (e.g., "power_map").
+    index : int
+        Index to append to the filename (start from index 0).
+    extension (str)
+        File extension (e.g., 'svg', 'png').
+
+    Returns
+    -------
+    str
+        Constructed filename with numeric suffix and extension.
+    """
+    return f"{base}_{index + 1:02d}.{extension}"
+
+def override_dict_defaults(default_dict, override_dict=None):
+    """
+    Merges a default dictionary with user-specified overrides.
+
+    Parameters:
+    --------------
+    default_dict (dict):
+        Dictionary containing default key-value pairs.
+    override_dict (dict, optional):
+        Dictionary of user-defined key-value pairs that override defaults.
+
+    Returns:
+    --------------
+    dict:
+        Merged dictionary where user-defined keys replace defaults.
+    """
+        
+    if override_dict is None:
+        override_dict = {}
+    return {**default_dict, **override_dict}

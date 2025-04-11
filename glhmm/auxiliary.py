@@ -10,6 +10,7 @@ import sys
 import scipy.special
 import scipy.io
 import math
+import warnings
 
 from numba import njit
 
@@ -17,6 +18,15 @@ try:
     import cupy as cp
 except:
     pass
+
+# Suppress expected numerical warnings from GLHMM
+# ------------------------------------------------
+# GLHMM uses zero-padding to align time series of different lengths for parallel computation.
+# This can lead to harmless divide-by-zero or overflow warnings during operations on padded timepoints,
+# which are discarded in the final output. We suppress these specific warnings to avoid cluttering the logs.
+import warnings
+warnings.filterwarnings("ignore", message=".*invalid value encountered in divide")
+warnings.filterwarnings("ignore", message=".*overflow encountered in divide")
 
 
 def slice_matrix(M,indices):

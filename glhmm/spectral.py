@@ -1,6 +1,6 @@
 """
 Spectral analysis from Gaussian Linear Hidden Markov Model
-@author: Laura Masaracchia, 2025
+@author: Laura Masaracchia & Nick Y. Larsen, 2025
 """
 
 import numpy as np
@@ -342,8 +342,8 @@ def nnmf_decompose(coh, indices, n_components, max_iter=1000):
 
     Returns:
     -------
-    dec_spectrum: array-like with shape (n_subjects, n_components, n_freq)
-        decomposed spectrum
+    nnmf_frequency_profiles (numpy.ndarray): 
+        frequency components derived from NNMF with shape (n_subjects, n_components, n_freq)
     """
     # coh should have dimensions [n_subjects, n_freq, n_channels, n_channels, n_states]
     # for debugging purposes
@@ -371,25 +371,257 @@ def nnmf_decompose(coh, indices, n_components, max_iter=1000):
     else:
         raise AssertionError('Wrong shape of coherence. Make sure it has at least (n_freq,n_channels,n_channels)')
 
-    dec_spectrum = np.empty(shape=(n_subj,n_components,n_freq))
+
+    nnmf_frequency_profiles = np.empty((n_subj, n_components, n_freq))
+    coh_maps = np.zeros((n_subj, n_components, n_channels, n_channels))
     coh = coh.copy().reshape(n_subj, n_freq, n_channels, n_channels, n_states)
+    # Get upper triangle indices of channel pairs (excluding diagonal)
+    i, j = np.triu_indices(n_channels, 1)
 
     for n in range(n_subj):
-        # put the data in the right shape for NNMF, shape [n_samples, n_features]
-        # here is [n_states*n_channels*(n_channels-1)/2, n_freq]
-        coh_s = coh[n].transpose(1,2,3,0)
-        i, j = np.triu_indices(n_channels, 1)
-        coh_sreal = coh_s[i, j, :,:]
-        coh_sreshaped = coh_sreal.reshape(-1, n_freq)
+        coh_s = coh[n].transpose(1, 2, 3, 0)  # (n_channels, n_channels, n_states)
+        coh_sreal = coh_s[i, j, :, :]         # shape: (n_pairs, n_states)
+        coh_sreshaped = coh_sreal.reshape(-1, n_freq)  # shape: (n_states * n_pairs, n_freq)
 
-        # out of non_negative_factorization is
-        # W, n_samples by components,
-        # H, n_components by n_features
-        # n_iter, number of actual iterations performed until convergence
-        W, H, n_iter = non_negative_factorization(coh_sreshaped, n_components=n_components, max_iter=max_iter)
+        W, H, _ = non_negative_factorization(coh_sreshaped, n_components=n_components, max_iter=max_iter)
 
-        # Order the weights and components in ascending frequency - just as done in OSL
+        # Order by frequency peak
         order = np.argsort(H.argmax(axis=1))
-        dec_spectrum[n] = H[order]
+        nnmf_frequency_profiles[n] = H[order]
+        W_ordered = W[:, order]
 
-    return dec_spectrum
+        W_reshaped = W_ordered.reshape(n_states, -1, n_components)
+        W_avg = W_reshaped.mean(axis=0)  # shape: [n_pairs, n_components]
+
+        for k in range(n_components):
+            mat = np.zeros((n_channels, n_channels))
+            mat[i, j] = W_avg[:, k]
+            mat[j, i] = W_avg[:, k]
+            coh_maps[n, k] = mat
+
+    return nnmf_frequency_profiles, coh_maps
+
+
+def power_from_spectra(frequencies, power_spectra, components=None, frequency_range=None, method="mean"):
+    """
+    Compute region-wise power from power spectra across frequency bands or spectral components.
+
+    Parameters
+    ----------
+    frequencies : np.ndarray
+        1D array of frequency values in Hz. Shape: (n_freq,)
+    power_spectra : np.ndarray
+        Power spectral or cross-spectral density array.
+        Shape must be one of the following:
+            - (n_freq, n_channels)
+            - (n_freq, n_channels, n_states)
+            - (n_sessions, n_freq, n_channels, n_states)
+            - (n_sessions, n_freq, n_channels, n_channels, n_states)
+    components : np.ndarray, optional
+        Spectral components to project PSDs onto. Shape: (n_components, n_freq).
+        Cannot be used with frequency_range.
+    frequency_range : tuple of float, optional
+        Frequency range as (min_freq, max_freq) in Hz to select power within.
+        Cannot be used with components.
+    method : str
+        One of: 'sum', 'mean', or 'integral'.
+
+    Returns
+    -------
+    np.ndarray
+        Power values with shape:
+            - (n_components, n_channels, n_states) if components are provided
+            - (n_states, n_channels) otherwise
+        If sessions are present, shape will be (n_sessions, ...)
+    """
+    if method not in ["mean", "sum", "integral"]:
+        raise ValueError("method must be one of: 'mean', 'sum', or 'integral'.")
+
+    if components is not None and frequency_range is not None:
+        raise ValueError("Provide either components or frequency_range, not both.")
+
+    band_definitions = {
+        "delta": (1, 4),
+        "theta": (4, 8),
+        "alpha": (8, 12),
+        "beta": (13, 30),
+        "gamma": (30, np.max(frequencies)),
+    }
+
+    # Validate exclusive args
+    if components is not None and frequency_range is not None:
+        raise ValueError("Specify only one of components or frequency_range.")
+
+    if frequency_range is not None:
+        if isinstance(frequency_range, str):
+            frequency_range = band_definitions.get(frequency_range.lower())
+            if frequency_range is None:
+                raise ValueError("Unknown frequency band name.")
+        if frequencies is None:
+            raise ValueError("Frequency axis 'f' is required for frequency_range.")
+        min_freq, max_freq = frequency_range
+        freq_mask = (frequencies >= min_freq) & (frequencies <= max_freq)
+    else:
+        freq_mask = slice(None)
+
+    psd = power_spectra
+    ndim = psd.ndim
+
+    # Normalize to (n_sessions, n_freq, n_channels, n_states)
+    if ndim == 2:  # (n_freq, n_channels)
+        psd = psd[:, :, np.newaxis]  # (n_freq, n_channels, 1)
+        psd = psd[np.newaxis, ...]   # (1, n_freq, n_channels, 1)
+    elif ndim == 3:  # (n_freq, n_channels, n_states)
+        psd = psd[np.newaxis, ...]   # (1, n_freq, n_channels, n_states)
+    elif ndim == 4:  # (n_sessions, n_freq, n_channels, n_states)
+        pass
+    elif ndim == 5:  # (n_sessions, n_freq, n_channels, n_channels, n_states)
+        diag_idx = np.arange(psd.shape[2])
+        psd = psd[:, :, diag_idx, diag_idx, :]  # take diagonals
+    else:
+        raise ValueError(f"Unsupported input shape: {psd.shape}")
+
+    n_sessions, n_freq, n_channels, n_states = psd.shape
+    power_values_across_sessions = []
+
+    for session in range(n_sessions):
+        session_psd = psd[session].real  # (n_freq, n_channels, n_states)
+
+        reshaped_psd = session_psd.transpose(2, 1, 0).reshape(n_states * n_channels, n_freq)
+
+        if components is not None:
+            n_components = components.shape[0]
+            component_power = components @ reshaped_psd.T  # (n_components, n_states * n_channels)
+            for c in range(n_components):
+                component_power[c] /= np.sum(components[c])
+            power_per_band = component_power.reshape(n_components, n_states, n_channels)
+        else:
+            if method == "sum":
+                band_power = np.sum(reshaped_psd[:, freq_mask], axis=-1)
+            elif method == "integral":
+                df = np.mean(np.diff(frequencies[freq_mask]))
+                band_power = np.sum(reshaped_psd[:, freq_mask] * df, axis=-1)
+            else:  # mean
+                band_power = np.mean(reshaped_psd[:, freq_mask], axis=-1)
+
+            power_per_band = band_power.reshape(n_states, n_channels)
+
+        power_values_across_sessions.append(power_per_band)
+
+    return np.squeeze(np.array(power_values_across_sessions))
+
+
+
+
+def mean_coherence_from_spectra(frequencies, coh, components=None, frequency_range=None):
+    """
+    Computes mean coherence per channel pair from coherence spectra, either averaged over a frequency range or projected onto spectral components.
+
+    Parameters
+    ----------
+    frequencies (np.ndarray)
+        1D array of frequency values (Hz). Required if using frequency_range.
+    coh (np.ndarray)
+        Coherence array. Shape must be one of:
+            - (n_freq, n_channels, n_channels)
+            - (n_freq, n_channels, n_channels, n_modes)
+            - (n_sessions, n_freq, n_channels, n_channels, n_modes)
+    components (np.ndarray, optional)
+        Spectral components to project onto. Shape: (n_components, n_freq).
+    frequency_range : tuple, optional
+        Frequency range (min_freq, max_freq) to average over.
+
+    Returns
+    -------
+    Mean coherence (np.ndarray). Shape:
+        - (n_components, n_modes, n_channels, n_channels) if components provided
+        - (n_modes, n_channels, n_channels) or (n_channels, n_channels) otherwise
+        - Includes (n_sessions, ...) if multiple sessions present
+    """
+
+    band_definitions = {
+        "delta": (1, 4),
+        "theta": (4, 8),
+        "alpha": (8, 12),
+        "beta": (13, 30),
+        "gamma": (30, 50),
+    }
+
+    # Validate exclusive args
+    if components is not None and frequency_range is not None:
+        raise ValueError("Specify only one of components or frequency_range.")
+
+    if frequency_range is not None:
+        if isinstance(frequency_range, str):
+            frequency_range = band_definitions.get(frequency_range.lower())
+            if frequency_range is None:
+                raise ValueError("Unknown frequency band name.")
+        if frequencies is None:
+            raise ValueError("Frequency axis 'f' is required for frequency_range.")
+        min_freq, max_freq = frequency_range
+        freq_mask = (frequencies >= min_freq) & (f <= max_freq)
+    else:
+        freq_mask = slice(None)
+
+    ndim = coh.ndim
+    if ndim == 3:  # (n_freq, n_channels, n_channels)
+        coh = coh[..., np.newaxis]  # (n_freq, n_channels, n_channels, 1)
+        coh = coh[np.newaxis, ...]  # (1, n_freq, n_channels, n_channels, 1)
+    elif ndim == 4:  # (n_freq, n_channels, n_channels, n_modes)
+        coh = coh[np.newaxis, ...]  # (1, n_freq, n_channels, n_channels, n_modes)
+    elif ndim != 5:
+        raise ValueError(
+            "coh must be 3D (n_freq, n_channels, n_channels), "
+            "4D (n_freq, n_channels, n_channels, n_modes), or "
+            "5D (n_sessions, n_freq, n_channels, n_channels, n_modes)"
+        )
+
+    n_sessions, n_freq, n_channels, _, n_modes = coh.shape
+    n_components = 1 if components is None else components.shape[0]
+
+    output = []
+
+    for sess in range(n_sessions):
+        session_coh = coh[sess]  # (n_freq, n_channels, n_channels, n_modes)
+
+        # reshape to (n_modes * n_pairs, n_freq)
+        reshaped = session_coh.transpose(3, 1, 2, 0).reshape(n_modes * n_channels * n_channels, n_freq)
+
+        if components is not None:
+            proj = components @ reshaped.T  # (n_components, n_modes * n_pairs)
+            proj /= np.sum(components, axis=1, keepdims=True)
+            coh_result = proj.reshape(n_components, n_modes, n_channels, n_channels)
+        else:
+            if isinstance(freq_mask, slice):
+                coh_avg = np.mean(reshaped[:, freq_mask], axis=1)
+            else:
+                coh_avg = np.mean(reshaped[:, freq_mask], axis=1)
+
+            coh_result = coh_avg.reshape(n_components, n_modes, n_channels, n_channels)
+
+        output.append(coh_result)
+
+    return np.squeeze(np.array(output))
+
+
+def get_frequency_args_range(frequencies, frequency_range):
+    """
+    Gets the index range corresponding to a frequency interval.
+
+    Parameters:
+    --------------
+    frequencies (numpy.ndarray): 
+        1D array of frequency values (Hz).
+    frequency_range (tuple): 
+        Two-element tuple (min_freq, max_freq) defining the desired frequency range.
+
+    Returns:
+    ----------
+    args_range (list): 
+        List containing the start and end indices corresponding to the frequency range.
+    """
+    f_min_arg = np.argmax(frequencies >= frequency_range[0])
+    f_max_arg = np.argmax(frequencies > frequency_range[1])
+    if f_max_arg <= f_min_arg:
+        raise ValueError("Invalid frequency range.")
+    return [f_min_arg, f_max_arg]

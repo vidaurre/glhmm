@@ -125,14 +125,17 @@ def test_across_subjects(
     method = method.lower()
     
     # Adding an extra permutation values, since the first one would be the base statistics
-    Nnull_samples+=1 
+    FLAG_parametric = 0
     # Ensure Nnull_samples is at least 1
-    if Nnull_samples == 1:
+    if Nnull_samples ==0:
         # Set flag for identifying categories without permutation
-        detect_categorical = False if method=="univariate" and detect_categorical==False else True
-        if method == 'cca' and Nnull_samples == 1:
+        detect_categorical = True
+        if method == 'cca' and Nnull_samples == 0:
             raise ValueError("CCA does not support parametric statistics. The number of permutations ('Nnull_samples') cannot be set to 1. "
                             "Please increase the number of permutations to perform a valid analysis.")
+        Nnull_samples +=1
+        FLAG_parametric =1
+        print("Applying parametric test")
         
     # Check validity of method and data_type
     valid_methods = ["multivariate", "univariate", "cca"]
@@ -183,9 +186,12 @@ def test_across_subjects(
     
     # Get indices for permutation
     idx_array = get_indices_array(idx_data) if idx_data is not None and idx_data.ndim == 2 else idx_data.copy() if idx_data is not None else None
+
     # Calculate possible permutations
-    compute_max_permutations(idx_array, permute_within_blocks, permute_between_blocks, Nnull_samples-1, verbose=verbose)
-    
+    if FLAG_parametric==0:
+        compute_max_permutations(idx_array, permute_within_blocks, permute_between_blocks, Nnull_samples=Nnull_samples, verbose=verbose)
+
+
     # Get the shapes of the data
     n_T, n_N, n_p, n_q, D_data, R_data = get_input_shape(D_data, R_data, verbose)
     # Note for convension we wrote (T, p, q) => (n_T, n_p, n_q)
@@ -256,7 +262,7 @@ def test_across_subjects(
             pval[t, :] = stats_results["pval_matrix"] if perm == 0 and stats_results["pval_matrix"] is not None else pval[t, :]
             F_stats_list[t, perm, :] = stats_results["F_stats"] if stats_results["F_stats"] is not None else F_stats_list[t, perm, :]
             t_stats_list[t, perm, :] = stats_results["t_stats"] if stats_results["t_stats"] is not None else t_stats_list[t, perm, :]
-        if Nnull_samples>1:
+        if FLAG_parametric==0:
             # Calculate p-values
             pval = get_pval(test_statistics, Nnull_samples, method, t, pval, FWER_correction)
 
@@ -404,16 +410,17 @@ def test_across_trials(D_data, R_data, idx_data, method="multivariate", Nnull_sa
     category_columns = []   
     test_type =  'test_across_trials'
     method = method.lower()
-    
-    # Adding an extra permutation values, since the first one would be the base statistics
-    Nnull_samples+=1 
+    FLAG_parametric = 0
     # Ensure Nnull_samples is at least 1
-    if Nnull_samples ==1:
+    if Nnull_samples ==0:
         # Set flag for identifying categories without permutation
         detect_categorical = True
-        if method == 'cca' and Nnull_samples == 1:
+        if method == 'cca' and Nnull_samples == 0:
             raise ValueError("CCA does not support parametric statistics. The number of permutations ('Nnull_samples') cannot be set to 1. "
                             "Please increase the number of permutations to perform a valid analysis.")
+        Nnull_samples +=1
+        FLAG_parametric =1
+        print("Applying parametric test")
 
     # Check validity of method and data_type
     valid_methods = ["multivariate", "univariate", "cca"]
@@ -470,7 +477,8 @@ def test_across_trials(D_data, R_data, idx_data, method="multivariate", Nnull_sa
         idx_array =idx_data.copy()        
 
     # Calculate possible permutations
-    compute_max_permutations(idx_array, permute_within_blocks=True, permute_between_blocks=False, Nnull_samples=Nnull_samples-1, verbose=verbose)
+    if FLAG_parametric==0:
+        compute_max_permutations(idx_array, permute_within_blocks=True, permute_between_blocks=False, Nnull_samples=Nnull_samples, verbose=verbose)
 
     # Initialize arrays based on shape of data shape and defined options
     pval, base_statistics, test_statistics_list, F_stats_list, t_stats_list, R2_stats_list = initialize_arrays(n_p, n_q, n_T, method, Nnull_samples, return_base_statistics, combine_tests, n_cca_components)
@@ -505,7 +513,7 @@ def test_across_trials(D_data, R_data, idx_data, method="multivariate", Nnull_sa
             t_stats_list[t, perm, :] = stats_results["t_stats"] if stats_results["t_stats"] is not None else t_stats_list[t, perm, :]
             
 
-        if Nnull_samples>1:
+        if FLAG_parametric==0:
             # Calculate p-values
             pval = get_pval(test_statistics, Nnull_samples, method, t, pval, FWER_correction)
             
@@ -513,7 +521,7 @@ def test_across_trials(D_data, R_data, idx_data, method="multivariate", Nnull_sa
             if return_base_statistics==True:
                 test_statistics_list[t,:] = test_statistics
 
-    if Nnull_samples >1 and combine_tests is not False:
+    if Nnull_samples >0 and combine_tests is not False:
         # Set all values to empty lists (except for cases like "all_columns")
         category_columns = {key: [] for key in category_columns}
         category_columns['z_score'] = combine_tests
@@ -522,7 +530,7 @@ def test_across_trials(D_data, R_data, idx_data, method="multivariate", Nnull_sa
     f_t_stats = get_f_t_stats(D_data, R_data, F_stats_list, t_stats_list, Nnull_samples, n_T) if method =='multivariate' else None
     # Create report summary
     test_summary =create_test_summary(R_data, base_statistics,pval, predictor_names, outcome_names, method, f_t_stats,n_T, n_N, n_p,n_q, Nnull_samples, category_columns, combine_tests)
-    Nnull_samples = 0 if Nnull_samples==1 else Nnull_samples    
+
     category_columns = {key: value for key, value in category_columns.items() if value}
     if len(category_columns)==1:
         category_columns[next(iter(category_columns))]='all_columns'
@@ -642,15 +650,19 @@ def test_across_sessions_within_subject(D_data, R_data, idx_data, method="multiv
     test_type = 'test_across_sessions'  
     method = method.lower()
     permute_beta = True # For across session test we are permuting the beta coefficients for each session
+    FLAG_parametric = 0
 
-    Nnull_samples+=1 
     # Ensure Nnull_samples is at least 1
-    if Nnull_samples ==1:
+    if Nnull_samples ==0:
         # Set flag for identifying categories without permutation
         detect_categorical = True
-        if method == 'cca' and Nnull_samples == 1:
+        if method == 'cca' and Nnull_samples == 0:
             raise ValueError("CCA does not support parametric statistics. The number of permutations ('Nnull_samples') cannot be set to 1. "
                             "Please increase the number of permutations to perform a valid analysis.")
+        Nnull_samples +=1
+        FLAG_parametric =1
+        print("Applying parametric test")
+
 
     if not isinstance(detect_categorical,bool):
         raise TypeError("detect_categorical must be a boolean value (True or False)")
@@ -691,9 +703,11 @@ def test_across_sessions_within_subject(D_data, R_data, idx_data, method="multiv
         
     # Get indices of the sessions
     idx_array = get_indices_array(idx_data)
+
     # Calculate possible permutations
-    compute_max_permutations(idx_array, Nnull_samples=Nnull_samples-1, permute_beta=True, verbose=verbose)
-    
+    if FLAG_parametric==0:
+        compute_max_permutations(idx_array, permute_within_blocks=False, permute_between_blocks=True, Nnull_samples=Nnull_samples, verbose=verbose)
+
     # Get input shape information
     n_T, n_N, n_p, n_q, D_data, R_data = get_input_shape(D_data, R_data, verbose)
 
@@ -760,15 +774,16 @@ def test_across_sessions_within_subject(D_data, R_data, idx_data, method="multiv
             pval[t, :] = stats_results["pval_matrix"] if perm == 0 and stats_results["pval_matrix"] is not None else pval[t, :]
             F_stats_list[t, perm, :] = stats_results["F_stats"] if stats_results["F_stats"] is not None else F_stats_list[t, perm, :]
             t_stats_list[t, perm, :] = stats_results["t_stats"] if stats_results["t_stats"] is not None else t_stats_list[t, perm, :]
-        if Nnull_samples>1:
-            # Calculate p-values
+        
+        if FLAG_parametric==0:
+            # Calculate p-values based on permutations
             pval = get_pval(test_statistics, Nnull_samples, method, t, pval, FWER_correction)
             
             # Output test statistics if it is set to True can be hard for memory otherwise
             if return_base_statistics==True:
                 test_statistics_list[t,:] = test_statistics
     
-    if Nnull_samples >1 and combine_tests is not False:
+    if Nnull_samples >0 and combine_tests is not False:
         # Set all values to empty lists (except for cases like "all_columns")
         category_columns = {key: [] for key in category_columns}
         category_columns['z_score'] = combine_tests
@@ -905,18 +920,23 @@ def test_across_state_visits(D_data, R_data , method="multivariate", Nnull_sampl
     # Initialize variables
     test_type = 'test_across_state_visits'
     method = method.lower()
+    FLAG_parametric = 0
     if vpath_surrogates is not None:
         # Define Nnull_samples if vpath_surrogates is provided
         Nnull_samples = vpath_surrogates.shape[-1]
-    
-    Nnull_samples+=1 
+
     # Ensure Nnull_samples is at least 1
-    if Nnull_samples == 1:
+    if Nnull_samples == 0:
         # Set flag for identifying categories without permutation
         detect_categorical = True
         if method == 'cca' or method =='osr' or method =='osa' and Nnull_samples == 1:
             raise ValueError("'cca', 'osr' and 'osa' does not support parametric statistics. The number of Monto Carlo samples ('Nnull_samples') cannot be set to 1. "
                             "Please increase the number of Monto Carlo samples to perform a valid analysis.")
+    
+        Nnull_samples +=1
+        FLAG_parametric =1
+        print("Applying parametric test")
+
     if not isinstance(detect_categorical,bool):
         raise TypeError("detect_categorical must be a boolean value (True or False)")
     
@@ -1022,8 +1042,7 @@ def test_across_state_visits(D_data, R_data , method="multivariate", Nnull_sampl
                     stats_results = test_statistics_calculations(vpath_surrogate_onehot, data_t , perm, test_statistics, reg_pinv, method, category_columns)
                     base_statistics[t, :] = stats_results["base_statistics"] if perm == 0 and stats_results["base_statistics"] is not None else base_statistics[t, :] 
                     pval[t, :] = stats_results["pval_matrix"] if perm == 0 and stats_results["pval_matrix"] is not None else pval[t, :]
-            if Nnull_samples>1:
-                # Calculate p-values
+            if FLAG_parametric==0: 
                 pval = get_pval(test_statistics, Nnull_samples, method, t, pval, FWER_correction)
                 pval = np.squeeze(pval, axis=0)
         ###################### Permutation testing for state pairs #################################
@@ -1049,8 +1068,8 @@ def test_across_state_visits(D_data, R_data , method="multivariate", Nnull_sampl
                         vpath_surrogate = vpath_surrogates[:,perm].astype(int)
                     test_statistics[perm,idx] = calculate_statepair_difference(vpath_surrogate, data_t, state_1, 
                                                                                state_2, comparison_statistic)
-                if Nnull_samples>1:
-                    p_val= np.sum(test_statistics[:,idx] >= test_statistics[0,idx], axis=0) / (Nnull_samples + 1)
+                if FLAG_parametric==0:
+                    p_val= np.sum(test_statistics[:,idx] >= test_statistics[0,idx], axis=0) / (Nnull_samples)
                     pval[state_1-1, state_2-1] = p_val
                     pval[state_2-1, state_1-1] = 1 - p_val
             # Fill numbers in base statistics
@@ -2523,7 +2542,7 @@ def compute_max_permutations(block_indices= None, permute_within_blocks = False,
     if verbose:
         # Handle Cases Where Only One Permutation is Possible
         if final_permutations == 1:
-            print("Warning: Only 1 permutation is possible with the given constraints.")
+            print("Warning: Only using the unpermuted data.")
 
         print(f"Total possible permutations: {formatted_possible}")
         print(f"Running number of permutations: {int(final_permutations) if final_permutations < float('inf') else formatted_possible}")
