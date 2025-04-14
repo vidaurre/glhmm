@@ -188,9 +188,8 @@ def test_across_subjects(
     idx_array = get_indices_array(idx_data) if idx_data is not None and idx_data.ndim == 2 else idx_data.copy() if idx_data is not None else None
 
     # Calculate possible permutations
-    if FLAG_parametric==0:
+    if FLAG_parametric==0 and dict_family is None:
         compute_max_permutations(idx_array, permute_within_blocks, permute_between_blocks, Nnull_samples=Nnull_samples, verbose=verbose)
-
 
     # Get the shapes of the data
     n_T, n_N, n_p, n_q, D_data, R_data = get_input_shape(D_data, R_data, verbose)
