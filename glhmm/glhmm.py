@@ -29,7 +29,6 @@ from . import auxiliary
 from . import io
 from . import utils
 
-
 class glhmm():
     """ Gaussian Linear Hidden Markov Model class to decode stimulus from data.
     
@@ -178,8 +177,16 @@ class glhmm():
 
             L = xp.asarray(L)
             P = xp.asarray(self.P)
-
-            a,b,sc = auxiliary.compute_alpha_beta_parallel(L,self.Pi,P,indices_individual,gpu_acceleration)
+            # Suppress expected numerical warnings from GLHMM
+            # ------------------------------------------------
+            # GLHMM uses zero-padding to align time series of different lengths for parallel computation.
+            # This can lead to harmless divide-by-zero or overflow warnings during operations on padded timepoints,
+            # which are discarded in the final output. We suppress these specific warnings to avoid cluttering the logs.
+            with warnings.catch_warnings():
+                warnings.filterwarnings("ignore", message=".*invalid value encountered in divide")
+                warnings.filterwarnings("ignore", message=".*overflow encountered in divide")
+                warnings.filterwarnings("ignore", category=RuntimeWarning, message="invalid value encountered in subtract")
+                a,b,sc = auxiliary.compute_alpha_beta_parallel(L,self.Pi,P,indices_individual,gpu_acceleration)
 
             ## convert scale to a vector for output.
             scale = np.zeros(max(ind[:,1]))
