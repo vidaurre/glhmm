@@ -217,13 +217,13 @@ class glhmm():
             if len(has_inf)>0:     
                 Lsub = xp.asarray(L[:,has_inf,:])
                 del L
+                with xp.errstate(divide='ignore', invalid='ignore'):
+                    LL = xp.log(Lsub)
+                    for jj in range(len(has_inf)):
+                        t = xp.all(LL[:,jj,:]<0,axis=1)
+                        LL[t,jj,:] = LL[t,jj,:] -  xp.expand_dims(xp.max(LL[t,jj,:],axis=1), axis=1)
 
-                LL = xp.log(Lsub)
-                for jj in range(len(has_inf)):
-                    t = xp.all(LL[:,jj,:]<0,axis=1)
-                    LL[t,jj,:] = LL[t,jj,:] -  xp.expand_dims(xp.max(LL[t,jj,:],axis=1), axis=1)
-
-                a,b,_ = auxiliary.compute_alpha_beta_parallel(xp.exp(LL),self.Pi,P,indices_individual[has_inf,:],gpu_acceleration)
+                    a,b,_ = auxiliary.compute_alpha_beta_parallel(xp.exp(LL),self.Pi,P,indices_individual[has_inf,:],gpu_acceleration)
                 del LL
 
                 if gpu_acceleration == 2:
