@@ -892,7 +892,8 @@ def plot_vpath(viterbi_path, signal=None, idx_data=None, figsize=(7, 4), fontsiz
     viterbi_path 
         The Viterbi path data matrix.
     signal (numpy.ndarray), optional 
-        Signal data to overlay on the plot. Default is None.
+        Signal data to overlay on the plot. Default is None. 
+        If used, the signal will be plotted rescaled to mean 0 and max value 1 for graphic purposes.
     idx_data (numpy.ndarray), optional  
         Array representing time intervals. Default is None.
     figsize (tuple), optional 
@@ -944,12 +945,15 @@ def plot_vpath(viterbi_path, signal=None, idx_data=None, figsize=(7, 4), fontsiz
 
     # Plot signal overlay
     if signal is not None:
+        signal_norm = signal.copy()
+        signal_norm -= np.mean(signal_norm)
+        signal_norm /= np.max(signal_norm)
         if time_conversion_rate is not None:
             time_seconds = np.arange(len(signal)) / time_conversion_rate
-            axes.plot(time_seconds, signal, color='black', label=signal_label)
+            axes.plot(time_seconds, signal_norm, color='black', label=signal_label)
             axes.set_xlabel(xlabel, fontsize=fontsize_labels)
         else:
-            axes.plot(signal, color='black', label=signal_label)
+            axes.plot(signal_norm, color='black', label=signal_label)
 
     # Draw vertical gray lines for T_t intervals
     if idx_data is not None:
@@ -1384,27 +1388,26 @@ def plot_state_prob_and_covariance(init_stateP, TP, state_means, state_FC, cmap=
     axes[0, 1].set_yticklabels(ticks + 1)  # Increment ticks by 1 for labels
     
     # Plot state means
-    num_ticks = max(5, min(state_means.shape))
+    num_xticks = max(5, state_means.shape[1])
+    num_yticks = max(5, state_means.shape[0])
     im2 = axes[0, 2].imshow(state_means, cmap=cmap, aspect='auto')
     axes[0, 2].set_title("State means")
     cbar2 = fig.colorbar(im2, ax=axes[0, 2])
     cbar2.set_ticks(np.linspace(state_means.min(), state_means.max(), num=num_ticks).round(2))
     # Set ticks and labels
-    ticks = np.linspace(0, state_means.shape[1]-1, num_ticks).astype(int)
-    axes[0, 2].set_xticks(ticks)
-    axes[0, 2].set_xticklabels(ticks + 1)  # Increment ticks by 1 for labels
-    axes[0, 2].set_yticks(np.linspace(1, state_means.shape[0], num_ticks).astype(int))
+    xticks = np.linspace(0, state_means.shape[1]-1, num_xticks).astype(int)
+    axes[0, 2].set_xticks(xticks)
+    axes[0, 2].set_xticklabels(xticks + 1)  # Increment ticks by 1 for labels
+    # if 
+    yticks = np.linspace(0, state_means.shape[0]-1, num_yticks).astype(int)
+    axes[0, 2].set_yticks(yticks+1)
 
     # Plot state covariances
     min_value = np.min(state_FC)
     max_value = np.max(state_FC)
-    # Limits the number of ticks
-    if len(ticks)>10:
-        num_state = num_ticks
-    else:
-        num_state = len(ticks)
-        
-    ticks = np.linspace(0, state_FC.shape[0] - 1, num_state).astype(int)
+    
+    num_ticks = max(5,state_FC.shape[0])
+    ticks = np.linspace(0, state_FC.shape[0] - 1, num_ticks).astype(int)
     # Plot state covariances
     for k in range((num_cols*num_rows) -3): # have to fill the remaning number of subplots
         row_idx = (k + 3) // 3  # Shift row index by 3 to start from the second row

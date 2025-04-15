@@ -22,6 +22,8 @@ The required dependencies to use glhmm are:
 - scipy
 - matplotlib
 - seaborn
+- pickle
+- scikit-learn
 
 - cupy (only when using GPU acceleration; requires manual install)
 - h5py

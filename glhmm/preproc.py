@@ -361,7 +361,7 @@ def build_data_autoregressive(data,indices,autoregressive_order=1,
     
     X = np.zeros((T - N*autoregressive_order,p*autoregressive_order))
     Y = np.zeros((T - N*autoregressive_order,p))
-    indices_new = np.zeros((N,2))
+    indices_new = np.zeros((N,2)).astype(int)
 
     for j in range(N):
         ind_1 = np.arange(indices[j,0]+autoregressive_order,indices[j,1],dtype=np.int64)

@@ -614,7 +614,7 @@ def padGamma(Gamma, T, options):
     do_chop = 0
 
     # Check if 'embeddedlags' is in options and has more than one value
-    if 'embeddedlags' in options and isinstance(options['embeddedlags'], list) and len(options['embeddedlags']) > 1:
+    if 'embeddedlags' in options and len(options['embeddedlags']) > 1:
         d = [-min(options['embeddedlags']), max(options['embeddedlags'])]  # Define d based on 'embeddedlags'
         do_chop = 1
     # Check if 'order' is in options and its value is greater than 1
