@@ -189,7 +189,6 @@ def multitaper_spectral_analysis(data, indices, Fs, Gamma=None, options=None):
             'Data dimensions incompatible with analysis. Data should be of shape (n_samples, n_channels)')
     if len(data.shape) == 1:  # one channel
         data = data[:, np.newaxis]
-        indices = indices[np.newaxis,:]
 
     n_samples, n_channels = data.shape
     n_subj = indices.shape[0]
