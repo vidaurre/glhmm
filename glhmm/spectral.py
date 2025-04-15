@@ -175,10 +175,6 @@ def multitaper_spectral_analysis(data, indices, Fs, Gamma=None, options=None):
         - 'psdc' : cross-channel power spectral density, with shape (n_subjects or n_sessions, n_freq, n_channels, n_channels, n_states)
         - 'coh' : channels coherence, with shape (n_subjects or n_sessions, n_freq, n_channels, n_channels, n_states)
 
-    Author: Laura Masaracchia
-    Email: laurama@cfin.au.dk
-    Date: 3/12/2024
-
     """
 
     # --------- basic checks ------------
@@ -559,7 +555,7 @@ def mean_coherence_from_spectra(frequencies, coh, components=None, frequency_ran
         if frequencies is None:
             raise ValueError("Frequency axis 'f' is required for frequency_range.")
         min_freq, max_freq = frequency_range
-        freq_mask = (frequencies >= min_freq) & (f <= max_freq)
+        freq_mask = (frequencies >= min_freq) & (frequencies <= max_freq)
     else:
         freq_mask = slice(None)
 
@@ -625,3 +621,49 @@ def get_frequency_args_range(frequencies, frequency_range):
     if f_max_arg <= f_min_arg:
         raise ValueError("Invalid frequency range.")
     return [f_min_arg, f_max_arg]
+
+
+def get_nnmf_component_intervals(freqs, nnmf_components):
+    """
+    Identify the frequency intervals between adjacent NNMF spectral components
+    based on their first point of intersection.
+
+    Parameters:
+    --------------
+    freqs : numpy.ndarray
+        1D array of shape (n_freqs,) representing frequency values (e.g., in Hz).
+    nnmf_components : numpy.ndarray
+        2D array of shape (n_components, n_freqs) representing the spectral 
+        profiles of each NNMF component.
+
+    Returns:
+    --------------
+    intervals : list of [float, float]
+        List of frequency intervals defined by the first intersection between 
+        each adjacent pair of components. The first interval starts at the lowest 
+        frequency and the last ends at the highest frequency.
+    """
+    n_components = nnmf_components.shape[0]
+    min_freq = freqs[0]
+    max_freq = freqs[-1]
+
+    intervals = []
+    prev_idx = 0
+
+    for i in range(n_components - 1):
+        diff = nnmf_components[i] - nnmf_components[i + 1]
+        cross_idxs = np.flatnonzero(np.diff(np.sign(diff)))
+
+        for idx in cross_idxs:
+            if idx > prev_idx:
+                freq_cross = freqs[idx]
+                break
+        else:
+            raise ValueError(f"No valid intersection found after index {prev_idx} for components {i} and {i + 1}.")
+
+        start_freq = min_freq if i == 0 else freqs[prev_idx]
+        intervals.append([start_freq, freq_cross])
+        prev_idx = idx
+
+    intervals.append([freqs[prev_idx], max_freq])
+    return intervals
