@@ -1,4 +1,4 @@
-# glhmm.auxiliary
+# glhmm.spectral
 
 ```{eval-rst}
 .. automodule:: glhmm.spectral
