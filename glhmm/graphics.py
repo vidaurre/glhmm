@@ -945,15 +945,16 @@ def plot_vpath(viterbi_path, signal=None, idx_data=None, figsize=(7, 4), fontsiz
 
     # Plot signal overlay
     if signal is not None:
-        signal_norm = signal.copy()
-        signal_norm -= np.mean(signal_norm)
-        signal_norm /= np.max(signal_norm)
+        # Normalize the sig_data to the range [0, 1]
+        min_value = np.min(signal)
+        max_value = np.max(signal)
+        normalized_sig_data = ((signal - min_value) / (max_value - min_value))
         if time_conversion_rate is not None:
-            time_seconds = np.arange(len(signal)) / time_conversion_rate
-            axes.plot(time_seconds, signal_norm, color='black', label=signal_label)
+            time_seconds = np.arange(len(normalized_sig_data)) / time_conversion_rate
+            axes.plot(time_seconds, normalized_sig_data, color='black', label=signal_label)
             axes.set_xlabel(xlabel, fontsize=fontsize_labels)
         else:
-            axes.plot(signal_norm, color='black', label=signal_label)
+            axes.plot(normalized_sig_data, color='black', label=signal_label)
 
     # Draw vertical gray lines for T_t intervals
     if idx_data is not None:
