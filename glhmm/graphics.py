@@ -1888,7 +1888,7 @@ def plot_p_values_bar(
         Whether the p-values of each bar should be plotted at the same height or adjusted to the height of each individual bar
     """
     # Validate input and flatten p-values
-    pval = np.squeeze(pval_in).flatten() if pval_in.shape[0]==1 else pval_in.copy()
+    pval = np.squeeze(pval_in).flatten() if pval_in.shape[0]==1 or pval_in.ndim==2 and np.any(np.array(pval_in.shape) == 1) else pval_in.copy()
     if pval.ndim != 1:
         raise ValueError("The input 'pval_in' must be a one-dimensional array.")
 
