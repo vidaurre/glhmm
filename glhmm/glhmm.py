@@ -29,7 +29,6 @@ from . import auxiliary
 from . import io
 from . import utils
 
-
 class glhmm():
     """ Gaussian Linear Hidden Markov Model class to decode stimulus from data.
     
@@ -65,6 +64,10 @@ class glhmm():
     Pistructure : array_like, optional
         Binary vector defining the allowed initial states.
         The default is a (n_states,) vector of all ones, allowing all states to be used as initial states.
+    preproclog : dict, optional
+        Log returned by preprocessing containing information about which preprocessing has been applied. 
+        This is required if you have applied a transformation (PCA/ICA) during preprocessing to backtransform states into original space.
+        Default to None
 
     Notes:
     ------
@@ -82,6 +85,8 @@ class glhmm():
         connectivity=None,
         Pstructure=None,
         Pistructure=None,
+        preproclogX=None,
+        preproclogY=None
     ):
 
         if (connectivity is not None) and not ((covtype == 'shareddiag') or (covtype == 'diag')):
@@ -113,6 +118,8 @@ class glhmm():
         self.Pi = None
         self.active_states = np.ones(K,dtype=bool)
         self.trained = False
+        self.preproclogX = preproclogX
+        self.preproclogY = preproclogY
         
     ## Private methods
 
@@ -170,8 +177,16 @@ class glhmm():
 
             L = xp.asarray(L)
             P = xp.asarray(self.P)
-
-            a,b,sc = auxiliary.compute_alpha_beta_parallel(L,self.Pi,P,indices_individual,gpu_acceleration)
+            # Suppress expected numerical warnings from GLHMM
+            # ------------------------------------------------
+            # GLHMM uses zero-padding to align time series of different lengths for parallel computation.
+            # This can lead to harmless divide-by-zero or overflow warnings during operations on padded timepoints,
+            # which are discarded in the final output. We suppress these specific warnings to avoid cluttering the logs.
+            with warnings.catch_warnings():
+                warnings.filterwarnings("ignore", message=".*invalid value encountered in divide")
+                warnings.filterwarnings("ignore", message=".*overflow encountered in divide")
+                warnings.filterwarnings("ignore", category=RuntimeWarning, message="invalid value encountered in subtract")
+                a,b,sc = auxiliary.compute_alpha_beta_parallel(L,self.Pi,P,indices_individual,gpu_acceleration)
 
             ## convert scale to a vector for output.
             scale = np.zeros(max(ind[:,1]))
@@ -202,13 +217,13 @@ class glhmm():
             if len(has_inf)>0:     
                 Lsub = xp.asarray(L[:,has_inf,:])
                 del L
+                with xp.errstate(divide='ignore', invalid='ignore'):
+                    LL = xp.log(Lsub)
+                    for jj in range(len(has_inf)):
+                        t = xp.all(LL[:,jj,:]<0,axis=1)
+                        LL[t,jj,:] = LL[t,jj,:] -  xp.expand_dims(xp.max(LL[t,jj,:],axis=1), axis=1)
 
-                LL = xp.log(Lsub)
-                for jj in range(len(has_inf)):
-                    t = xp.all(LL[:,jj,:]<0,axis=1)
-                    LL[t,jj,:] = LL[t,jj,:] -  xp.expand_dims(xp.max(LL[t,jj,:],axis=1), axis=1)
-
-                a,b,_ = auxiliary.compute_alpha_beta_parallel(xp.exp(LL),self.Pi,P,indices_individual[has_inf,:],gpu_acceleration)
+                    a,b,_ = auxiliary.compute_alpha_beta_parallel(xp.exp(LL),self.Pi,P,indices_individual[has_inf,:],gpu_acceleration)
                 del LL
 
                 if gpu_acceleration == 2:
@@ -1477,17 +1492,20 @@ class glhmm():
         diagonal_covmat = (self.hyperparameters["covtype"] == 'shareddiag') or \
                         (self.hyperparameters["covtype"] == 'diag')  
 
-        if len(np.zeros(100).shape)==1: # T
+        if len(size.shape)==1: # T
             T = size
             indices = auxiliary.make_indices_from_T(T)
         else: # indices
             indices = size
-            if len(indices.shape) == 1: 
-                indices = np.expand_dims(indices,axis=0)
+            # if len(indices.shape) == 1: 
+            #     indices = np.expand_dims(indices,axis=0)
             T = size[:,1] - size[:,0]
 
         N = indices.shape[0]
-        q = self.Sigma[0]["rate"].shape[0]
+        if self.preproclogY:
+            q = self.preproclogY["p"]
+        else:
+            q = self.Sigma[0]["rate"].shape[0]
         
         if Gamma is None:
             Gamma = self.sample_Gamma(size)
@@ -1495,21 +1513,26 @@ class glhmm():
         rng = np.random.default_rng()
 
         if (self.hyperparameters["model_beta"] != 'no') and (X is None):
-            p = self.beta[0]["Mu"].shape[0]
+            beta = self.get_beta(0)
+            p = beta.shape[0]
             X = np.random.normal(size=(np.sum(T),p))
 
         # Y, mean
         Y = np.zeros((np.sum(T),q))
         if self.hyperparameters["model_mean"] == 'shared':
-            Y += np.expand_dims(self.mean[0]['Mu'],axis=0)
+            mean = self.get_mean(0)
+            Y += np.expand_dims(mean,axis=0)
         if self.hyperparameters["model_beta"] == 'shared':
-            Y += X @ self.beta[0]["Mu"]
+            beta = self.get_beta(0)
+            Y += X @ beta
             
         for k in range(K):
             if self.hyperparameters["model_mean"] == 'state': 
-                Y += np.expand_dims(self.mean[k]["Mu"],axis=0) * np.expand_dims(Gamma[:,k],axis=1)
+                mean = self.get_mean(k)
+                Y += np.expand_dims(mean,axis=0) * np.expand_dims(Gamma[:,k],axis=1)
             if self.hyperparameters["model_beta"] == 'state':
-                Y += (X @ self.beta[k]["Mu"]) * np.expand_dims(Gamma[:,k],axis=1)
+                beta = self.get_beta(k)
+                Y += (X @ beta) * np.expand_dims(Gamma[:,k],axis=1)
 
         # Y, covariance
         if shared_covmat:
@@ -1800,17 +1823,21 @@ class glhmm():
         return fe_terms
         
 
-    def get_covariance_matrix(self,k=0):
+    def get_covariance_matrix(self, k=0, orig_space=True):
         """Returns the covariance matrix for the specified state.
 
         Parameters:
         -----------
         k : int, optional
             The index of the state. Default=0.
+        orig_space : bool, optional
+            If a transformation (PCA/ICA) was applied during preprocessing, 
+            indicate whether covariance matrix should be returned in
+            original space. Default=True.
 
         Returns:
         --------
-        array of shape (n_parcels, n_parcels)
+        array of shape (n_variables_2, n_variables_2)
             The covariance matrix for the specified state.
 
         Raises:
@@ -1822,20 +1849,70 @@ class glhmm():
         if not self.trained: 
             raise Exception("The model has not yet been trained") 
 
-        return self.Sigma[k]["rate"] / self.Sigma[k]["shape"]
+        covmat = self.Sigma[k]["rate"] / self.Sigma[k]["shape"]
+        if self.preproclogY and "pcamodel" in self.preproclogY and orig_space:
+            print('Transforming covariance matrix back into original space')
+            pcamodel = self.preproclogY["pcamodel"]
+            covmat = pcamodel.components_.T@covmat@pcamodel.components_
+        
+        if self.preproclogY and "icamodel" in self.preproclogY and orig_space:
+            print('Transforming covariance matrix back into original space')
+            icamodel = self.preproclogY["icamodel"]
+            covmat = icamodel.components_.T@covmat@icamodel.components_
 
+        return covmat
+    
+    def get_covariance_matrices(self, orig_space=True):
+        """Returns the covariance matrices for all states.
 
-    def get_inverse_covariance_matrix(self,k=0):
+        Parameters:
+        ----------
+        orig_space : bool, optional
+            If a transformation (PCA/ICA) was applied during preprocessing,
+            indicate whether covariance matrices should be returned in original space.
+            Default=True
+
+        Returns:
+        -------
+        covmats : ndarray of shape (n_variables_2, n_variables_2, n_states)
+            The covariance matrices for all states
+
+        Raises:
+        -------
+        Exception
+            If the model has not yet been trained.
+        """
+
+        if not self.trained:
+            raise Exception("The model has not yet been trained")
+        
+        if self.preproclogY and orig_space:
+            q = self.preproclogY["p"]
+        else:
+            q = self.Sigma[0]["rate"].shape[0]
+
+        K = self.hyperparameters["K"]
+        covmats = np.zeros((q,q,K))
+        for k in range(K):
+            covmats[:,:,k] = self.get_covariance_matrix(k=k, orig_space=orig_space)
+
+        return covmats
+
+    def get_inverse_covariance_matrix(self, k=0, orig_space=True):
         """Returns the inverse covariance matrix for the specified state.
         
         Parameters:
         -----------
         k : int, optional
             The index of the state. Default=0.
+        orig_space : bool, optional
+            If a transformation (PCA/ICA) was applied during preprocessing, 
+            indicate whether inverse covariance matrix should be returned in
+            original space. Default=True.
         
         Returns:
         --------
-        array of shape (n_parcels, n_parcels)
+        array of shape (n_variables_2, n_variables_2)
             The inverse covariance matrix for the specified state.
         
         Raises:
@@ -1846,9 +1923,56 @@ class glhmm():
         """
         if not self.trained: 
             raise Exception("The model has not yet been trained") 
+        
+        icovmat = self.Sigma[k]["irate"] * self.Sigma[k]["shape"]
 
-        return self.Sigma[k]["irate"] * self.Sigma[k]["shape"]
-    
+        if self.preproclogY and "pcamodel" in self.preproclogY and orig_space:
+            print('Transforming inverse covariance matrix back into original space')
+            pcamodel = self.preproclogY["pcamodel"]
+            icovmat = pcamodel.components_.T@icovmat@pcamodel.components_
+        
+        if self.preproclogY and "icamodel" in self.preproclogY and orig_space:
+            print('Transforming inverse covariance matrix back into original space')
+            icamodel = self.preproclogY["icamodel"]
+            icovmat = icamodel.components_.T@icovmat@icamodel.components_
+
+        return icovmat
+
+    def get_inverse_covariance_matrices(self, orig_space=True):
+        """Returns the inverse covariance matrices for all states.
+
+        Parameters:
+        ----------
+        orig_space : bool, optional
+            If a transformation (PCA/ICA) was applied during preprocessing,
+            indicate whether inverse covariance matrices should be returned in original space.
+            Default=True
+
+        Returns:
+        -------
+        covmats : ndarray of shape (n_variables_2, n_variables_2, n_states)
+            The covariance matrices for all states
+
+        Raises:
+        -------
+        Exception
+            If the model has not yet been trained.
+        """
+
+        if not self.trained:
+            raise Exception("The model has not yet been trained")
+        
+        if self.preproclogY and orig_space:
+            q = self.preproclogY["p"]
+        else:
+            q = self.Sigma[0]["rate"].shape[0]
+
+        K = self.hyperparameters["K"]
+        icovmats = np.zeros((q,q,K))
+        for k in range(K):
+            icovmats[:,:,k] = self.get_inverse_covariance_matrix(k=k, orig_space=orig_space)
+
+        return icovmats   
 
     def set_covariance_matrix(rate,shape,self,k=0):
         """Sets the covariance matrix to specific values.
@@ -1867,13 +1991,16 @@ class glhmm():
         self.Sigma[k]["shape"] = shape
 
 
-    def get_beta(self,k=0):
+    def get_beta(self, k=0, orig_space=True):
         """Returns the regression coefficients (beta) for the specified state.
 
         Parameters:
         -----------
         k : int, optional, default=0
             The index of the state for which to retrieve the beta value.
+        orig_space : bool, optional
+            If a transformation (PCA/ICA) was applied during preprocessing to either or both inputs,
+            indicate whether beta should be returned in original space. Default=True.
 
         Returns:
         --------
@@ -1892,12 +2019,40 @@ class glhmm():
 
         if self.hyperparameters["model_beta"] == 'no':
             raise Exception("The model has no beta")
+        
+        beta = self.beta[k]["Mu"]
 
-        return self.beta[k]["Mu"]
+        if self.preproclogX and "pcamodel" in self.preproclogX and orig_space:
+            print('Transforming beta back into original X space')
+            pcamodelX = self.preproclogX["pcamodel"]
+            beta = pcamodelX.components_.T@beta
+        
+        if self.preproclogX and "icamodel" in self.preproclogX and orig_space:
+            print('Transforming beta back into original X space')
+            icamodelX = self.preproclogX["icamodel"]
+            beta = icamodelX.components_.T@beta
+
+        if self.preproclogY and "pcamodel" in self.preproclogY and orig_space:
+            print('Transforming beta back into original Y space')
+            pcamodelY = self.preproclogY["pcamodel"]
+            beta = beta@pcamodelY.components_
+
+        if self.preproclogY and "icamodel" in self.preproclogY and orig_space:
+            print('Transforming beta back into original Y space')
+            icamodelY = self.preproclogY["icamodel"]
+            beta = beta@icamodelY.components_
+
+        return beta
    
 
-    def get_betas(self):
+    def get_betas(self, orig_space=True):
         """Returns the regression coefficients (beta) for all states.
+
+        Parameters:
+        ----------
+        orig_space : bool, optional
+            If a transformation (PCA/ICA) was applied during preprocessing to either or both inputs,
+            indicate whether betas should be returned in original space. Default=True.
 
         Returns:
         --------
@@ -1917,10 +2072,21 @@ class glhmm():
         if self.hyperparameters["model_beta"] == 'no':
             raise Exception("The model has no beta")
 
-        (p,q) = self.beta[0]["Mu"].shape
+        if self.preproclogX and orig_space:
+            p = self.preproclogX["p"]
+        else:
+            p = self.beta[0]["Mu"].shape[0]
+
+        if self.preproclogY and orig_space:
+            q = self.preproclogY["p"]
+        else:
+            q = self.beta[0]["Mu"].shape[1]
+        
         K = self.hyperparameters["K"]
         betas = np.zeros((p,q,K))
-        for k in range(K): betas[:,:,k] = self.beta[k]["Mu"]
+        for k in range(K): 
+            betas[:,:,k] = self.get_beta(k=k, orig_space=orig_space)
+
         return betas
 
 
@@ -1939,13 +2105,17 @@ class glhmm():
         self.beta[k]["Mu"] = beta
 
 
-    def get_mean(self,k=0):
+    def get_mean(self, k=0, orig_space=True):
         """Returns the mean for the specified state.
 
         Parameters:
         -----------
         k : int, optional, default=0
             The index of the state for which to retrieve the mean.
+        orig_space : bool, optional
+            If a transformation (PCA/ICA) was applied during preprocessing, 
+            indicate whether mean should be returned in original space. 
+            Default=True.
 
         Returns:
         --------
@@ -1964,12 +2134,31 @@ class glhmm():
 
         if self.hyperparameters["model_mean"] == 'no':
             raise Exception("The model has no mean")
+        
+        mu = self.mean[k]["Mu"]
 
-        return self.mean[k]["Mu"]
+        if self.preproclogY and "pcamodel" in self.preproclogY and orig_space:
+            print('Transforming state mean back into original space')
+            pcamodel = self.preproclogY["pcamodel"]
+            mu = pcamodel.inverse_transform(mu)
+        
+        if self.preproclogY and "icamodel" in self.preproclogY and orig_space:
+            print('Transforming state mean back into original space')
+            icamodel = self.preproclogY["icamodel"]
+            mu = icamodel.inverse_transform(mu)
+
+        return mu
     
 
-    def get_means(self):
+    def get_means(self, orig_space=True):
         """Returns the means for all states.
+
+        Parameters:
+        -----------
+        orig_space : bool, optional
+            If a transformation (PCA/ICA) was applied during preprocessing, 
+            indicate whether mean should be returned in original space. 
+            Default=True.
 
         Returns:
         --------
@@ -1989,14 +2178,15 @@ class glhmm():
         if self.hyperparameters["model_mean"] == 'no':
             raise Exception("The model has no mean")
 
-        if self.hyperparameters["model_beta"] != 'no':
-            q = self.beta[0]["Mu"].shape[1]
+        if self.preproclogY and orig_space:
+            q = self.preproclogY["p"]
         else:
             q = self.Sigma[0]["rate"].shape[0]
 
         K = self.hyperparameters["K"]
         means = np.zeros((q,K))
-        for k in range(K): means[:,k] = self.mean[k]["Mu"]
+        for k in range(K): 
+            means[:,k] = self.get_mean(k=k, orig_space=orig_space)
         return means    
 
 
@@ -2291,10 +2481,12 @@ class glhmm():
             fe_it = np.sum(self.get_fe(X,Y,Gamma,Xi,scale,indices))
             fe = np.append(fe, fe_it) 
 
-            if it > 1:
-                chgFrEn = abs((fe[-1]-fe[-2]) / (fe[-1]-fe[0]))
-                if np.abs(chgFrEn) < options["tol"]: cyc_to_go -= 1
-                else: cyc_to_go = options["cyc_to_go_under_th"]
+            if it > 1 and np.all(np.isfinite([fe[-1], fe[-2], fe[0]])):
+                chgFrEn = abs((fe[-1] - fe[-2]) / (fe[-1] - fe[0]))
+                if np.abs(chgFrEn) < options["tol"]:
+                    cyc_to_go -= 1
+                else:
+                    cyc_to_go = options["cyc_to_go_under_th"]
                 if options["verbose"]: 
                     print("Cycle " + str(it+1) + ", free energy = " + str(fe_it) + \
                         ", relative change = " + str(chgFrEn))
@@ -2302,7 +2494,8 @@ class glhmm():
                     if options["verbose"]: print("Reached early convergence")
                     break
             else:
-                if options["verbose"]: print("Cycle " + str(it+1) + " free energy = " + str(fe_it))
+                if options["verbose"]:
+                    print("Cycle " + str(it+1) + " free energy = " + str(fe_it))
 
             # M-step
             if options["updateDyn"]:

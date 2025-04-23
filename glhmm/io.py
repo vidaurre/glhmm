@@ -400,45 +400,150 @@ def download_file_with_progress_bar(url: str, dest_path: Path):
             file.write(data)
             progress.update(len(data))
 
-def prepare_data_directory(PATH_DATA: Path, zenodo_url: str = "https://zenodo.org/record/14756003/files/data.zip"):
+
+from pathlib import Path
+from zipfile import ZipFile
+
+def prepare_data_directory(procedure=None, url=None):
     """
-    Ensure the data directory is prepared. If the specified directory does not exist, 
-    download and extract the data from Zenodo.
+    Prepare the local 'data/' directory by downloading and extracting data from Zenodo,
+    or from a custom URL if provided.
 
     Parameters
     ----------
-    data_dir : Path
-        Path to the specific data directory (e.g., 'data/Procedure_1').
-    zenodo_url : str, optional, default='https://zenodo.org/record/14756003/files/data.zip'
-        URL of the Zenodo zip file containing the data.
+    procedure : str, optional
+        One of ['procedure_1', 'procedure_2', 'procedure_3', 'procedure_4', 'all'].
+        If None or 'all', downloads 'data.zip'.
+    url : str, optional
+        Advanced use only: provide a custom URL pointing to a .zip file.
+        This overrides the default Zenodo links.
 
     Returns
     -------
     Path
-        Path to the specific data directory where the data is stored.
+        Path to the extracted dataset inside the 'data/' directory.
     """
-    # Check if the specific data directory exists
-    if PATH_DATA.exists():    
-        return PATH_DATA
+    # Create base data directory
+    base_data_dir = Path.cwd() / "data"
+    base_data_dir.mkdir(exist_ok=True)
 
-    # Define the parent directory for downloading and extracting the data
-    PATH_PARENT = PATH_DATA.parent.parent # that is the folder of the working directory
+    # Default filename mapping if no custom URL is given
+    default_zip_map = {
+        'procedure_1': 'Procedure_1_data.zip',
+        'procedure_2': 'Procedure_2_and_3_data.zip',
+        'procedure_3': 'Procedure_2_and_3_data.zip',
+        'procedure_4': 'Procedure_4_data.zip',
+        'all': 'data.zip',
+        None: 'data.zip'
+    }
 
-    # Define the zip file name in the parent directory
-    zip_path = PATH_PARENT / "data.zip"
+    # Determine the zip filename and URL
+    if url is not None:
+        zip_filename = url.split("/")[-1]
+    else:
+        if procedure not in default_zip_map:
+            raise ValueError(f"Invalid procedure: {procedure}. Must be one of {list(default_zip_map.keys())}")
+        zip_filename = default_zip_map[procedure]
+        url = f"https://zenodo.org/record/15213970/files/{zip_filename}"
 
-    # Download the data zip file from Zenodo with a progress bar
-    print(f"Downloading data from {zenodo_url}...")
-    download_file_with_progress_bar(zenodo_url, zip_path)
+    # Paths for zip and extracted data
+    zip_path = base_data_dir / zip_filename
+    expected_folder = zip_filename.replace('_data.zip', '').replace('.zip', '')
+    extracted_path = base_data_dir / expected_folder
 
-    # Extract the zip file
-    print(f"Extracting data to {PATH_PARENT}...")
+    # Skip if data already exists
+    if extracted_path.exists():
+        print(f"Data already exists at: {extracted_path}")
+        return extracted_path
+
+    # Download and extract
+    print(f"Downloading {zip_filename} from {url}...")
+    download_file_with_progress_bar(url, zip_path)
+
+    print(f"Extracting {zip_filename} into {base_data_dir}...")
     with ZipFile(zip_path, 'r') as zip_ref:
-        zip_ref.extractall(PATH_PARENT)
-    print(f"Data extracted successfully.")
+        zip_ref.extractall(base_data_dir)
 
-    # Remove the zip file after extraction
     zip_path.unlink()
-    print(f"Removed temporary zip file: {zip_path}.")
+    print(f"Removed zip file: {zip_path}")
 
-    return PATH_DATA
+    return extracted_path
+
+
+
+
+def resolve_figure_directory(save_figures, filename, default_folder="Figures"):
+    """
+    Resolves the output directory and base filename for figure saving.
+
+    Parameters:
+    ----------------
+    save_figures (bool):
+        Whether figures are to be saved.
+    filename (str or None):
+        Optional filename or path prefix for saved outputs.
+    default_folder (str):
+        Default folder name if no filename is provided.
+
+    Returns:
+    ----------------
+    output_dir (str):
+        Path to the folder where figures will be saved.
+    base_filename (str):
+        Base name used to generate individual filenames.
+    """
+        
+    if not save_figures:
+        return None, None
+
+    if filename:
+        filename = Path(filename)
+        output_dir = filename.parent if filename.parent != Path('.') else Path(default_folder)
+        base_filename = filename.stem
+    else:
+        output_dir = Path(default_folder)
+        base_filename = "figure"
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    return output_dir, base_filename
+
+def generate_filename(base, index, extension):
+    """
+    Generate a sequential filename with a numeric suffix.
+
+    Parameters
+    ----------
+    base (str)
+        Base string for the filename (e.g., "power_map").
+    index : int
+        Index to append to the filename (start from index 0).
+    extension (str)
+        File extension (e.g., 'svg', 'png').
+
+    Returns
+    -------
+    str
+        Constructed filename with numeric suffix and extension.
+    """
+    return f"{base}_{index + 1:02d}.{extension}"
+
+def override_dict_defaults(default_dict, override_dict=None):
+    """
+    Merges a default dictionary with user-specified overrides.
+
+    Parameters:
+    --------------
+    default_dict (dict):
+        Dictionary containing default key-value pairs.
+    override_dict (dict, optional):
+        Dictionary of user-defined key-value pairs that override defaults.
+
+    Returns:
+    --------------
+    dict:
+        Merged dictionary where user-defined keys replace defaults.
+    """
+        
+    if override_dict is None:
+        override_dict = {}
+    return {**default_dict, **override_dict}

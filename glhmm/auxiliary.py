@@ -10,6 +10,7 @@ import sys
 import scipy.special
 import scipy.io
 import math
+import warnings
 
 from numba import njit
 
@@ -17,6 +18,8 @@ try:
     import cupy as cp
 except:
     pass
+
+
 
 
 def slice_matrix(M,indices):
@@ -628,8 +631,8 @@ def padGamma(Gamma, T, options):
         T = np.array(T)  # Convert T to a numpy array if it is a list
 
     K = Gamma.shape[1]  # Number of columns in Gamma
-    #offset = sum(d)  # Calculate the offset based on d
-    offset = len(options['embeddedlags'])-1 # Calculate the offset
+    offset = sum(d)  # Calculate the offset based on d
+    #offset = len(options['embeddedlags'])-1 # Calculate the offset
     N = len(T)  # Number of trials/sessions
     Tshifted = T - offset  # Shift timepoints based on offset
 

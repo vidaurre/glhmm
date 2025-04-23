@@ -9,6 +9,7 @@ Crucially, the toolbox has a focus on finding associations at various levels bet
 
 - Official source code repo: <https://github.com/vidaurre/glhmm>
 - GLHMM documentation: <https://glhmm.readthedocs.io/en/latest/index.html>
+- Paper: <https://direct.mit.edu/imag/article/doi/10.1162/imag_a_00460/127499>
 
 ## Dependencies
 

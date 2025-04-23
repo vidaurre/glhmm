@@ -2,19 +2,38 @@
 # -*- coding: utf-8 -*-
 """
 Basic graphics - Gaussian Linear Hidden Markov Model
-@author: Diego Vidaurre 2023
+@author: Diego Vidaurre & Nick Yao Larsen 2025
 """
+import os
+import math
+import logging
+import warnings
+import itertools
+from pathlib import Path
+
 import numpy as np
-import seaborn as sb
+import pandas as pd
+import nibabel as nib
+from tqdm import trange
+
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mtick
-import pandas as pd
-import math
-from matplotlib import cm, colors
-from matplotlib.colors import LogNorm, LinearSegmentedColormap, to_rgba_array
+from matplotlib import cm, ticker, gridspec
+from matplotlib.colors import LogNorm, Normalize, LinearSegmentedColormap, to_rgba_array
+from matplotlib.cm import ScalarMappable
 from mpl_toolkits.axes_grid1 import make_axes_locatable
+from matplotlib.patches import Patch
+from matplotlib.ticker import FormatStrFormatter, ScalarFormatter
+
+import seaborn as sb
+
+from nilearn import plotting, surface, image
+from nilearn.surface import vol_to_surf
+from nilearn.image import resample_to_img
+from nilearn._utils.niimg_conversions import check_niimg_3d
 
 from . import utils
+from glhmm.io import *
 
 
 
@@ -72,7 +91,7 @@ def show_Gamma(Gamma, line_overlay=None, tlim=None, Hz=1, palette='viridis'):
         entire sequence.
     Hz : int, default=1
         The frequency of the signal, in Hz.
-    palette : str, default = 'Oranges'
+    palette (str), default = 'Oranges'
         The name of the color palette to use.
     """
 
@@ -136,9 +155,9 @@ def show_temporal_statistic(Gamma,indices, statistic='FO',type_plot='barplot'):
         The state timeseries probabilities.
     indices: numpy.ndarray of shape (n_sessions,)
         The session indices to plot.
-    statistic: str, default='FO'
+    statistic(str), default='FO'
         The statistic to compute and plot. Can be 'FO', 'switching_rate' or 'FO_entropy'.
-    type_plot: str, default='barplot'
+    type_plot(str), default='barplot'
         The type of plot to generate. Can be 'barplot', 'boxplot' or 'matrix'.
 
     Raises:
@@ -743,165 +762,6 @@ def plot_p_value_matrix(pval_in, alpha = 0.05, normalize_vals=True, figsize=(9, 
     # Show the plot
     plt.show()
     
-def plot_correlation_matrix(corr_vals, statistical_measures, normalize_vals=False, 
-                            figsize=(9, 5), title_text="Correlation Coefficients Heatmap", fontsize_labels=12, fontsize_title=14,
-                            annot=False, cmap_type='default', cmap_reverse=True, xlabel="", ylabel="", 
-                            xticklabels=None, x_tick_min=None, x_tick_max=None, num_x_ticks=5,
-                            xlabel_rotation=0, none_diagonal = False, num_colors = 256, save_path=None):
-    """
-    Plot a heatmap of correlation coefficients.
-
-    Parameters:
-    -----------
-    corr_vals (numpy.ndarray)
-        Base statistics of correlation coefficients.
-    statistical_measures (dict)
-        Holds information about the different test statistics that have been applied.
-    normalize_vals (bool, optional)
-        If True, the data range will be normalized from 0 to 1 (default is False).
-    figsize (tuple, optional), default=(9, 5):
-        Figure size in inches (width, height).
-    title_text (str, optional), default="Correlation Coefficients Heatmap"
-        Title text for the heatmap.
-    fontsize_labels (int, optional), default=12:
-        Font size for the x and y-axis labels.
-    fontsize_title (int, optional), default=14
-        fontsize of title
-    annot (bool, optional), default=False:
-        If True, annotate each cell with the numeric value.
-    cmap_type (str, optional), default='default':
-        Colormap to use.
-    cmap_reverse (bool, optional), default=True:
-        If True, reverse the colormap.
-    xlabel (str, optional), default='':
-        X-axis label. If not provided, default labels based on the method will be used.
-    ylabel (str, optional), default='':
-        Y-axis label. If not provided, default labels based on the method will be used.
-    xticklabels (List[str], optional), default=None:
-        If not provided, labels will be numbers equal to the shape of corr_vals.shape[1].
-        Else, you can define your own labels, e.g., xticklabels=['sex', 'age'].
-    x_tick_min (float, optional), default=None:
-        Minimum value for the x-tick labels.
-    x_tick_max (float, optional), default=None:
-        Maximum value for the x-tick labels.
-    num_x_ticks (int, optional), default=5:
-        Number of x-ticks.
-    none_diagonal (bool, optional), default=False:
-        If True, turn the diagonal into NaN numbers.
-    num_colors (int, optional), default=256:
-        Number of colors to use in the colormap.
-    save_path (str, optional), default=None
-        If a string is provided, it saves the figure to that specified path
-    """
-    if statistical_measures!={'corr_coef_cols': 'all_columns'}:
-        raise ValueError("Cannot plot the base statistics for the correlation coefficients because different test statistics have been used.")
-    
-    if corr_vals.ndim==0:
-        corr_vals = np.reshape(corr_vals, (1, 1))
-    if xlabel_rotation==45:
-        ha ="right"
-    else:
-        ha = "center"    
-    # Number of x-tick steps
-    steps=len(corr_vals)
-    num_x_ticks = num_x_ticks if num_x_ticks is not None else corr_vals.shape[1] if corr_vals.shape[1]<20 else 5
-
-    fig, axes = plt.subplots(figsize=figsize)
-    if len(corr_vals.shape)==1:
-        corr_vals =np.expand_dims(corr_vals,axis=0)
-
-    if cmap_type=='default':
-        # seismic_cmap = cm.seismic.reversed()
-        coolwarm_cmap = cm.coolwarm.reversed()
-        
-        #seismic_cmap = cm.RdBu.reversed()
-        # Generate an array of values representing the colormap
-        color_array = np.linspace(0, 1, num_colors).reshape(1, -1)
-        cmap_list = coolwarm_cmap(color_array)[0]
-        cmap = colors.ListedColormap(cmap_list)
-    else:
-        # Get the colormap dynamically based on the input string
-        cmap = getattr(cm, cmap_type, None)
-        if cmap_reverse:
-            cmap =cmap.reversed()
-
-    if normalize_vals:
-        # Normalize the data range from -1 to 1
-        norm = plt.Normalize(vmin=-1, vmax=1)
-        heatmap = sb.heatmap(corr_vals, ax=axes, cmap=cmap, annot=annot, fmt=".3f", cbar=False, norm=norm)
-    else:
-        heatmap = sb.heatmap(corr_vals, ax=axes, cmap=cmap, annot=annot, fmt=".3f", cbar=False)
-    # Add labels and title
-    axes.set_xlabel(xlabel, fontsize=fontsize_labels)
-    axes.set_ylabel(ylabel, fontsize=fontsize_labels)
-    axes.set_title(title_text, fontsize=fontsize_title)
-
-    # define x_ticks
-    #x_tick_positions = np.linspace(0, corr_vals.shape[1], num_x_ticks).astype(int)
-    x_tick_positions = np.linspace(0, corr_vals.shape[1]-1, num_x_ticks).astype(int)
-    # Generate x-tick labels based on user input or default to time points
-    if x_tick_min is not None and x_tick_max is not None:
-        x_tick_labels = np.linspace(x_tick_min, x_tick_max, num_x_ticks).round(2)
-        if np.all(x_tick_labels == x_tick_labels.astype(int)):
-            x_tick_labels = x_tick_labels.astype(int)
-    elif x_tick_min is not None:
-        x_tick_labels = np.linspace(x_tick_min, pval.shape[1], num_x_ticks).round(2)
-        if np.all(x_tick_labels == x_tick_labels.astype(int)):
-            x_tick_labels = x_tick_labels.astype(int)
-    elif x_tick_max is not None:
-        x_tick_labels = np.linspace(0, x_tick_max, num_x_ticks).round(2)
-        if np.all(x_tick_labels == x_tick_labels.astype(int)):
-            x_tick_labels = x_tick_labels.astype(int) 
-    else:
-        x_tick_labels = x_tick_positions
-
-    # Set the x-axis ticks
-    if xticklabels is not None:
-        axes.set_xticks(x_tick_positions+0.5)
-        axes.set_xticklabels([xticklabels[i] for i in x_tick_labels] if len(xticklabels) != len(x_tick_labels) else xticklabels,
-        rotation=xlabel_rotation, fontsize=10, ha=ha)
-    elif corr_vals.shape[1]>1:
-        axes.set_xticks(x_tick_positions+0.5)
-        axes.set_xticklabels(x_tick_labels, rotation=xlabel_rotation, fontsize=10, ha=ha)
-    else:
-        axes.set_xticklabels([])
-
-    # Set the y-axis ticks
-    if corr_vals.shape[0]>1:
-        axes.set_yticks(np.linspace(0, corr_vals.shape[0]-1, steps).astype(int)+0.5)
-        axes.set_yticklabels(np.linspace(1, corr_vals.shape[0], steps).astype(int), rotation=xlabel_rotation, fontsize=10, ha=ha)
-    else:
-        axes.set_yticklabels([])
-    # Create an axes on the right side of ax. The width of cax will be 5%
-    # of ax and the padding between cax and ax will be fixed at 0.05 inch.
-    
-    divider = make_axes_locatable(axes)
-    cax = divider.append_axes("right", size="5%", pad=0.01)
-    # Create a custom colorbar
-    colorbar = plt.colorbar(heatmap.get_children()[0], cax=cax)
-    # Set the ticks to range from the bottom to the top of the colorbar
-    # Get the minimum and maximum values from your data
-    # Determine the precision needed to avoid zero for min_value
-    min_digit = 2 - int(np.floor(np.log10(abs(np.nanmin(corr_vals))))) - 1
-    min_val = np.round(np.nanmin(corr_vals), min_digit) # -1 => second digit number beside the first int val 
-    max_digit = 2 - int(np.floor(np.log10(abs(np.nanmax(corr_vals))))) - 1
-    factor_max =10**(max_digit)
-    max_val = np.floor(np.nanmax(corr_vals)*factor_max)/factor_max # -1 => second digit number beside the first int val
-    if normalize_vals:
-        colorbar.set_ticks(np.linspace(-1, 1, 7).round(2))
-    else:
-        # Set ticks with at least 5 values evenly spaced between min and max
-        colorbar.set_ticks(np.linspace(min_val, max_val, 7))
-        precision = np.min([min_digit,max_digit])
-        colorbar.set_ticklabels(np.linspace(min_val, max_val, 7).round(precision))
-        
-
-    # Save the figure if save_path is provided
-    if save_path is not None:
-        plt.savefig(save_path, bbox_inches='tight') 
-    # Show the plot
-    plt.show()
-
   
 def plot_permutation_distribution(base_statistics_perms, title_text="Permutation Distribution",xlabel="Test Statistic Values",ylabel="Density", save_path=None):
     """
@@ -1023,7 +883,7 @@ def plot_scatter_with_labels(p_values, alpha=0.05, title_text="", xlabel=None, y
     plt.show()
 
 def plot_vpath(viterbi_path, signal=None, idx_data=None, figsize=(7, 4), fontsize_labels=13, fontsize_title=16, 
-               yticks=None, time_conversion_rate=None, xlabel="Timepoints", ylabel="", title="Viterbi Path", 
+               yticks=None, time_conversion_rate=None, xlabel="Timepoints", ylabel="", title="Viterbi Path", cmap=None,
                signal_label="Signal", show_legend=True, vertical_linewidth=1.5, save_path=None):
     """
     Plot Viterbi path with optional signal overlay.
@@ -1052,6 +912,8 @@ def plot_vpath(viterbi_path, signal=None, idx_data=None, figsize=(7, 4), fontsiz
         Label for the y-axis. Default is "".
     title (str), optional 
         Title for the plot. Default is "Viterbi Path".
+    cmap (str, optional): 
+        Name of a colormap to use for state line colors (default is 'Set3').
     signal_label (str, optional
         Label for the signal plot. Default is "Signal".
     show_legend (bool), optional
@@ -1063,12 +925,31 @@ def plot_vpath(viterbi_path, signal=None, idx_data=None, figsize=(7, 4), fontsiz
     """
     num_states = viterbi_path.shape[1]
     colors = sb.color_palette("Set3", n_colors=num_states)
-    if num_states > len(colors):
-        extra_colors = sb.color_palette("husl", n_colors=num_states - len(colors))
-        colors.extend(extra_colors)
+
+    # Assign distinct colors for each state
+    if cmap is not None:
+        # Assign distinct colors for each component
+        valid_cmaps = plt.colormaps()
+        if isinstance(cmap, str) and cmap in valid_cmaps:
+            if num_states <= 10:
+                cmap = plt.get_cmap(cmap)
+                colors = [cmap(i) for i in range(num_states)]
+            else: 
+                colors = get_distinct_colors(num_states, cmap)
+        else:
+            warnings.warn(f"Invalid colormap '{cmap}'. Falling back to 'Set3'. "
+                          f"Use one of: {', '.join(valid_cmaps[:5])}... etc.")
+            cmap = plt.get_cmap('Set3')
+            colors = [cmap(i) for i in range(num_states)]
+    elif num_states <= 10:
+        cmap = plt.get_cmap('Set3')
+        colors = [cmap(i) for i in range(num_states)]
+    else:
+        colors = get_distinct_colors(num_states, cmap)
 
     fig, axes = plt.subplots(figsize=figsize)
 
+    
     # Plot Viterbi path
     if time_conversion_rate is not None:
         time_seconds = np.arange(viterbi_path.shape[0]) / time_conversion_rate
@@ -1085,12 +966,16 @@ def plot_vpath(viterbi_path, signal=None, idx_data=None, figsize=(7, 4), fontsiz
 
     # Plot signal overlay
     if signal is not None:
+        # Normalize the sig_data to the range [0, 1]
+        min_value = np.min(signal)
+        max_value = np.max(signal)
+        normalized_sig_data = ((signal - min_value) / (max_value - min_value))
         if time_conversion_rate is not None:
-            time_seconds = np.arange(len(signal)) / time_conversion_rate
-            axes.plot(time_seconds, signal, color='black', label=signal_label)
+            time_seconds = np.arange(len(normalized_sig_data)) / time_conversion_rate
+            axes.plot(time_seconds, normalized_sig_data, color='black', label=signal_label)
             axes.set_xlabel(xlabel, fontsize=fontsize_labels)
         else:
-            axes.plot(signal, color='black', label=signal_label)
+            axes.plot(normalized_sig_data, color='black', label=signal_label)
 
     # Draw vertical gray lines for T_t intervals
     if idx_data is not None:
@@ -1102,9 +987,9 @@ def plot_vpath(viterbi_path, signal=None, idx_data=None, figsize=(7, 4), fontsiz
         axes.legend(title='States', loc='upper left', bbox_to_anchor=(1, 1))
 
     if yticks and signal is not None:
-        scaled_values = [int(val * len(np.unique(signal))) for val in np.unique(signal)]
+        scaled_values = [int(val * len(np.unique(normalized_sig_data))) for val in np.unique(normalized_sig_data)]
         # Set y-ticks with formatted integers
-        axes.set_yticks(np.unique(signal), scaled_values)
+        axes.set_yticks(np.unique(normalized_sig_data), scaled_values)
     else:
         # Remove x-axis tick labels
         axes.set_yticks([])
@@ -1201,7 +1086,7 @@ def plot_average_probability(Gamma_data, title='Average probability for each sta
 
 
 def plot_FO(FO, figsize=(8, 4), fontsize_ticks=12, fontsize_labels=14, fontsize_title=16, width=0.8, xlabel='Subject',
-            ylabel='Fractional occupancy', title='State Fractional Occupancies', 
+            ylabel='Fractional occupancy', title='State Fractional Occupancies', cmap=None,
             show_legend=True, num_x_ticks=11, num_y_ticks=5, pad_y_spine=None, save_path=None):
     """
     Plot fractional occupancies for different states.
@@ -1226,6 +1111,8 @@ def plot_FO(FO, figsize=(8, 4), fontsize_ticks=12, fontsize_labels=14, fontsize_
         Label for the y-axis.
     title (str, optional), default='State Fractional Occupancies':
         Title for the plot.
+    cmap (str, optional): 
+        Name of a colormap to use for state line colors (default is 'Set3').
     show_legend (bool, optional), default=True:
         Whether to show the legend.
     num_x_ticks (int, optional), default=11:
@@ -1241,10 +1128,27 @@ def plot_FO(FO, figsize=(8, 4), fontsize_ticks=12, fontsize_labels=14, fontsize_
     bottom = np.zeros(FO.shape[0])
     sessions = np.arange(1, FO.shape[0] + 1)
     num_states = FO.shape[1]
-    colors = sb.color_palette("Set3", n_colors=num_states)
-    if num_states > len(colors):
-        extra_colors = sb.color_palette("husl", n_colors=num_states - len(colors))
-        colors.extend(extra_colors)
+    
+    # Assign distinct colors for each component
+    if cmap is not None:
+        # Assign distinct colors for each component
+        valid_cmaps = plt.colormaps()
+        if isinstance(cmap, str) and cmap in valid_cmaps:
+            if num_states <= 10:
+                cmap = plt.get_cmap(cmap)
+                colors = [cmap(i) for i in range(num_states)]
+            else: 
+                colors = get_distinct_colors(num_states, cmap)
+        else:
+            warnings.warn(f"Invalid colormap '{cmap}'. Falling back to 'Set3'. "
+                          f"Use one of: {', '.join(valid_cmaps[:5])}... etc.")
+            cmap = plt.get_cmap('Set3')
+            colors = [cmap(i) for i in range(num_states)]
+    elif num_states <= 10:
+        cmap = plt.get_cmap('Set3')
+        colors = [cmap(i) for i in range(num_states)]
+    else:
+        colors = get_distinct_colors(num_states, cmap)
         
     for k in range(num_states):
         axes.bar(sessions, FO[:, k], bottom=bottom, color=colors[k], width=width)
@@ -1287,8 +1191,8 @@ def plot_FO(FO, figsize=(8, 4), fontsize_ticks=12, fontsize_labels=14, fontsize_
     plt.show()
 
 
-def plot_switching_rates(SR, figsize=(8, 4),fontsize_ticks=12, fontsize_labels=14, fontsize_title=16, width=0.18, 
-                         xlabel='Subject', ylabel='Switching Rate', title='State Switching Rates', 
+def plot_switching_rates(SR, figsize=(8, 4), fontsize_ticks=12, fontsize_labels=14, fontsize_title=16, width=0.18, 
+                         xlabel='Subject', ylabel='Switching Rate', title='State Switching Rates',  cmap= None,
                          show_legend=True, num_x_ticks=11, num_y_ticks=5, pad_y_spine=None, save_path=None):
     """
     Plot switching rates for different states.
@@ -1313,6 +1217,8 @@ def plot_switching_rates(SR, figsize=(8, 4),fontsize_ticks=12, fontsize_labels=1
         Label for the y-axesis.
     title (str, optional), default='State Switching Rates':
         Title for the plot.
+    cmap (str, optional): 
+        Name of a colormap to use for state line colors (default is 'Set3').
     show_legend (bool, optional), default=True:
         Whether to show the legend.
     num_x_ticks (int, optional), default=11:
@@ -1324,59 +1230,77 @@ def plot_switching_rates(SR, figsize=(8, 4),fontsize_ticks=12, fontsize_labels=1
     save_path (str, optional), default=None
         If a string is provided, it saves the figure to that specified path
     """
+
     fig, axes = plt.subplots(figsize=figsize, constrained_layout=True)
     multiplier = 0
     sessions = np.arange(1, SR.shape[0] + 1)
     num_states = SR.shape[1]
-    colors = sb.color_palette("Set3", n_colors=num_states)
-    if num_states > len(colors):
-        extra_colors = sb.color_palette("husl", n_colors=num_states - len(colors))
-        colors.extend(extra_colors)
-
+    # Assign distinct colors for each component
+    if cmap is not None:
+        # Assign distinct colors for each component
+        valid_cmaps = plt.colormaps()
+        if isinstance(cmap, str) and cmap in valid_cmaps:
+            if num_states <= 10:
+                cmap = plt.get_cmap(cmap)
+                colors = [cmap(i) for i in range(num_states)]
+            else: 
+                colors = get_distinct_colors(num_states, cmap)
+        else:
+            warnings.warn(f"Invalid colormap '{cmap}'. Falling back to 'Set3'. "
+                          f"Use one of: {', '.join(valid_cmaps[:5])}... etc.")
+            cmap = plt.get_cmap('Set3')
+            colors = [cmap(i) for i in range(num_states)]
+    elif num_states <= 10:
+        cmap = plt.get_cmap('Set3')
+        colors = [cmap(i) for i in range(num_states)]
+    else:
+        colors = get_distinct_colors(num_states, cmap)
     for k in range(num_states):
         offset = width * multiplier
-        rects = axes.bar(sessions + offset, SR[:, k], width, color=colors[k])
+        axes.bar(sessions + offset, SR[:, k], width, color=colors[k])
         multiplier += 1
-    
-    axes.set_xticks(sessions)
+
     axes.set_xlabel(xlabel, fontsize=fontsize_labels)
     axes.set_ylabel(ylabel, fontsize=fontsize_labels)
     axes.set_title(title, fontsize=fontsize_title)
-    
-    ticks = np.linspace(1, SR.shape[0], SR.shape[0]).astype(int)
-    # If there are more than 11 states then reduce the number of ticks
-    if len(ticks) > 11:
-        n_ticks = num_x_ticks
+
+    # Adapt x ticks
+    if SR.shape[0] > num_x_ticks:
+        xticks = np.linspace(1, SR.shape[0], num_x_ticks).astype(int)
     else:
-        n_ticks = len(ticks)
-    axes.set_xticks(np.linspace(1, SR.shape[0], n_ticks).astype(int))
-    axes.set_yticks(np.linspace(0, 1, num_y_ticks))
+        xticks = sessions
+    axes.set_xticks(xticks)
 
-    # Adjust tick label font size
-    axes.tick_params(axis='x', labelsize=fontsize_ticks)
-    axes.tick_params(axis='y', labelsize=fontsize_ticks)
+    # # Adapt y ticks
+    # min_y, max_y = np.min(SR), np.max(SR)
+    # axes.set_yticks(np.linspace(min_y, max_y, num_y_ticks))
 
-    # Remove the frame around the plot
+    min_y, max_y = np.min(SR), np.max(SR)
+    axes.set_yticks(np.linspace(min_y, max_y, num_y_ticks))
+    axes.yaxis.set_major_formatter(ScalarFormatter(useMathText=True))
+    axes.ticklabel_format(style='sci', axis='y', scilimits=(-3, 3))
+
+    axes.tick_params(axis='both', labelsize=fontsize_ticks)
+
     axes.spines['top'].set_visible(False)
     axes.spines['right'].set_visible(False)
     axes.spines['bottom'].set_visible(False)
     axes.spines['left'].set_visible(False)
-    if pad_y_spine is None:
-        pad_y_spine = -figsize[0]*2.2
-    axes.spines['left'].set_position(('outward', pad_y_spine))  # Adjust the outward position of the left spine
 
-    # Adjust tick label font size
-    axes.tick_params(axis='both', labelsize=fontsize_labels)
+    if pad_y_spine is None:
+        pad_y_spine = -figsize[0] * 2.2
+    axes.spines['left'].set_position(('outward', pad_y_spine))
 
     if show_legend:
         axes.legend(['State {}'.format(i+1) for i in range(num_states)], fontsize=fontsize_labels, loc='upper left', bbox_to_anchor=(1, 1))
-    # Save the figure if save_path is provided
+
     if save_path is not None:
         plt.savefig(save_path, bbox_inches='tight') 
     plt.show()
 
+
 def plot_state_lifetimes(LT, figsize=(8, 4), fontsize_ticks=12, fontsize_labels=14, fontsize_title=16, width=0.18, 
-                         xlabel='Subject', ylabel='Lifetime', title='State Lifetimes', 
+                         xlabel='Subject', ylabel='Lifetime', title='State Lifetimes', cmap= None,
                          show_legend=True, num_x_ticks=11, num_y_ticks=5, pad_y_spine=None, save_path=None):
     """
     Plot state lifetimes for different states.
@@ -1401,6 +1325,8 @@ def plot_state_lifetimes(LT, figsize=(8, 4), fontsize_ticks=12, fontsize_labels=
         Label for the y-axesis.
     title (str, optional), default='State Lifetimes':
         Title for the plot.
+    cmap (str, optional): 
+        Name of a colormap to use for state line colors (default is 'Set3').
     show_legend (bool, optional), default=True:
         Whether to show the legend.
     num_x_ticks (int, optional), default=11:
@@ -1412,60 +1338,72 @@ def plot_state_lifetimes(LT, figsize=(8, 4), fontsize_ticks=12, fontsize_labels=
     save_path (str, optional), default=None
         If a string is provided, it saves the figure to that specified path
     """
+
     fig, axes = plt.subplots(figsize=figsize, constrained_layout=True)
     multiplier = 0
     sessions = np.arange(1, LT.shape[0] + 1)
     num_states = LT.shape[1]
-    colors = sb.color_palette("Set3", n_colors=num_states)
-    if num_states > len(colors):
-        extra_colors = sb.color_palette("husl", n_colors=num_states - len(colors))
-        colors.extend(extra_colors)
+
+    # Assign distinct colors for each component
+    if cmap is not None:
+        # Assign distinct colors for each component
+        valid_cmaps = plt.colormaps()
+        if isinstance(cmap, str) and cmap in valid_cmaps:
+            if num_states <= 10:
+                cmap = plt.get_cmap(cmap)
+                colors = [cmap(i) for i in range(num_states)]
+            else: 
+                colors = get_distinct_colors(num_states, cmap)
+        else:
+            warnings.warn(f"Invalid colormap '{cmap}'. Falling back to 'Set3'. "
+                          f"Use one of: {', '.join(valid_cmaps[:5])}... etc.")
+            cmap = plt.get_cmap('Set3')
+            colors = [cmap(i) for i in range(num_states)]
+    elif num_states <= 10:
+        cmap = plt.get_cmap('Set3')
+        colors = [cmap(i) for i in range(num_states)]
+    else:
+        colors = get_distinct_colors(num_states, cmap)
 
     for k in range(num_states):
         offset = width * multiplier
-        rects = axes.bar(sessions + offset, LT[:, k], width, color=colors[k])
+        axes.bar(sessions + offset, LT[:, k], width, color=colors[k])
         multiplier += 1
-    
-    axes.set_xticks(sessions, sessions)
+
     axes.set_xlabel(xlabel, fontsize=fontsize_labels)
     axes.set_ylabel(ylabel, fontsize=fontsize_labels)
     axes.set_title(title, fontsize=fontsize_title)
-    
-    ticks = np.linspace(1, LT.shape[0], LT.shape[0]).astype(int)
-    # If there are more than 11 states then reduce the number of ticks
-    if len(ticks) > 11:
-        n_ticks = num_x_ticks
+
+    # Adapt x ticks
+    if LT.shape[0] > num_x_ticks:
+        xticks = np.linspace(1, LT.shape[0], num_x_ticks).astype(int)
     else:
-        n_ticks = len(ticks)
-    axes.set_xticks(np.linspace(1, LT.shape[0], n_ticks).astype(int))
-    axes.set_yticks(np.linspace(0, 1, num_y_ticks))
+        xticks = sessions
+    axes.set_xticks(xticks)
 
+    # Adapt y ticks
+    min_y, max_y = np.min(LT), np.max(LT)
+    axes.set_yticks(np.linspace(min_y, max_y, num_y_ticks))
 
-    # Adjust tick label font size
-    axes.tick_params(axis='x', labelsize=fontsize_ticks)
-    axes.tick_params(axis='y', labelsize=fontsize_ticks)
+    axes.tick_params(axis='both', labelsize=fontsize_ticks)
 
-    # Remove the frame around the plot
     axes.spines['top'].set_visible(False)
     axes.spines['right'].set_visible(False)
     axes.spines['bottom'].set_visible(False)
     axes.spines['left'].set_visible(False)
-    if pad_y_spine is None:
-        pad_y_spine = -figsize[0]*2.2
-    axes.spines['left'].set_position(('outward', pad_y_spine))  # Adjust the outward position of the left spine
 
-    # Adjust tick label font size
-    axes.tick_params(axis='both', labelsize=fontsize_labels)
+    if pad_y_spine is None:
+        pad_y_spine = -figsize[0] * 2.2
+    axes.spines['left'].set_position(('outward', pad_y_spine))
 
     if show_legend:
         axes.legend(['State {}'.format(i+1) for i in range(num_states)], fontsize=fontsize_labels, loc='upper left', bbox_to_anchor=(1, 1))
 
-    # Save the figure if save_path is provided
     if save_path is not None:
         plt.savefig(save_path, bbox_inches='tight') 
     plt.show()
 
-def plot_state_prob_and_covariance(init_stateP, TP, state_means, state_FC, cmap='viridis', figsize=(9, 7), num_ticks=5, save_path=None):
+def plot_state_prob_and_covariance(init_stateP, TP, state_means, state_FC, cmap='coolwarm', figsize=(9, 7), num_ticks=5, save_path=None):
     """
     Plot HMM parameters.
 
@@ -1479,8 +1417,8 @@ def plot_state_prob_and_covariance(init_stateP, TP, state_means, state_FC, cmap=
         State means.
     state_FC : array-like
         State covariances.
-    cmap : str or Colormap, optional
-        The colormap to be used for plotting. Default is 'viridis'.
+    cmap (str) or Colormap, optional
+        The colormap to be used for plotting. Default is 'coolwarm'.
     figsize (tuple), optional
         Figure size. Default is (9, 7).
     num_ticks (int), optional 
@@ -1950,11 +1888,20 @@ def plot_p_values_bar(
         Whether the p-values of each bar should be plotted at the same height or adjusted to the height of each individual bar
     """
     # Validate input and flatten p-values
-    pval = np.squeeze(pval_in).flatten() if pval_in.shape[-1]==1 else pval_in.copy()
+    pval = np.squeeze(pval_in).flatten() if pval_in.shape[0]==1 or pval_in.ndim==2 and np.any(np.array(pval_in.shape) == 1) else pval_in.copy()
     if pval.ndim != 1:
         raise ValueError("The input 'pval_in' must be a one-dimensional array.")
 
-    # Ensure xticklabels is set
+
+    # Validate xticklabels
+    if xticklabels is not None:
+        if not isinstance(xticklabels, list):
+            warnings.warn(f"xticklabels must be a list, but got {type(xticklabels)}. Using default labels instead.")
+            xticklabels = None
+        elif len(xticklabels) != len(pval):
+            raise ValueError(f"xticklabels length ({len(xticklabels)}) does not match pval length ({len(pval)}).")
+
+    # Set default labels if needed
     if xticklabels is None or len(xticklabels) == 0:
         xticklabels = [f"Var {i + 1}" for i in range(len(pval))]
 
@@ -2154,7 +2101,1080 @@ def plot_data_grid(data_list, titles=None, figsize_per_plot=(4, 3),
 
     # Save if save_path is provided
     if save_path:
-        plt.savefig(save_path, bbox_inches='tight', dpi=300)
+        plt.savefig(save_path, bbox_inches='tight')
 
     # Show the figure
     plt.show()
+
+
+def get_distinct_colors(n_colors, cmap=None):
+    """
+    Generate visually distinct colors using a combination of built-in categorical 
+    and perceptually uniform colormaps.
+
+    Parameters:
+    --------------
+    n_colors (int): 
+        The number of distinct colors to generate.
+    cmap (str, optional): 
+        Name of a colormap to use as the primary source of colors. If not provided, 
+        defaults to a combination of standard categorical colormaps. If the requested 
+        number of colors exceeds what is available, additional colors are sampled 
+        from other colormaps to fill the gap.
+
+    Returns:
+    --------------
+    colors (list): 
+        A list of RGBA tuples representing distinct colors. If the number of 
+        requested colors exceeds what is available from standard categorical maps, 
+        additional colors are sampled from a continuous colormap.
+    """
+    base_maps = ['Set3', 'tab10', 'Accent', 'Dark2']
+    # Remove user-specified cmap if it's in base_maps to avoid duplication
+    if cmap in base_maps:
+        base_maps.remove(cmap)
+        base_maps.insert(0,cmap)
+    elif cmap is not None:
+        base_maps.insert(0,cmap)
+    colors = []
+
+    for cmap_name in base_maps:
+        cmap = cm.get_cmap(cmap_name)
+        cmap_colors = [cmap(i) for i in range(cmap.N)]
+        colors.extend(cmap_colors)
+
+        if len(colors) >= n_colors:
+            break
+
+    if len(colors) < n_colors:
+        # Fill remaining with perceptually uniform colors
+        extra_needed = n_colors - len(colors)
+        viridis = cm.get_cmap('gist_rainbow')
+        colors.extend([viridis(i / extra_needed) for i in range(extra_needed)])
+
+    return colors[:n_colors]
+
+def plot_nnm_spectral_components(nnmf_components, freqs, x_lim=None, highlight_freq=True, 
+                                 title='Spectral Components from NNMF Decomposition', cmap=None, bands=None, band_colors=None, 
+                                 figsize=(10, 5), fontsize_labels=13, fontsize_title=16, band_legend_anchor=(1.28, 1), save_path=None):
+    """
+    Plot the spectral components obtained from NNM decomposition with optional
+    frequency band highlighting.
+
+    Parameters:
+    --------------
+    nnmf_components (numpy.ndarray): 
+        Array of shape (n_components, n_freqs) representing the decomposed 
+        spectral components for each component.
+    freqs (numpy.ndarray): 
+        1D array representing the frequency axis, should match the second 
+        dimension of `nnmf_components`.
+    x_lim (int, optional): 
+        The upper limit of the frequency axis (x-axis). If None, it will default 
+        to the maximum value in `freqs`.
+    highlight_freq (bool, optional): 
+        Whether to highlight canonical or custom frequency bands, default is True.
+    title (str, optional): 
+        Title of the plot. Default is "Spectral Components from NNMF Decomposition".
+    cmap (str, optional): 
+        Name of a colormap to use for state line colors (default is 'Set3').
+    bands (dict, optional): 
+        Dictionary defining frequency bands. Keys are band names and values 
+        are (start, end) tuples in Hz. If None, default bands will be used.
+    band_colors (dict, optional): 
+        Dictionary mapping band names to color names. Keys must match those in `bands`.
+    figsize (tuple, optional): 
+        Tuple defining figure size in inches, default is (10, 5).
+    band_legend_anchor (tuple or None, optional): 
+        Tuple for `bbox_to_anchor` to control frequency band legend placement. 
+        Default is (1.28, 1). If set to None, legend is placed at 'lower right'.
+    save_path (str), optional, default=None
+        If a string is provided, it saves the figure to that specified path
+
+    """
+    if x_lim is None:
+        x_lim = int(np.max(freqs))
+
+    # Default frequency bands and colors
+    default_bands = {
+        'Delta': (0, 4), 'Theta': (4, 8), 'Alpha': (8, 13),
+        'Beta': (13, 30), 'Gamma': (30, x_lim)
+    }
+    default_band_colors = {
+        'Delta': 'orange', 'Theta': 'cyan', 'Alpha': 'magenta',
+        'Beta': 'black', 'Gamma': 'green'
+    }
+
+    # Use provided or default bands/colors
+    bands = bands if bands is not None else default_bands
+    band_colors = band_colors if band_colors is not None else default_band_colors
+
+    # Validate consistency
+    if set(bands.keys()) != set(band_colors.keys()):
+        raise ValueError("The keys of 'bands' and 'band_colors' must match exactly.")
+
+    n_components = nnmf_components.shape[0]
+
+    # Assign distinct colors for each component
+    if cmap is not None:
+        # Assign distinct colors for each component
+        valid_cmaps = plt.colormaps()
+        if isinstance(cmap, str) and cmap in valid_cmaps:
+            cmap = plt.get_cmap(cmap)
+            component_colors = [cmap(i) for i in range(n_components)]
+        else:
+            warnings.warn(f"Invalid colormap '{cmap}'. Falling back to 'Set3'. "
+                          f"Use one of: {', '.join(valid_cmaps[:5])}... etc.")
+            cmap = plt.get_cmap('Set3')
+            component_colors = [cmap(i) for i in range(n_components)]
+    elif n_components <= 10:
+        cmap = plt.get_cmap('Set3')
+        component_colors = [cmap(i) for i in range(n_components)]
+    else:
+        component_colors = get_distinct_colors(n_components, cmap)
+
+    fig, ax = plt.subplots(figsize=figsize)
+
+    # Plot each component
+    for i in range(n_components):
+        ax.plot(
+            freqs, nnmf_components[i],
+            label=f'Component {i + 1}',
+            linewidth=2.5,
+            alpha=1,
+            color=component_colors[i],
+        )
+
+    # Highlight frequency bands
+    if highlight_freq:
+        for band, (start, end) in bands.items():
+            ax.axvspan(start, end, color=band_colors[band], alpha=0.2)
+
+    ax.set_xlabel('Frequency (Hz)', fontsize = fontsize_labels)
+    ax.set_ylabel('Component Weight', fontsize = fontsize_labels)
+    ax.set_title(title, fontsize = fontsize_title)
+    ax.set_xlim(0, x_lim)
+
+    # Legend for components
+    state_legend = ax.legend(loc='upper right', title='NNMF Components')
+
+    # Optional frequency band legend
+    if highlight_freq:
+        band_handles = [
+            Patch(facecolor=band_colors[band], edgecolor='none', alpha=0.5,
+                label=f'{band}: {start}-{end} Hz')
+            for band, (start, end) in bands.items()
+        ]
+
+        if band_legend_anchor is not None:
+            band_legend = ax.legend(
+                handles=band_handles,
+                loc='upper right',
+                bbox_to_anchor=band_legend_anchor,
+                title='Frequency Bands'
+            )
+        else:
+            band_legend = ax.legend(
+                handles=band_handles,
+                loc='lower right',
+                title='Frequency Bands'
+            )
+
+        ax.add_artist(state_legend)
+
+    plt.tight_layout()
+    # Save the figure if save_path is provided
+    if save_path is not None:
+        plt.savefig(save_path, bbox_inches='tight') 
+
+    plt.show()
+
+def plot_state_psd(psd, freqs, significant_states=None, x_lim=None, cmap=None, highlight_freq=False, bands=None,
+    band_colors=None, title='Power Spectral Density (PSD) per State', figsize=(10, 5), 
+    fontsize_labels=13, fontsize_title=16, band_legend_anchor=(1.28, 1), label_line=None, save_path=None):
+    """
+    Plot the power spectral density (PSD) for each state, with optional 
+    highlighting of frequency bands and significant states.
+
+    Parameters:
+    --------------
+    psd (numpy.ndarray): 
+        Array of shape (n_freqs, num_states) representing the PSD of each state.
+    freqs (numpy.ndarray): 
+        1D array representing the frequency axis, should match the second 
+        dimension of `psd`.
+    significant_states (set, optional): 
+        Set of 1-based indices indicating which states are considered significant. 
+        Significant states are highlighted with a solid line and an asterisk.
+    x_lim (int, optional): 
+        The upper limit of the frequency axis (x-axis). If None, it will default 
+        to the maximum value in `freqs`.
+    cmap (str, optional): 
+        Name of a colormap to use for state line colors (default is 'Set3').
+    highlight_freq (bool, optional): 
+        Whether to highlight canonical or custom frequency bands. Default is True.
+    bands (dict, optional): 
+        Dictionary defining frequency bands. Keys are band names and values are 
+        (start, end) tuples in Hz. If None, default bands will be used.
+    band_colors (dict, optional): 
+        Dictionary mapping band names to color names. Keys must match those in `bands`.
+    title (str, optional): 
+        Title of the plot. Default is "Power Spectral Density (PSD) per State".
+    figsize (tuple, optional): 
+        Tuple defining figure size in inches. Default is (10, 5).
+    fontsize_labels (int): 
+        Font size for x and y axis labels. Default is 13.
+    fontsize_title (int): 
+        Font size for the plot title. Default is 16.
+    band_legend_anchor (tuple or None, optional): 
+        Tuple for `bbox_to_anchor` to control frequency band legend placement. 
+        Default is (1.28, 1). If set to None, legend is placed at 'upper right'.
+    label_line (str or list, optional): 
+        Custom labels for each line. Can be a string (prefix) or a list of names. 
+        If not provided, states are labeled as "State 1", "State 2", etc.
+    save_path (str, optional, default=None): 
+        If a string is provided, the figure will be saved to the specified path.
+
+    """
+
+    if significant_states is None:
+        significant_states = set()
+
+    if x_lim is None:
+        x_lim = int(np.max(freqs))
+
+    if np.iscomplexobj(psd):
+        print("Warning: PSD contains complex values — imaginary parts will be discarded.")
+        psd = np.real(psd)
+
+    default_bands = {
+        'Delta': (0, 4), 'Theta': (4, 8), 'Alpha': (8, 13),
+        'Beta': (13, 30), 'Gamma': (30, x_lim)
+    }
+    default_band_colors = {
+        'Delta': 'orange', 'Theta': 'cyan', 'Alpha': 'magenta',
+        'Beta': 'black', 'Gamma': 'green'
+    }
+    bands = bands if bands is not None else default_bands
+    band_colors = band_colors if band_colors is not None else default_band_colors
+
+    if set(bands.keys()) != set(band_colors.keys()):
+        raise ValueError("The keys of 'bands' and 'band_colors' must match exactly.")
+
+    num_states = psd.shape[1] if psd.ndim == 2 else 1
+    psd = psd[:, np.newaxis] if psd.ndim==1 else psd
+
+    if isinstance(label_line, list):
+        if len(label_line) != num_states:
+            raise ValueError("Length of 'label_line' list must match number of lines to plot.")
+        line_labels = label_line
+    elif isinstance(label_line, str):
+        line_labels = [f"{label_line} {i+1}" if num_states > 1 else label_line for i in range(num_states)]
+    else:
+        line_labels = [f"State {i+1}" if num_states > 1 else "State" for i in range(num_states)]
+
+    # Assign distinct colors for each component
+    if cmap is not None:
+        # Assign distinct colors for each component
+        valid_cmaps = plt.colormaps()
+        if isinstance(cmap, str) and cmap in valid_cmaps:
+            if num_states <= 10:
+                cmap = plt.get_cmap(cmap)
+                component_colors = [cmap(i) for i in range(num_states)]
+            else: 
+                component_colors = get_distinct_colors(num_states, cmap)
+        else:
+            warnings.warn(f"Invalid colormap '{cmap}'. Falling back to 'Set3'. "
+                          f"Use one of: {', '.join(valid_cmaps[:5])}... etc.")
+            cmap = plt.get_cmap('Set3')
+            component_colors = [cmap(i) for i in range(num_states)]
+    elif num_states ==1:
+        cmap = plt.get_cmap('tab10')
+        component_colors = [cmap(i) for i in range(num_states)]
+    elif num_states <= 10:
+        cmap = plt.get_cmap('Set3')
+        component_colors = [cmap(i) for i in range(num_states)]
+    else:
+        component_colors = get_distinct_colors(num_states, cmap)
+
+    fig, ax = plt.subplots(figsize=figsize)
+
+    for state in range(num_states):
+        state_num = state + 1
+        color = component_colors[state]
+        label = line_labels[state]
+        y_vals = psd[:, state]
+
+        if state_num in significant_states:
+            ax.plot(freqs, y_vals, label=f"{label} *", linewidth=2.5, linestyle='-', alpha=1.0, color=color, zorder=3)
+        elif significant_states == set():
+            ax.plot(freqs, y_vals, label=label, linewidth=2.5, linestyle='-', alpha=1.0, color=color, zorder=2)
+        else:
+            ax.plot(freqs, y_vals, label=label, linewidth=1.5, linestyle='--', alpha=0.8, color=color, zorder=2)
+
+    for state in significant_states:
+        max_abs_val = psd[np.abs(psd[state - 1]).argmax()][state - 1]
+        ax.text(x_lim - 15, max_abs_val, f"{line_labels[state - 1]} *", fontsize=12, fontweight='bold')
+
+    if highlight_freq:
+        for band, (start, end) in bands.items():
+            ax.axvspan(start, end, color=band_colors[band], alpha=0.2)
+
+    ax.set_xlabel('Frequency (Hz)', fontsize=fontsize_labels)
+    ax.set_ylabel('Power', fontsize=fontsize_labels)
+    ax.set_title(title, fontsize=fontsize_title)
+    ax.set_xlim(0, x_lim)
+
+    if label_line is None:
+        legend_title = 'States'
+    elif isinstance(label_line, str):
+        legend_title = label_line if num_states > 1 else ''  # use 'label_line' as title if multiple lines
+    elif isinstance(label_line, list):
+        legend_title = 'Lines'
+    else:
+        legend_title = ''
+
+    state_legend = ax.legend(loc='upper right', title=legend_title)
+
+    if highlight_freq:
+        band_handles = [
+            Patch(facecolor=band_colors[band], edgecolor='none', alpha=0.5,
+                label=f'{band}: {start}-{end} Hz')
+            for band, (start, end) in bands.items()
+        ]
+        band_legend = ax.legend(
+            handles=band_handles,
+            loc='upper right' if band_legend_anchor is None else 'upper right',
+            bbox_to_anchor=band_legend_anchor if band_legend_anchor else None,
+            title='Frequency Bands'
+        )
+        ax.add_artist(state_legend)
+
+    plt.tight_layout()
+    # Save the figure if save_path is provided
+    if save_path is not None:
+        plt.savefig(save_path, bbox_inches='tight') 
+    plt.show()
+
+
+def plot_state_coherence(coh, freqs, significant_states=None, x_lim=None, cmap=None,
+                                highlight_freq=False, bands=None, band_colors=None, 
+                                title='State Coherence between Two Channels', figsize=(10, 5), 
+                                fontsize_labels=13, fontsize_title=16, 
+                                band_legend_anchor=(1.28, 1), label_line=None, save_path=None):
+    """
+    Plot the coherence between two channels for each state, with optional 
+    highlighting of frequency bands and significant states.
+
+    Parameters:
+    --------------
+    coh (numpy.ndarray): 
+        Array of shape (n_freqs, num_states) representing the coherence between 
+        two selected channels for each state.
+    freqs (numpy.ndarray): 
+        1D array representing the frequency axis, should match the first 
+        dimension of `coh`.
+    significant_states (set, optional): 
+        Set of 1-based indices indicating which states are considered significant. 
+        Significant states are highlighted with a solid line and an asterisk.
+    x_lim (int, optional): 
+        The upper limit of the frequency axis (x-axis). If None, it will default 
+        to the maximum value in `freqs`.
+    cmap (str, optional): 
+        Name of a colormap to use for state line colors (default is 'Set3').
+    highlight_freq (bool, optional): 
+        Whether to highlight canonical or custom frequency bands. Default is False.
+    bands (dict, optional): 
+        Dictionary defining frequency bands. Keys are band names and values are 
+        (start, end) tuples in Hz. If None, default bands will be used.
+    band_colors (dict, optional): 
+        Dictionary mapping band names to color names. Keys must match those in `bands`.
+    title (str, optional): 
+        Title of the plot. Default is "State Coherence between Two Channels".
+    figsize (tuple, optional): 
+        Tuple defining figure size in inches. Default is (10, 5).
+    fontsize_labels (int): 
+        Font size for x and y axis labels. Default is 13.
+    fontsize_title (int): 
+        Font size for the plot title. Default is 16.
+    band_legend_anchor (tuple or None, optional): 
+        Tuple for `bbox_to_anchor` to control frequency band legend placement. 
+        Default is (1.28, 1). If set to None, legend is placed at 'upper right'.
+    label_line (str or list, optional): 
+        Custom labels for each line. Can be a string (prefix) or a list of names. 
+        If not provided, states are labeled as "State 1", "State 2", etc.
+    save_path (str, optional, default=None): 
+        If a string is provided, the figure will be saved to the specified path.
+    """
+    if significant_states is None:
+        significant_states = set()
+
+    if x_lim is None:
+        x_lim = int(np.max(freqs))
+
+    coh = np.real(coh)
+    n_freqs, num_states = coh.shape
+
+    # Labels
+    if isinstance(label_line, list):
+        if len(label_line) != num_states:
+            raise ValueError("Length of 'label_line' must match number of states.")
+        line_labels = label_line
+    elif isinstance(label_line, str):
+        line_labels = [f"{label_line} {i+1}" for i in range(num_states)]
+    else:
+        line_labels = [f"State {i+1}" for i in range(num_states)]
+
+    # Bands and colors
+    default_bands = {
+        'Delta': (0, 4), 'Theta': (4, 8), 'Alpha': (8, 13),
+        'Beta': (13, 30), 'Gamma': (30, x_lim)
+    }
+    default_band_colors = {
+        'Delta': 'orange', 'Theta': 'cyan', 'Alpha': 'magenta',
+        'Beta': 'black', 'Gamma': 'green'
+    }
+    bands = bands if bands is not None else default_bands
+    band_colors = band_colors if band_colors is not None else default_band_colors
+
+    if set(bands.keys()) != set(band_colors.keys()):
+        raise ValueError("Keys of bands and band_colors must match.")
+
+    # Assign distinct colors for each component
+    if cmap is not None:
+        # Assign distinct colors for each component
+        valid_cmaps = plt.colormaps()
+        if isinstance(cmap, str) and cmap in valid_cmaps:
+            if num_states <= 10:
+                cmap = plt.get_cmap(cmap)
+                component_colors = [cmap(i) for i in range(num_states)]
+            else: 
+                component_colors = get_distinct_colors(num_states, cmap)
+        else:
+            warnings.warn(f"Invalid colormap '{cmap}'. Falling back to 'Set3'. "
+                          f"Use one of: {', '.join(valid_cmaps[:5])}... etc.")
+            cmap = plt.get_cmap('Set3')
+            component_colors = [cmap(i) for i in range(num_states)]
+    elif num_states <= 10:
+        cmap = plt.get_cmap('Set3')
+        component_colors = [cmap(i) for i in range(num_states)]
+    else:
+        component_colors = get_distinct_colors(num_states, cmap)
+
+
+    fig, ax = plt.subplots(figsize=figsize)
+
+    for state in range(num_states):
+        state_idx = state + 1
+        label = line_labels[state]
+        color = component_colors[state]
+        y_vals = coh[:, state]
+
+        if state_idx in significant_states:
+            ax.plot(freqs, y_vals, label=f"{label} *", linewidth=2.5, linestyle='-', alpha=1.0, color=color)
+        elif significant_states == set():
+            ax.plot(freqs, y_vals, label=label, linewidth=2.5, linestyle='-', alpha=1.0, color=color)
+        else:
+            ax.plot(freqs, y_vals, label=label, linewidth=1.5, linestyle='--', alpha=0.8, color=color)
+
+    # Highlight frequency bands
+    if highlight_freq:
+        for band, (start, end) in bands.items():
+            ax.axvspan(start, end, color=band_colors[band], alpha=0.2)
+
+    ax.set_xlabel('Frequency (Hz)', fontsize=fontsize_labels)
+    ax.set_ylabel('Coherence', fontsize=fontsize_labels)
+    ax.set_title(title, fontsize=fontsize_title)
+    ax.set_xlim(0, x_lim)
+
+    # Legends
+    state_legend = ax.legend(loc='upper right', title='States')
+
+    if highlight_freq:
+        band_handles = [
+            Patch(facecolor=band_colors[band], edgecolor='none', alpha=0.5,
+                  label=f'{band}: {start}-{end} Hz')
+            for band, (start, end) in bands.items()
+        ]
+        band_legend = ax.legend(
+            handles=band_handles,
+            loc='upper right' if band_legend_anchor is None else 'upper right',
+            bbox_to_anchor=band_legend_anchor,
+            title='Frequency Bands'
+        )
+        ax.add_artist(state_legend)
+
+    plt.tight_layout()
+    if save_path is not None:
+        plt.savefig(save_path, bbox_inches='tight')
+    plt.show()
+
+
+
+def check_exists(filename, fallback_directory="."):
+    """
+    Check if a file exists, optionally falling back to a secondary directory.
+
+    Parameters
+    ----------
+    filename (str)
+        File path or name to check.
+    fallback_directory (str), optional
+        Directory to look in if the file is not found at the original path.
+        Default is current directory.
+
+    Returns
+    -------
+    str
+        Full path to the found file.
+
+    Raises
+    ------
+    FileNotFoundError
+        If the file is not found in either location.
+    """
+    if not os.path.exists(filename):
+        fallback = os.path.join(fallback_directory, filename)
+        if os.path.exists(fallback):
+            return fallback
+        else:
+            raise FileNotFoundError(filename)
+    return filename
+
+def validate(array, correct_dimensionality, allow_dimensions, error_message):
+    """
+    Validate and reshape an array to the correct dimensionality.
+
+    Parameters
+    ----------
+    array (np.ndarray)
+        The array to validate.
+    correct_dimensionality : int
+        The target number of dimensions.
+    allow_dimensions : list of int
+        Acceptable dimensionalities that will be expanded to the target.
+    error_message (str)
+        Error message to raise if dimensionality is incorrect.
+
+    Returns
+    -------
+    np.ndarray
+        Array reshaped to the correct number of dimensions.
+
+    Raises
+    ------
+    ValueError
+        If the input does not meet dimensionality requirements.
+    """
+    array = np.array(array)
+    for dimensionality in allow_dimensions:
+        if array.ndim == dimensionality:
+            for _ in range(correct_dimensionality - dimensionality):
+                array = array[np.newaxis, ...]
+    if array.ndim != correct_dimensionality:
+        raise ValueError(error_message)
+    return array
+
+def parcel_vector_to_voxel_grid(mask_file, parcellation_file, vector):
+    """
+    Map a vector of parcel values onto a 3D voxel grid using a mask and parcellation.
+
+    Parameters
+    ----------
+    mask_file (str)
+        Path to a NIfTI mask file.
+    parcellation_file (str)
+        Path to a NIfTI parcellation file.
+    vector (np.ndarray)
+        1D array of values (one per parcel). Shape must match number of parcels.
+
+    Returns
+    -------
+    np.ndarray
+        3D voxel grid with mapped values at each brain voxel.
+
+    Raises
+    ------
+    ValueError
+        If the number of parcels in the parcellation does not match the length of the vector.
+    """
+        
+    logging.getLogger("nibabel.global").setLevel(logging.ERROR)
+    mask_file = check_exists(mask_file)
+    parcellation_file = check_exists(parcellation_file)
+
+    mask = nib.load(mask_file)
+    mask_grid = mask.get_fdata().ravel(order="F")
+    non_zero_voxels = mask_grid != 0
+
+    parcellation = nib.load(parcellation_file)
+    parcellation_grid = parcellation.get_fdata()
+    if parcellation_grid.ndim == 3:
+        unique_values = np.unique(parcellation_grid)[1:]
+        parcellation_grid = np.array([(parcellation_grid == v).astype(int) for v in unique_values])
+        parcellation_grid = np.rollaxis(parcellation_grid, 0, 4)
+        parcellation = nib.Nifti1Image(parcellation_grid, parcellation.affine, parcellation.header)
+
+    parcellation = resample_to_img(parcellation, mask, force_resample=True, copy_header=True)
+    parcellation_grid = parcellation.get_fdata()
+    n_parcels = parcellation.shape[-1]
+
+    if vector.shape[0] != n_parcels:
+        raise ValueError("parcellation_file has a different number of parcels to the vector")
+
+    voxel_weights = parcellation_grid.reshape(-1, n_parcels, order="F")[non_zero_voxels]
+    voxel_weights /= voxel_weights.max(axis=0, keepdims=True)
+    voxel_values = voxel_weights @ vector
+
+    voxel_grid = np.zeros(mask_grid.shape[0])
+    voxel_grid[non_zero_voxels] = voxel_values
+    voxel_grid = voxel_grid.reshape(mask.shape, order="F")
+
+    return voxel_grid
+
+def get_custom_colormap():
+    """
+    Create a custom colormap for brain activation plotting.
+
+    Returns
+    -------
+    matplotlib.colors.LinearSegmentedColormap
+        A custom colormap transitioning through turquoise, blue, gray, and red-yellow.
+    """
+    colors = ["#00FA9A", "#40E0D0", "#0000FF", "#BFBFBF", "#FF0000", "#FFA500", "#FFFF00"]
+    positions = [0.0, 0.16, 0.33, 0.5, 0.66, 0.83, 1.0]
+    return LinearSegmentedColormap.from_list("brain_activation_updated", list(zip(positions, colors)), N=256)
+
+
+
+def save_figure(fig, path, fig_format, show=False):
+    """
+    Save a matplotlib figure to disk and optionally close it.
+
+    Parameters
+    ----------
+    fig (matplotlib.figure.Figure)
+        The figure to save.
+    path (str):
+        Output path where the figure will be saved.
+    fig_format (str):
+        Format to save the figure (e.g., 'svg', 'png').
+    show (bool):
+        Whether to keep the figure open (True) or close it (False).
+    """
+    fig.savefig(path, format=fig_format)
+    if not show:
+        plt.close(fig)
+
+def plot_brain_state_maps(power_map, mask_file, parcellation_file, filename=None, fig_format="png", component=0, subtract_mean=False,
+                        mean_weights=None, match_color_scale=True, plot_kwargs=None, show_plots=True, combined=False,
+                        titles=None, n_rows=1, save_figures=False, figure_filenames=None, save_folder_name="brain_maps"):
+    """
+    Plots or saves power spectral brain state maps projected to surface.
+
+    Parameters:
+    --------------
+    power_map (np.ndarray):
+        Array of shape (n_components, n_modes, n_channels) or similar.
+    mask_file (str):
+        Path to NIfTI mask file.
+    parcellation_file (str):
+        Path to NIfTI parcellation file.
+    filename (str, optional):
+        Base filename for saving output. Supports .nii/.nii.gz/.png/.svg/.pdf.
+    fig_format (str, optional), default='png':
+        File format for figure export (e.g., "pdf", "png").
+    component (int, optional):
+        Index of the spectral component to plot.
+    subtract_mean (bool, optional):
+        Whether to subtract mean across modes.
+    mean_weights (np.ndarray, optional):
+        Weights for computing the average across modes.
+    match_color_scale (bool, optional):
+        Force consistent vmin/vmax across plots.
+    plot_kwargs : dict, optional
+        Keyword arguments passed to `nilearn.plotting.plot_img_on_surf`.
+        Common options include:
+            - surf_mesh (str) or dict, default='fsaverage5'
+                Cortical mesh to use for plotting.
+            - hemispheres : list of str, default=['left', 'right']
+                Hemispheres to show ('left', 'right', or both).
+            - views : list of str, default=['lateral', 'medial']
+                View angles for each hemisphere.
+            - inflate (bool), default=False
+                Whether to use an inflated surface.
+            - bg_on_data (bool), default=False
+                Whether to blend background surface with data overlay.
+            - title (str), optional
+                Title shown above each surface plot.
+            - colorbar (bool), default=True
+                Show colorbar alongside the figure.
+            - vmin, vmax : float, optional
+                Value range for colormap.
+            - threshold : float, optional
+                Values below this (in absolute value) are masked out.
+            - symmetric_cbar (bool) or 'auto', default='auto'
+                Whether to center the colorbar symmetrically around zero.
+            - cmap (str) or colormap, default='cold_hot'
+                Colormap used for surface data.
+            - cbar_tick_format (str), default='%i'
+                Tick formatting for the colorbar.
+    show_plots (bool, optional):
+        Whether to display the plots.
+    combined (bool, optional):
+        Combine plots into a single figure (enables save_figures).
+    titles (list or bool, optional):
+        List of titles for each mode or True for auto-generated labels.
+    n_rows (int, optional):
+        Number of rows in the combined figure.
+    save_figures (bool, optional):
+        Whether to save each plot as a file.
+    figure_filenames (str or list, optional):
+        Base name or list of full paths for saving each plot.
+    save_folder_name (str, optional): 
+        Name of the output folder where saved figures will be stored. Default is "brain_maps".
+    """
+
+    power_map = np.squeeze(power_map)
+    if power_map.ndim > 1 and power_map.shape[-1] == power_map.shape[-2]:
+        power_map = np.diagonal(power_map, axis1=-2, axis2=-1)
+        if power_map.ndim == 1:
+            power_map = power_map[np.newaxis, ...]
+    else:
+        power_map = power_map[np.newaxis, ...]
+
+    power_map = validate(power_map, 3, [2], "power_map.shape is incorrect")
+    n_modes = power_map.shape[1]
+
+    if subtract_mean and n_modes > 1:
+        power_map -= np.average(power_map, axis=1, weights=mean_weights)[:, np.newaxis, ...]
+
+    power_map = power_map[component]
+    mask_file = check_exists(mask_file)
+    parcellation_file = check_exists(parcellation_file)
+    power_map = [parcel_vector_to_voxel_grid(mask_file, parcellation_file, p) for p in power_map]
+    power_map = np.moveaxis(power_map, 0, -1)
+    mask = nib.load(mask_file)
+
+    if plot_kwargs is None:
+        plot_kwargs = {}
+    # Use custom colormap by default unless overridden
+    if "cmap" not in plot_kwargs:
+        plot_kwargs["cmap"] = get_custom_colormap()
+
+    if combined:
+        if not save_figures:
+            print("[Warning] 'combined=True' requires 'save_figures=True'. Enabling save_figures automatically.")
+            save_figures = True
+        if fig_format.lower() != "png":
+            print("[Warning] switching fig_format to 'png' when 'combined=True'.")
+            fig_format = "png"
+
+    if "cbar_tick_format" in plot_kwargs:
+        if plot_kwargs["cbar_tick_format"] is True:
+            plot_kwargs["cbar_tick_format"] = "%.2f"
+        elif plot_kwargs["cbar_tick_format"] is False:
+            plot_kwargs["cbar_tick_format"] = ""
+
+    if titles is None:
+        titles = [None] * n_modes
+    elif titles is True:
+        titles = [f"State {i+1}" for i in range(n_modes)]
+    elif isinstance(titles, str):
+        titles = [f"{titles} {i+1}" for i in range(n_modes)]
+    elif isinstance(titles, list):
+        if len(titles) != n_modes:
+            raise ValueError("Length of 'titles' must match number of modes.")
+    
+    if match_color_scale:
+        if plot_kwargs.get("symmetric_cbar", False) is True:
+            abs_max = np.nanmax(np.abs(power_map))
+            plot_kwargs["vmin"] = -abs_max
+            plot_kwargs["vmax"] = abs_max
+        else:
+            plot_kwargs["vmin"] = np.nanmin(power_map)
+            plot_kwargs["vmax"] = np.nanmax(power_map)
+
+    output_files = []
+    # PATH_OUTPUT = Path(".") if filename is None else Path(filename).parent
+    # base_filename = Path(filename).stem if filename else "power_map"
+    PATH_OUTPUT, base_filename = __resolve_figure_directory(save_figures, filename, default_folder=save_folder_name)
+
+    for i in trange(n_modes, desc="Saving images", disable=not show_plots):
+        nii = nib.Nifti1Image(power_map[:, :, :, i], mask.affine, mask.header)
+
+        fig, ax = plotting.plot_img_on_surf(nii, output_file=None, **plot_kwargs)
+
+        if plot_kwargs.get("colorbar", True):
+            for axes_obj in fig.axes:
+                if hasattr(axes_obj, 'get_position'):
+                    bbox = axes_obj.get_position()
+                    if bbox.width < 0.4 and bbox.height < 0.05:
+                        axes_obj.set_position([0.2, 0.05, 0.6, 0.025])
+                        if hasattr(axes_obj, 'collections') and axes_obj.collections:
+                            colorbar = getattr(axes_obj.collections[0], 'colorbar', None)
+                            if colorbar and plot_kwargs.get("cbar_tick_format"):
+                                colorbar.locator = ticker.MaxNLocator(nbins=4)
+                                colorbar.formatter = ticker.FormatStrFormatter(plot_kwargs["cbar_tick_format"])
+                                colorbar.update_ticks()
+
+        if titles:
+            fig.suptitle(titles[i], fontsize=20)
+
+        # Save figure if requested
+        if save_figures or combined:
+            base = figure_filenames if isinstance(figure_filenames, str) else base_filename
+            path_fig = PATH_OUTPUT / __generate_filename(base, i, fig_format)
+            fig.savefig(path_fig, format=fig_format)
+            output_files.append(path_fig)
+
+            if not show_plots:
+                plt.close(fig)
+
+    if combined:
+        n_columns = -(n_modes // -n_rows)
+        fig, axes_grid = plt.subplots(n_rows, n_columns, figsize=(n_columns * 5, n_rows * 5))
+        for i, ax in enumerate(axes_grid.flatten()):
+            ax.axis("off")
+            if i < len(output_files):
+                ax.imshow(plt.imread(output_files[i]))
+        fig.tight_layout()
+        combined_path = PATH_OUTPUT / f"{base_filename}_combined.{fig_format}"
+        fig.savefig(combined_path)
+        if not show_plots:
+            plt.close(fig)
+
+
+def update_save_flags(save_figures, combined, fig_format):
+    """
+    Updates save_figures and fig_format based on combined flag.
+
+    Parameters
+    ----------
+    save_figures : bool
+        Whether to save individual figures.
+    combined : bool
+        Whether to save a combined multi-panel figure.
+    fig_format : str
+        Desired figure format (e.g., 'pdf', 'png').
+
+    Returns
+    -------
+    save_figures : bool
+        Updated save_figures flag.
+    fig_format : str
+        Updated fig_format (forces 'png' if combined).
+    """
+    if combined:
+        if not save_figures:
+            print("[Info] 'combined=True' now also saves individual figures.")
+            save_figures = True
+        if fig_format.lower() != "png":
+            print("[Info] Combined figure forced to PNG format.")
+            fig_format = "png"
+    return save_figures, fig_format
+
+
+def get_parcellation_centers(parcellation_file):
+    """
+    Extracts MNI coordinates for each parcel in a 4D NIfTI parcellation.
+
+    Parameters:
+    --------------
+    parcellation_file (str):
+        Path to a 4D binary NIfTI file where each volume corresponds to a parcel.
+
+    Returns:
+    --------------
+    centers (np.ndarray):
+        Array of shape (n_parcels, 3) containing the MNI coordinates for each parcel.
+    """
+        
+    img = nib.load(parcellation_file)
+    data = img.get_fdata()
+    affine = img.affine
+
+    if data.ndim == 4:
+        n_parcels = data.shape[-1]
+        centers = []
+        for i in range(n_parcels):
+            parcellation_coords = np.argwhere(data[..., i] > 0)
+            if parcellation_coords.size == 0:
+                centers.append([np.nan, np.nan, np.nan])
+            else:
+                voxel_center = parcellation_coords.mean(axis=0)
+                world_center = nib.affines.apply_affine(affine, voxel_center)
+                centers.append(world_center)
+        return np.array(centers)
+    else:
+        raise ValueError("Parcellation file must be 4D.")
+    
+
+def plot_connectivity_maps(connectivity_map, parcellation_file, filename=None, fig_format="png", component=None, threshold=0,
+                           match_color_scale = True, plot_kwargs=None, show_plots=True, axes=None, combined=False,
+                           save_figures=False, titles=None, n_rows=1, figure_filenames=None, save_folder_name="connectivity_maps"):
+    """
+    Plot connectivity maps, such as functional or spectral connectivity, using a parcellation layout.
+
+    Parameters:
+    --------------
+    connectivity_map (numpy.ndarray): 
+        Array of shape (n_modes, n_channels, n_channels) or (n_components, n_modes, n_channels, n_channels). 
+        Represents connectivity matrices for each mode (or component and mode).
+    parcellation_file (str): 
+        Path to a parcellation file used to define node coordinates for plotting the connectome.
+    filename (str, optional): 
+        If provided, the base filename for saving the figure(s). The appropriate format 
+        (e.g., .png, .svg) will be determined by `fig_format`.
+    fig_format (str, optional): 
+        Format to save the figures, e.g., 'png', 'svg', or 'pdf'. Default is 'png'.
+    component (int, optional): 
+        If connectivity_map is 4D, this selects which component to plot. If None, all components are plotted.
+    threshold (float, optional): 
+        Minimum absolute value for showing a connection. Values below this threshold are not shown. 
+        Default is 0 (no thresholding).
+    match_color_scale (bool, optional): 
+        Whether to use the same color scale across all plots. Default is True.
+    plot_kwargs (dict, optional): 
+        Additional keyword arguments passed to the plotting function (e.g., `edge_cmap`, `node_size`).
+    show_plots (bool, optional): 
+        Whether to display the figures on screen. Default is True.
+    axes (matplotlib.axes.Axes or array-like, optional): 
+        Axes to use for plotting, if already created externally. If None, new axes will be generated.
+    combined (bool, optional): 
+        If True, all maps are shown in a single figure. Otherwise, one figure per map is created.
+    save_figures (bool, optional): 
+        Whether to save the plotted figures. Default is False.
+    titles (list of str, optional): 
+        Titles to use for each connectivity map. If None, titles will be generated automatically.
+    n_rows (int, optional): 
+        Number of rows to use when arranging subplots (if `combined=True`). Default is 1.
+    figure_filenames (list of str, optional): 
+        List of custom filenames for each individual figure (only used if `combined=False` 
+        and `save_figures=True`).
+    save_folder_name (str, optional): 
+        Name of the output folder where saved figures will be stored. Default is "connectivity_maps".
+    """
+
+    connectivity_map = np.copy(connectivity_map)
+    # Standardize shape
+    if connectivity_map.ndim == 2:
+        connectivity_map = connectivity_map[np.newaxis, np.newaxis, ...]
+    elif connectivity_map.ndim == 3:
+        connectivity_map = connectivity_map[np.newaxis, ...]
+    elif connectivity_map.ndim != 4:
+        raise ValueError("connectivity_map must be 2D, 3D or 4D")
+
+    if isinstance(threshold, (float, int)):
+        threshold = np.array([threshold] * connectivity_map.shape[1])
+
+    if np.any(threshold > 1) or np.any(threshold < 0):
+        raise ValueError("threshold must be between 0 and 1.")
+    
+
+    if component is None:
+        component = 0
+    conn_map = connectivity_map[component]
+    n_modes = conn_map.shape[0]
+
+    if match_color_scale:
+        # Create a copy to avoid modifying original data
+        conn_map_ = np.copy(conn_map)
+
+        # Zero out the diagonal (for square matrices)
+        if conn_map_.ndim == 3 and conn_map_.shape[1] == conn_map_.shape[2]:
+            for i in range(conn_map_.shape[0]):
+                np.fill_diagonal(conn_map_[i], 0)
+
+        abs_max = np.nanmax(np.abs(conn_map_))
+
+        if abs_max > 0 and not np.isnan(abs_max):
+            plot_kwargs = plot_kwargs or {}
+            plot_kwargs["edge_vmin"] = -abs_max
+            plot_kwargs["edge_vmax"] = abs_max
+        else:
+            print("[Warning] conn_map contains only zeros or NaNs after removing diagonals.")
+
+    # set titles
+    if titles is None:
+        titles = [None] * n_modes
+    elif titles is True:
+        titles = [f"State {i+1}" for i in range(n_modes)]
+    elif isinstance(titles, str):
+        titles = [f"{titles} {i+1}" for i in range(n_modes)]
+    elif isinstance(titles, list):
+        if len(titles) != n_modes:
+            raise ValueError("Length of 'titles' must match number of modes.")
+
+    if combined:
+        # Automatically adjust saving behavior for combined plots
+        save_figures, fig_format = update_save_flags(save_figures, combined, fig_format)
+    if save_figures:
+        if isinstance(figure_filenames, list):
+            if len(figure_filenames) != n_modes:
+                raise ValueError("Length of figure_filenames must match number of modes.")
+
+    # Zero out diagonal
+    for c in conn_map:
+        np.fill_diagonal(c, 0)
+
+    parcellation_coords = get_parcellation_centers(parcellation_file)
+    default_plot_kwargs = {"node_size": 10, "node_color": "black"}
+    axes = axes or [None] * conn_map.shape[0]
+    output_files = []
+    kwargs = __override_dict_defaults(default_plot_kwargs, plot_kwargs)
+    PATH_OUTPUT, base_filename = __resolve_figure_directory(save_figures, filename, default_folder=save_folder_name)
+
+    for i in trange(conn_map.shape[0], desc="Saving images"):
+
+        # Only show colorbar if matrix isn't all zeros
+        kwargs["colorbar"] = np.any(conn_map[i][~np.eye(conn_map[i].shape[-1], dtype=bool)] != 0)
+        
+        base = figure_filenames if isinstance(figure_filenames, str) else base_filename
+        PATH_FIG = os.path.join(PATH_OUTPUT, __generate_filename(base, i, fig_format)) if save_figures else None
+        #fig = plt.figure()
+        display = plotting.plot_connectome(
+            conn_map[i],
+            parcellation_coords,
+            edge_threshold=f"{threshold[i] * 100}%",
+            output_file=None,  # Don't save here
+            axes=axes[i],
+            **kwargs,
+        )
+        if titles:
+            # Manually add title using matplotlib
+            fig = plt.gcf()
+            fig.suptitle(titles[i], fontsize=20, color="black", y=0.95)
+
+        if save_figures or combined:
+            if PATH_FIG is None:
+                # If we're only creating the combined image, still need to save a temporary one
+                PATH_FIG = os.path.join(PATH_OUTPUT, __generate_filename(f"{base_filename}_combined_part", i, fig_format))
+            fig.savefig(PATH_FIG, format=fig_format)
+            if not show_plots:
+                plt.close(fig)
+            output_files.append(PATH_FIG)
+
+    if combined:
+        n_columns = -(n_modes // -n_rows)
+        fig, axes_grid = plt.subplots(n_rows, n_columns, figsize=(n_columns * 5, n_rows * 5))
+        for i, ax in enumerate(axes_grid.flatten()):
+            ax.axis("off")
+            if i < n_modes:
+                ax.imshow(plt.imread(output_files[i]))
+        filename = filename or "connectivity_combined"
+        fig.tight_layout()
+        fig.savefig(os.path.join(PATH_OUTPUT, f"{base_filename}_combined.{fig_format}"))
+        if not show_plots:
+            plt.close(fig)
+        for image_path in output_files:
+            os.remove(image_path)
+
+
+def __resolve_figure_directory(save_figures, filename, default_folder="Figures"):
+    return resolve_figure_directory(save_figures, filename, default_folder)      
+def __generate_filename(base, index, extension):
+    return generate_filename(base, index, extension)     
+def __override_dict_defaults(default_dict, override_dict):
+    return override_dict_defaults(default_dict, override_dict)   
+
