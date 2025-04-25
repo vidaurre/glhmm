@@ -545,7 +545,7 @@ def interpolate_colormap(cmap_list):
     return modified_cmap
 
 def plot_p_value_matrix(pval_in, alpha = 0.05, normalize_vals=True, figsize=(9, 5), 
-                         title_text="Heatmap (p-values)", fontsize_labels=12, fontsize_title=14, annot=False, 
+                        title_text="Heatmap (p-values)", fontsize_labels=12, fontsize_title=14, annot=False, 
                         cmap_type='default', cmap_reverse=True, xlabel="", ylabel="", 
                         xticklabels=None, x_tick_min=None, x_tick_max=None, num_x_ticks=None, tick_positions = [0.001, 0.01, 0.05, 0.1, 0.3, 1], 
                         none_diagonal = False, num_colors = 256, xlabel_rotation=0, save_path=None):
@@ -710,16 +710,25 @@ def plot_p_value_matrix(pval_in, alpha = 0.05, normalize_vals=True, figsize=(9, 
     else:
         x_tick_labels = x_tick_positions
 
-    # Set the x-axis ticks
+    # Set the x-axis ticks and labels
     if xticklabels is not None:
-        axes.set_xticks(x_tick_positions+0.5)
-        axes.set_xticklabels([xticklabels[i] for i in x_tick_labels] if len(xticklabels) != len(x_tick_labels) else xticklabels,
-        rotation=xlabel_rotation, fontsize=10, ha=ha)
-    elif pval.shape[1]>1:
-        axes.set_xticks(x_tick_positions+0.5)
+        if isinstance(xticklabels, str):
+            # Generate labels like "Hello 1", "Hello 2", ...
+            xticklabels = [f"{xticklabels} {i + 1}" for i in range(len(x_tick_labels))]
+        elif not isinstance(xticklabels, list) or len(xticklabels) != len(x_tick_labels):
+            warnings.warn(f"xticklabels must be a list matching x_tick_labels, or a string. Using default numeric labels instead.")
+            xticklabels = [f"Var {i + 1}" for i in range(len(x_tick_labels))]
+
+        axes.set_xticks(x_tick_positions + 0.5)
+        axes.set_xticklabels(xticklabels, rotation=xlabel_rotation, fontsize=10, ha=ha)
+
+    elif pval.shape[1] > 1:
+        axes.set_xticks(x_tick_positions + 0.5)
         axes.set_xticklabels(x_tick_labels, rotation=xlabel_rotation, fontsize=10, ha=ha)
+
     else:
         axes.set_xticklabels([])
+        
     # Set the y-axis ticks
     if pval.shape[0]>1:
         axes.set_yticks(np.linspace(0, pval.shape[0]-1, steps).astype(int)+0.5)
@@ -1858,8 +1867,12 @@ def plot_p_values_bar(
     -----------
     pval_in (numpy.ndarray):
         Array of p-values to be plotted.
-    xticklabels (list, optional), default=[]:
-        List of categories or variables.
+    xticklabels (str or list, optional), default=None:
+        Either a list of category labels, or a single string.
+        - If a list: Must match the length of pval_in.
+        - If a string: Auto-generates labels like "<string> 1", "<string> 2", ..., "<string> N"
+        where N = len(pval_in).
+        - If None or invalid: Default labels will be used ("Var 1", "Var 2", ..., "Var N").
     figsize (tuple, optional), default=(9, 4):
         Figure size in inches (width, height).
     num_colors (int, optional), default=256:
@@ -1895,8 +1908,11 @@ def plot_p_values_bar(
 
     # Validate xticklabels
     if xticklabels is not None:
-        if not isinstance(xticklabels, list):
-            warnings.warn(f"xticklabels must be a list, but got {type(xticklabels)}. Using default labels instead.")
+        if isinstance(xticklabels, str):
+            # Generate labels like "Hello 1", "Hello 2", ..., "Hello N"
+            xticklabels = [f"{xticklabels} {i + 1}" for i in range(len(pval))]
+        elif not isinstance(xticklabels, list):
+            warnings.warn(f"xticklabels must be a list or a string, but got {type(xticklabels)}. Using default labels instead.")
             xticklabels = None
         elif len(xticklabels) != len(pval):
             raise ValueError(f"xticklabels length ({len(xticklabels)}) does not match pval length ({len(pval)}).")
@@ -2290,7 +2306,7 @@ def plot_nnm_spectral_components(nnmf_components, freqs, x_lim=None, highlight_f
     plt.show()
 
 def plot_state_psd(psd, freqs, significant_states=None, x_lim=None, cmap=None, highlight_freq=False, bands=None,
-    band_colors=None, title='Power Spectral Density (PSD) per State', figsize=(10, 5), 
+    band_colors=None, title='Power Spectral Density (PSD) per State', log_scale_y=False, log_scale_x=False, figsize=(10, 5), 
     fontsize_labels=13, fontsize_title=16, band_legend_anchor=(1.28, 1), label_line=None, save_path=None):
     """
     Plot the power spectral density (PSD) for each state, with optional 
@@ -2320,6 +2336,10 @@ def plot_state_psd(psd, freqs, significant_states=None, x_lim=None, cmap=None, h
         Dictionary mapping band names to color names. Keys must match those in `bands`.
     title (str, optional): 
         Title of the plot. Default is "Power Spectral Density (PSD) per State".
+    log_scale_y (bool, optional): 
+        Whether to apply a logarithmic scale to the y-axis (power). Default is True.
+    log_scale_x (bool, optional): 
+        Whether to apply a logarithmic scale to the x-axis (frequency). Default is False.
     figsize (tuple, optional): 
         Tuple defining figure size in inches. Default is (10, 5).
     fontsize_labels (int): 
@@ -2398,7 +2418,16 @@ def plot_state_psd(psd, freqs, significant_states=None, x_lim=None, cmap=None, h
         component_colors = get_distinct_colors(num_states, cmap)
 
     fig, ax = plt.subplots(figsize=figsize)
+    if log_scale_y:
+        if np.any(psd <= 0):
+            warnings.warn("log_scale_y=True, but PSD contains non-positive values. Log scale will be skipped.")
+            log_scale_y = False
+        else:
+            ax.set_yscale('log')
+        
 
+    if log_scale_x:
+        ax.set_xscale('log')
     for state in range(num_states):
         state_num = state + 1
         color = component_colors[state]
@@ -2424,6 +2453,8 @@ def plot_state_psd(psd, freqs, significant_states=None, x_lim=None, cmap=None, h
     ax.set_ylabel('Power', fontsize=fontsize_labels)
     ax.set_title(title, fontsize=fontsize_title)
     ax.set_xlim(0, x_lim)
+
+
 
     if label_line is None:
         legend_title = 'States'
@@ -2767,7 +2798,7 @@ def save_figure(fig, path, fig_format, show=False):
         plt.close(fig)
 
 def plot_brain_state_maps(power_map, mask_file, parcellation_file, filename=None, fig_format="png", component=0, subtract_mean=False,
-                        mean_weights=None, match_color_scale=True, plot_kwargs=None, show_plots=True, combined=False,
+                        mean_weights=None, match_color_scale=False, plot_kwargs=None, show_plots=True, combined=False,
                         titles=None, n_rows=1, save_figures=False, figure_filenames=None, save_folder_name="brain_maps"):
     """
     Plots or saves power spectral brain state maps projected to surface.
@@ -2786,11 +2817,11 @@ def plot_brain_state_maps(power_map, mask_file, parcellation_file, filename=None
         File format for figure export (e.g., "pdf", "png").
     component (int, optional):
         Index of the spectral component to plot.
-    subtract_mean (bool, optional):
+    subtract_mean (bool, optional), default=False:
         Whether to subtract mean across modes.
     mean_weights (np.ndarray, optional):
         Weights for computing the average across modes.
-    match_color_scale (bool, optional):
+    match_color_scale (bool, optional), default=False:
         Force consistent vmin/vmax across plots.
     plot_kwargs : dict, optional
         Keyword arguments passed to `nilearn.plotting.plot_img_on_surf`.

@@ -536,7 +536,7 @@ def mean_coherence_from_spectra(frequencies, coh, components=None, frequency_ran
     """
 
     band_definitions = {
-        "delta": (1, 4),
+        "delta": (0, 4),
         "theta": (4, 8),
         "alpha": (8, 12),
         "beta": (13, 30),
@@ -551,7 +551,7 @@ def mean_coherence_from_spectra(frequencies, coh, components=None, frequency_ran
         if isinstance(frequency_range, str):
             frequency_range = band_definitions.get(frequency_range.lower())
             if frequency_range is None:
-                raise ValueError("Unknown frequency band name.")
+                raise ValueError("Unknown frequency band name. You can choose: 'delta', 'theta', 'alpha', 'beta', 'gamma'.")
         if frequencies is None:
             raise ValueError("Frequency axis 'f' is required for frequency_range.")
         min_freq, max_freq = frequency_range

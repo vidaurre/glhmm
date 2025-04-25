@@ -401,32 +401,32 @@ def download_file_with_progress_bar(url: str, dest_path: Path):
             progress.update(len(data))
 
 
-from pathlib import Path
-from zipfile import ZipFile
-
-def prepare_data_directory(procedure=None, url=None):
+def prepare_data_directory(procedure=None, url=None, data_dir=None):
     """
     Prepare the local 'data/' directory by downloading and extracting data from Zenodo,
     or from a custom URL if provided.
 
     Parameters
     ----------
-    procedure : str, optional
+    procedure (str, optional)
         One of ['procedure_1', 'procedure_2', 'procedure_3', 'procedure_4', 'all'].
         If None or 'all', downloads 'data.zip'.
-    url : str, optional
+    url (str, optional)
         Advanced use only: provide a custom URL pointing to a .zip file.
         This overrides the default Zenodo links.
+    data_dir (str or Path, optional)
+        Custom base path where data should be downloaded and extracted.
+        Defaults to Path.cwd() / "data".
 
     Returns
     -------
     Path
         Path to the extracted dataset inside the 'data/' directory.
     """
-    # Create base data directory
-    base_data_dir = Path.cwd() / "data"
-    base_data_dir.mkdir(exist_ok=True)
-
+    # Set base data directory
+    base_data_dir = Path(data_dir) if data_dir is not None else Path.cwd() / "data"
+    base_data_dir.mkdir(parents=True, exist_ok=True)
+    
     # Default filename mapping if no custom URL is given
     default_zip_map = {
         'procedure_1': 'Procedure_1_data.zip',
@@ -449,7 +449,7 @@ def prepare_data_directory(procedure=None, url=None):
     # Paths for zip and extracted data
     zip_path = base_data_dir / zip_filename
     expected_folder = zip_filename.replace('_data.zip', '').replace('.zip', '')
-    extracted_path = base_data_dir / expected_folder
+    extracted_path = base_data_dir / str(expected_folder + "_data")
 
     # Skip if data already exists
     if extracted_path.exists():
