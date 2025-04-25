@@ -275,8 +275,9 @@ def test_across_subjects(
         category_columns = {key: [] for key in category_columns}
         category_columns['z_score'] = combine_tests
 
-    if test_statistics_list is not None or test_statistics_list.shape[0]==n_T and test_statistics_list.shape[1]==Nnull_samples:
+    if test_statistics_list is not None or n_T==1:
         test_statistics_list =np.squeeze(test_statistics_list,axis=0) 
+
 
     # Get f and t states when doing a multivariate test
     f_t_stats = get_f_t_stats(D_data, R_data, F_stats_list, t_stats_list, Nnull_samples, n_T) if method =='multivariate' else None
@@ -292,6 +293,10 @@ def test_across_subjects(
     elif category_columns=={} and method=='univariate':
         category_columns['t_stat_independent_cols']='all_columns'
 
+
+    if n_T==1:
+        pval =np.squeeze(pval,axis=0) 
+
     if np.sum(np.isnan(pval)) > 0 and verbose:
         print("Warning: Permutation testing resulted in p-values that are NaN.")
         print("This could indicate an issue with the input data, such as:")
@@ -299,6 +304,7 @@ def test_across_subjects(
         print("  - One or more features having identical values (no variability), making the F-statistic undefined.")
         print("Please review and clean your data before proceeding.")
     
+
     # Return results
     result = {
         'pval': pval,
@@ -1936,8 +1942,8 @@ def get_f_t_stats(D_data, R_data, F_stats_list, t_stats_list, Nnull_samples, n_T
             F_stats =[]
             t_stats =[]
             for t in range(n_T):
-                perm_p_values_F[t,:] = (np.sum(F_stats_list[t,:] >= F_stats_list[t,0,:], axis=0)) / (Nnull_samples+ 1)
-                perm_p_values_t[t,:] = (np.sum(t_stats_list[t,:] >= t_stats_list[t,0,:], axis=0)) / (Nnull_samples+ 1)
+                perm_p_values_F[t,:] = (np.sum(F_stats_list[t,:] >= F_stats_list[t,0,:], axis=0)) / (Nnull_samples)
+                perm_p_values_t[t,:] = (np.sum(np.abs(t_stats_list[t,:]) >= np.abs(t_stats_list[t,0,:]), axis=0)) / (Nnull_samples)
                 perm_ci_lower[t,:] = np.percentile(t_stats_list[t,1:], 2.5, axis=0)
                 perm_ci_upper[t,:] = np.percentile(t_stats_list[t,1:], 97.5, axis=0)
                 F_stats.append(F_stats_list[t,0])
@@ -1945,8 +1951,8 @@ def get_f_t_stats(D_data, R_data, F_stats_list, t_stats_list, Nnull_samples, n_T
             F_stats = np.squeeze(np.array(F_stats))
             t_stats = np.array(t_stats)
         else: 
-            perm_p_values_F = (np.sum(F_stats_list[0,1:] >= F_stats_list[0,0], axis=0)) / (Nnull_samples+ 1)
-            perm_p_values_t = (np.sum(t_stats_list[0,1:] >= t_stats_list[0,0], axis=0)) / (Nnull_samples+ 1)
+            perm_p_values_F = (np.sum(F_stats_list[0,1:] >= F_stats_list[0,0], axis=0)) / (Nnull_samples)
+            perm_p_values_t = (np.sum(np.abs(t_stats_list[0,1:]) >=np.abs(t_stats_list[0,0]), axis=0)) / (Nnull_samples)
             perm_ci_lower = (np.percentile(t_stats_list[0,1:], 2.5, axis=0))
             perm_ci_upper = (np.percentile(t_stats_list[0,1:], 97.5, axis=0))
             F_stats = F_stats_list[0,0]
@@ -2508,7 +2514,8 @@ def compute_max_permutations(block_indices= None, permute_within_blocks = False,
             # Permutation Between Blocks
             if permute_between_blocks:
                 size_counts = Counter(block_sizes.values())  # Count of blocks per size
-                log_permutations += sum(math.log(math.factorial(num_blocks)) for num_blocks in size_counts.values())
+                num_sessions =sum(size_counts.values())
+                log_permutations += math.log(math.factorial(num_sessions))
 
     else:
         raise ValueError("block_indices must be provided when using block-based permutations.")
@@ -6280,7 +6287,7 @@ def display_test_summary(result_dict, output="both", timepoint=0, return_tables=
         # base_statistics = result_dict['base_statistics'][timepoint,:] if result_dict['base_statistics'].ndim==3 else result_dict['base_statistics']
         # pval = result_dict['pval'][timepoint,:] if result_dict['pval'].ndim==3 else result_dict['pval']
         base_statistics = result_dict['base_statistics'][timepoint,:]
-        pval = result_dict['pval'][timepoint,:]  
+        pval = result_dict['pval'][timepoint,:] if  base_statistics.ndim==3 and result_dict['pval'].ndim==3 else result_dict['pval']
         # Generate Model Summary
         max_stat = np.max(np.abs(base_statistics), axis=0)
         min_pval = np.min(pval, axis=0)
@@ -6337,9 +6344,9 @@ def display_test_summary(result_dict, output="both", timepoint=0, return_tables=
 
                 # Apply the function to each value
                 model_summary = pd.DataFrame({
-                    "Outcome": ensure_list(outcomes),
-                    "Max Statistic": ensure_list(np.squeeze(max_stat)),
-                    "Min P-value": ensure_list(min_pval),
+                    # "Outcome": ensure_list(outcomes),
+                    # "Max Statistic": ensure_list(np.squeeze(max_stat)),
+                    # "Min P-value": ensure_list(min_pval),
                     "Unit": ensure_list(expanded_unit_key),
                     "Nnull_samples": ensure_list(expanded_Nnull_samples)
                 })
@@ -6443,6 +6450,46 @@ def update_permutation_matrix(permutation_matrix, nan_mask):
     ]).T
     
     return permutation_matrix_update
+
+def assign_family_groups_from_matrix(data_twins):
+    """
+    Generate a 1D array of family group labels from a symmetric matrix indicating related subjects.
+
+    Parameters:
+    --------------
+    data_twins (numpy.ndarray): 
+        A square matrix (n_subjects x n_subjects) where a positive value indicates a relationship 
+        between two subjects. The diagonal is ignored, and only the upper triangle is considered.
+
+    Returns:
+    ----------
+    fam_array (numpy.ndarray): 
+        A 1D array (n_subjects,) where related subjects are assigned the same group label. 
+        Unrelated subjects are marked with 0.
+    """
+    n_subjects = data_twins.shape[0]
+    upper_tri = np.triu(data_twins, k=1)
+
+    fam_array = np.zeros(n_subjects, dtype=int)
+    count = 1  # Start family labels from 1
+
+    for subject in range(n_subjects):
+        indices = np.where(upper_tri[subject] == 1)[0]
+        
+        if indices.size > 0:
+            existing_labels = fam_array[indices]
+            existing_labels = existing_labels[existing_labels > 0]
+
+            if existing_labels.size > 0:
+                label = existing_labels[0]
+            else:
+                label = count
+                count += 1
+
+            fam_array[subject] = label
+            fam_array[indices] = label
+
+    return fam_array
 
 def __palm_quickperms(EB, M=None, nP=1000, CMC=False, EE=True):
     # Call palm_quickperms from palm_functions
