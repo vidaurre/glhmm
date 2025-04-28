@@ -4,3 +4,8 @@ scikit-learn==1.2.1
 scipy==1.10.1
 nbsphinx
 ipykernel
+matplotlib
+seaborn
+pickle
+pandas
+h5py

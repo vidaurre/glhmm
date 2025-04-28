@@ -12,4 +12,5 @@ graphics
 prediction
 statistics
 palm_functions
+spectral
 ```
