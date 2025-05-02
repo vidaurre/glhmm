@@ -23,7 +23,7 @@ from matplotlib.colors import LogNorm, Normalize, LinearSegmentedColormap, to_rg
 from matplotlib.cm import ScalarMappable
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from matplotlib.patches import Patch
-from matplotlib.ticker import FormatStrFormatter, ScalarFormatter
+from matplotlib.ticker import FormatStrFormatter, ScalarFormatter,MaxNLocator
 
 import seaborn as sb
 
@@ -34,6 +34,8 @@ from nilearn._utils.niimg_conversions import check_niimg_3d
 
 from . import utils
 from glhmm.io import *
+
+
 
 
 
@@ -1200,63 +1202,74 @@ def plot_FO(FO, figsize=(8, 4), fontsize_ticks=12, fontsize_labels=14, fontsize_
     plt.show()
 
 
-def plot_switching_rates(SR, figsize=(8, 4), fontsize_ticks=12, fontsize_labels=14, fontsize_title=16, width=0.18, 
-                         xlabel='Subject', ylabel='Switching Rate', title='State Switching Rates',  cmap= None,
-                         show_legend=True, num_x_ticks=11, num_y_ticks=5, pad_y_spine=None, save_path=None):
+def plot_switching_rates(SR, figsize=(8, 4), fontsize_ticks=12,fontsize_labels=14,fontsize_title=16,width=0.18,group_gap=None,
+                        xlabel='Subject', ylabel='Switching Rate',title='State Switching Rates',cmap=None,
+                        show_legend=True,num_x_ticks=11,num_y_ticks=5,pad_y_spine=None,save_path=None):
     """
-    Plot switching rates for different states.
+    Plot grouped bar charts of switching rates for different states across sessions.
 
-    Parameters:
-    -----------
-    SR (numpy.ndarray):
-        Switching rate data matrix.
-    figsize (tuple, optional), default=(8, 4):
-        Figure size.
-    fontsize_ticks (int, optional), default=12:
-        Font size for tick labels.
-    fontsize_labels (int, optional), default=14:
-        Font size for axes labels.
-    fontsize_title (int, optional), default=16:
-        Font size for plot title.
-    width (float, optional), default=0.18:
-        Width of the bars.
-    xlabel (str, optional), default='Subject':
-        Label for the x-axesis.
-    ylabel (str, optional), default='Switching Rate':
-        Label for the y-axesis.
-    title (str, optional), default='State Switching Rates':
-        Title for the plot.
-    cmap (str, optional): 
-        Name of a colormap to use for state line colors (default is 'Set3').
-    show_legend (bool, optional), default=True:
-        Whether to show the legend.
-    num_x_ticks (int, optional), default=11:
-        Number of ticks for the x-axis.
-    num_y_ticks (int, optional), default=5:
-        Number of ticks for the y-axis.
-    pad_y_spine (float, optional), default=None:
-        Shifting the positin of the spine for the y-axis.
-    save_path (str, optional), default=None
-        If a string is provided, it saves the figure to that specified path
+    Parameters
+    ----------
+    SR : np.ndarray
+        Array of shape (n_sessions, n_states) containing switching rates.
+    figsize : tuple of float, default=(8, 4)
+        Size of the figure in inches (width, height).
+    fontsize_ticks : int, default=12
+        Font size for axis tick labels.
+    fontsize_labels : int, default=14
+        Font size for x-axis and y-axis labels.
+    fontsize_title : int, default=16
+        Font size for the title.
+    width : float, default=0.18
+        Width of each individual bar representing a state.
+    group_gap : float or None, default=None
+        Horizontal spacing between each group (session). If None, uses width * 0.5.
+    xlabel : str, default='Subject'
+        Label for the x-axis.
+    ylabel : str, default='Switching Rate'
+        Label for the y-axis.
+    title : str, default='State Switching Rates'
+        Title of the plot.
+    cmap : str or None, default=None
+        Name of a matplotlib colormap. If None, a default discrete colormap is used.
+    show_legend : bool, default=True
+        Whether to display the legend for states.
+    num_x_ticks : int, default=11
+        Number of ticks to show on the x-axis (session axis).
+    num_y_ticks : int, default=5
+        Number of ticks to show on the y-axis.
+    pad_y_spine : float or None, default=None
+        Padding to shift the left spine outward. If None, it's computed from the figure width.
+    save_path : str or None, default=None
+        If provided, saves the figure to this file path.
     """
 
     fig, axes = plt.subplots(figsize=figsize, constrained_layout=True)
-    multiplier = 0
-    sessions = np.arange(1, SR.shape[0] + 1)
+
+    num_sessions = SR.shape[0]
     num_states = SR.shape[1]
+    total_width = num_states * width
+
+    if group_gap is None:
+        group_gap = width * 0.5  # default spacing between groups
+
+    # Calculate x positions with gap between groups
+    group_centers = np.arange(num_sessions) * (total_width + group_gap)
+
     # Assign distinct colors for each component
     if cmap is not None:
-        # Assign distinct colors for each component
         valid_cmaps = plt.colormaps()
         if isinstance(cmap, str) and cmap in valid_cmaps:
             if num_states <= 10:
                 cmap = plt.get_cmap(cmap)
                 colors = [cmap(i) for i in range(num_states)]
-            else: 
+            else:
                 colors = get_distinct_colors(num_states, cmap)
         else:
-            warnings.warn(f"Invalid colormap '{cmap}'. Falling back to 'Set3'. "
-                          f"Use one of: {', '.join(valid_cmaps[:5])}... etc.")
+            warnings.warn(
+                f"Invalid colormap '{cmap}'. Falling back to 'Set3'. "
+                f"Use one of: {', '.join(valid_cmaps[:5])}... etc."
+            )
             cmap = plt.get_cmap('Set3')
             colors = [cmap(i) for i in range(num_states)]
     elif num_states <= 10:
@@ -1264,33 +1277,34 @@ def plot_switching_rates(SR, figsize=(8, 4), fontsize_ticks=12, fontsize_labels=
         colors = [cmap(i) for i in range(num_states)]
     else:
         colors = get_distinct_colors(num_states, cmap)
-    for k in range(num_states):
-        offset = width * multiplier
-        axes.bar(sessions + offset, SR[:, k], width, color=colors[k])
-        multiplier += 1
 
+    # Plot bars
+    for k in range(num_states):
+        offset = width * k
+        axes.bar(group_centers + offset, SR[:, k], width, color=colors[k])
+
+    # Labeling
     axes.set_xlabel(xlabel, fontsize=fontsize_labels)
     axes.set_ylabel(ylabel, fontsize=fontsize_labels)
     axes.set_title(title, fontsize=fontsize_title)
 
-    # Adapt x ticks
-    if SR.shape[0] > num_x_ticks:
-        xticks = np.linspace(1, SR.shape[0], num_x_ticks).astype(int)
+    # Set x-ticks centered on groups
+    xticks_pos = group_centers + total_width / 2 - width / 2
+    session_labels = np.arange(1, num_sessions + 1)
+    if num_sessions > num_x_ticks:
+        xtick_idx = np.linspace(0, num_sessions - 1, num_x_ticks).astype(int)
+        axes.set_xticks(xticks_pos[xtick_idx])
+        axes.set_xticklabels(session_labels[xtick_idx])
     else:
-        xticks = sessions
-    axes.set_xticks(xticks)
+        axes.set_xticks(xticks_pos)
+        axes.set_xticklabels(session_labels)
 
-    # # Adapt y ticks
-    # min_y, max_y = np.min(SR), np.max(SR)
-    # axes.set_yticks(np.linspace(min_y, max_y, num_y_ticks))
-
-    min_y, max_y = np.min(SR), np.max(SR)
-    axes.set_yticks(np.linspace(min_y, max_y, num_y_ticks))
-    axes.yaxis.set_major_formatter(ScalarFormatter(useMathText=True))
+    # Y-ticks
+    axes.yaxis.set_major_locator(MaxNLocator(nbins=num_y_ticks, prune=None, integer=False)) 
     axes.ticklabel_format(style='sci', axis='y', scilimits=(-3, 3))
-
     axes.tick_params(axis='both', labelsize=fontsize_ticks)
 
+    # Remove spines
     axes.spines['top'].set_visible(False)
     axes.spines['right'].set_visible(False)
     axes.spines['bottom'].set_visible(False)
@@ -1301,14 +1315,19 @@ def plot_switching_rates(SR, figsize=(8, 4), fontsize_ticks=12, fontsize_labels=
     axes.spines['left'].set_position(('outward', pad_y_spine))
 
     if show_legend:
-        axes.legend(['State {}'.format(i+1) for i in range(num_states)], fontsize=fontsize_labels, loc='upper left', bbox_to_anchor=(1, 1))
+        axes.legend(
+            ['State {}'.format(i + 1) for i in range(num_states)],
+            fontsize=fontsize_labels,
+            loc='upper left',
+            bbox_to_anchor=(1, 1)
+        )
 
     if save_path is not None:
-        plt.savefig(save_path, bbox_inches='tight') 
+        plt.savefig(save_path, bbox_inches='tight')
     plt.show()
 
 
-def plot_state_lifetimes(LT, figsize=(8, 4), fontsize_ticks=12, fontsize_labels=14, fontsize_title=16, width=0.18, 
+def plot_state_lifetimes(LT, figsize=(8, 4), fontsize_ticks=12, fontsize_labels=14, fontsize_title=16, width=0.18, group_gap = None,
                          xlabel='Subject', ylabel='Lifetime', title='State Lifetimes', cmap= None,
                          show_legend=True, num_x_ticks=11, num_y_ticks=5, pad_y_spine=None, save_path=None):
     """
@@ -1328,6 +1347,8 @@ def plot_state_lifetimes(LT, figsize=(8, 4), fontsize_ticks=12, fontsize_labels=
         Font size for plot title.
     width (float, optional), default=0.18:
         Width of the bars.
+    group_gap : float or None
+        Gap between groups of bars (sessions). If None, defaults to width * 0.5.
     xlabel (str, optional), default='Subject':
         Label for the x-axesis.
     ylabel (str, optional), default='Lifetime':
@@ -1349,23 +1370,28 @@ def plot_state_lifetimes(LT, figsize=(8, 4), fontsize_ticks=12, fontsize_labels=
     """
 
     fig, axes = plt.subplots(figsize=figsize, constrained_layout=True)
-    multiplier = 0
-    sessions = np.arange(1, LT.shape[0] + 1)
-    num_states = LT.shape[1]
 
-    # Assign distinct colors for each component
+    num_sessions = LT.shape[0]
+    num_states = LT.shape[1]
+    total_width = num_states * width
+
+    if group_gap is None:
+        group_gap = width * 0.5
+
+    # Calculate x positions for each group
+    group_centers = np.arange(num_sessions) * (total_width + group_gap)
+
+    # Assign distinct colors
     if cmap is not None:
-        # Assign distinct colors for each component
         valid_cmaps = plt.colormaps()
         if isinstance(cmap, str) and cmap in valid_cmaps:
             if num_states <= 10:
                 cmap = plt.get_cmap(cmap)
                 colors = [cmap(i) for i in range(num_states)]
-            else: 
+            else:
                 colors = get_distinct_colors(num_states, cmap)
         else:
-            warnings.warn(f"Invalid colormap '{cmap}'. Falling back to 'Set3'. "
-                          f"Use one of: {', '.join(valid_cmaps[:5])}... etc.")
+            warnings.warn(f"Invalid colormap '{cmap}'. Falling back to 'Set3'.")
             cmap = plt.get_cmap('Set3')
             colors = [cmap(i) for i in range(num_states)]
     elif num_states <= 10:
@@ -1374,28 +1400,32 @@ def plot_state_lifetimes(LT, figsize=(8, 4), fontsize_ticks=12, fontsize_labels=
     else:
         colors = get_distinct_colors(num_states, cmap)
 
+    # Plot bars
     for k in range(num_states):
-        offset = width * multiplier
-        axes.bar(sessions + offset, LT[:, k], width, color=colors[k])
-        multiplier += 1
+        offset = width * k
+        axes.bar(group_centers + offset, LT[:, k], width, color=colors[k])
 
     axes.set_xlabel(xlabel, fontsize=fontsize_labels)
     axes.set_ylabel(ylabel, fontsize=fontsize_labels)
     axes.set_title(title, fontsize=fontsize_title)
 
-    # Adapt x ticks
-    if LT.shape[0] > num_x_ticks:
-        xticks = np.linspace(1, LT.shape[0], num_x_ticks).astype(int)
+    # Center x-ticks under each group
+    xticks_pos = group_centers + total_width / 2 - width / 2
+    session_labels = np.arange(1, num_sessions + 1)
+    if num_sessions > num_x_ticks:
+        xtick_idx = np.linspace(0, num_sessions - 1, num_x_ticks).astype(int)
+        axes.set_xticks(xticks_pos[xtick_idx])
+        axes.set_xticklabels(session_labels[xtick_idx])
     else:
-        xticks = sessions
-    axes.set_xticks(xticks)
+        axes.set_xticks(xticks_pos)
+        axes.set_xticklabels(session_labels)
 
-    # Adapt y ticks
-    min_y, max_y = np.min(LT), np.max(LT)
-    axes.set_yticks(np.linspace(min_y, max_y, num_y_ticks))
-
+    # Y-ticks
+    axes.yaxis.set_major_locator(MaxNLocator(nbins=num_y_ticks, prune=None, integer=False)) 
+    axes.ticklabel_format(style='sci', axis='y', scilimits=(-3, 3))
     axes.tick_params(axis='both', labelsize=fontsize_ticks)
 
+    # Remove spines
     axes.spines['top'].set_visible(False)
     axes.spines['right'].set_visible(False)
     axes.spines['bottom'].set_visible(False)
@@ -1406,116 +1436,153 @@ def plot_state_lifetimes(LT, figsize=(8, 4), fontsize_ticks=12, fontsize_labels=
     axes.spines['left'].set_position(('outward', pad_y_spine))
 
     if show_legend:
-        axes.legend(['State {}'.format(i+1) for i in range(num_states)], fontsize=fontsize_labels, loc='upper left', bbox_to_anchor=(1, 1))
+        axes.legend(
+            ['State {}'.format(i + 1) for i in range(num_states)],
+            fontsize=fontsize_labels,
+            loc='upper left',
+            bbox_to_anchor=(1, 1)
+        )
 
     if save_path is not None:
-        plt.savefig(save_path, bbox_inches='tight') 
+        plt.savefig(save_path, bbox_inches='tight')
+
     plt.show()
 
-def plot_state_prob_and_covariance(init_stateP, TP, state_means, state_FC, cmap='coolwarm', figsize=(9, 7), num_ticks=5, save_path=None):
+def plot_state_prob_and_covariance(init_stateP,TP,state_means, state_FC, cmap='coolwarm',figsize=(9, 7), num_ticks=5,
+                                save_path=None, title_size=None, label_size=None, tick_size=None):
     """
-    Plot HMM parameters.
+    Plot HMM parameters: initial state probabilities, transition matrix,
+    state means, and state covariance matrices.
 
-    Parameters:
-    -----------
-    init_stateP : array-like
-        Initial state probabilities.
-    TP : array-like
-        Transition probabilities.
-    state_means : array-like
-        State means.
-    state_FC : array-like
-        State covariances.
-    cmap (str) or Colormap, optional
-        The colormap to be used for plotting. Default is 'coolwarm'.
-    figsize (tuple), optional
-        Figure size. Default is (9, 7).
-    num_ticks (int), optional 
-        Number of ticks for the colorbars
-    save_path (str, optional), default=None
-        If a string is provided, it saves the figure to that specified path
+    Parameters
+    ----------
+    init_stateP : np.ndarray
+        Array of shape (n_states,) representing the initial state probabilities.
+    TP : np.ndarray
+        Transition probability matrix of shape (n_states, n_states).
+    state_means : np.ndarray
+        Array of shape (n_states, n_features) representing the mean activity per state.
+    state_FC : np.ndarray
+        Array of shape (n_features, n_features, n_states) representing state-specific covariance matrices.
+    cmap : str or matplotlib colormap, default='coolwarm'
+        Colormap used for all plots.
+    figsize : tuple of float, default=(9, 7)
+        Size of the full figure in inches (width, height).
+    num_ticks : int, default=5
+        Number of ticks to show on colorbars and axes.
+    save_path : str or None, default=None
+        If provided, the figure will be saved to this path.
+    title_size : int or None, optional
+        Font size for subplot titles. If None, automatically scaled based on figure size.
+    label_size : int or None, optional
+        Font size for axis labels (currently reserved for future extension).
+    tick_size : int or None, optional
+        Font size for tick labels. If None, automatically scaled based on figure size.
     """
-    # Define the number of plots and their layout
-    num_plots = 3 + state_FC.shape[2]  # Number of plots including initial stateP, TP, state_means, and state_FC
-    num_cols = min(num_plots, 3)  # Maximum number of columns
-    num_rows = (num_plots - 1) // 3 + 1  # Calculate number of rows
+    num_states = init_stateP.shape[0]
+    num_cov_states = state_FC.shape[2]
+    num_plots = 3 + num_cov_states
+    num_cols = min(3, num_plots)
+    num_rows = (num_plots + num_cols - 1) // num_cols  # ceil division
 
-    # Create the figure and subplots
-    fig, axes = plt.subplots(num_rows, 3, figsize=figsize)  # Adjust figsize as needed
+    # Dynamic sizing fallback
+    base_scale = (figsize[0] + figsize[1]) / 2
+    if title_size is None:
+        title_size = int(base_scale * 1.6)
+    if label_size is None:
+        label_size = int(base_scale * 1.3)
+    if tick_size is None:
+        tick_size = int(base_scale * 1.2)
 
-    # Plot initial state probabilities
+    fig, axes = plt.subplots(num_rows, num_cols, figsize=figsize, constrained_layout=True)
+    axes = np.atleast_2d(axes)
+
+    # === Initial state probabilities ===
     im0 = axes[0, 0].imshow(init_stateP.reshape(-1, 1), cmap=cmap)
-    axes[0, 0].set_title("Initial state probabilities")
+    axes[0, 0].set_title("Initial state\nprobabilities", fontsize=title_size)
     axes[0, 0].set_xticks([])
+    axes[0, 0].tick_params(labelsize=tick_size)
+    if init_stateP.shape[0] <= 10:
+        yticks = np.arange(init_stateP.shape[0])
+        axes[0, 0].set_yticks(yticks)
+        axes[0, 0].set_yticklabels(yticks + 1)
+    else:
+        axes[0, 0].yaxis.set_major_locator(MaxNLocator(nbins=num_ticks, integer=True))
+        yticks = axes[0, 0].get_yticks()
+        axes[0, 0].set_yticks(yticks)
+        axes[0, 0].set_yticklabels([int(t) + 1 for t in yticks if 0 <= t < init_stateP.shape[0]])
+    #axes[0, 0].yaxis.set_major_locator(MaxNLocator(nbins=num_ticks, integer=True))
+
     cbar0 = fig.colorbar(im0, ax=axes[0, 0])
-    cbar0.set_ticks(np.linspace(init_stateP.min(), init_stateP.max(), num=num_ticks).round(2))
-    ticks = np.linspace(0, init_stateP.shape[0]-1, init_stateP.shape[0]).astype(int)
-    # If there are more than 10 states then make a steps of 5
-    if len(ticks)>10:
-        num_state = num_ticks
-    else:
-        num_state = len(ticks)
-    axes[0, 0].set_yticks(np.linspace(0, init_stateP.shape[0]-1, num_state).astype(int))
-    axes[0, 0].set_yticklabels(ticks + 1)  # Increment ticks by 1 for labels    
-        
-        
-    # Plot transition probabilities
+    cbar0.locator = MaxNLocator(nbins=num_ticks)
+    cbar0.update_ticks()
+    cbar0.ax.tick_params(labelsize=tick_size)
+
+    # === Transition probabilities ===
     im1 = axes[0, 1].imshow(TP, cmap=cmap)
-    axes[0, 1].set_title("Transition probabilities")
+    axes[0, 1].set_title("Transition probabilities", fontsize=title_size)
+    axes[0, 1].tick_params(labelsize=tick_size)
+
+    axes[0, 1].xaxis.set_major_locator(MaxNLocator(nbins=num_ticks, integer=True))
+    axes[0, 1].yaxis.set_major_locator(MaxNLocator(nbins=num_ticks, integer=True))
+#    axes[0, 1].set_xticklabels([int(t) + 1 for t in axes[0, 1].get_xticks()])
+#    axes[0, 1].set_yticklabels([int(t) + 1 for t in axes[0, 1].get_yticks()])
+
     cbar1 = fig.colorbar(im1, ax=axes[0, 1])
-    cbar1.set_ticks(np.linspace(TP.min(), TP.max(), num=num_ticks).round(2))
-    ticks = np.linspace(0, TP.shape[0]-1, TP.shape[0]).astype(int)
-    # If there are more than 10 states then make a steps of 5
-    axes[0, 1].set_xticks(np.linspace(0, TP.shape[0]-1, num_state).astype(int))
-    axes[0, 1].set_xticklabels(ticks + 1)  # Increment ticks by 1 for labels
-    axes[0, 1].set_yticks(np.linspace(0, TP.shape[0]-1, num_state).astype(int))
-    axes[0, 1].set_yticklabels(ticks + 1)  # Increment ticks by 1 for labels
-    
-    # Plot state means
-    num_ticks = max(5, min(state_means.shape))
+    cbar1.locator = MaxNLocator(nbins=num_ticks)
+    cbar1.update_ticks()
+    cbar1.ax.tick_params(labelsize=tick_size)
+
+    # === State Means ===
     im2 = axes[0, 2].imshow(state_means, cmap=cmap, aspect='auto')
-    axes[0, 2].set_title("State means")
+    axes[0, 2].set_title("State means", fontsize=title_size)
+    axes[0, 2].tick_params(labelsize=tick_size)
+
+    num_features = state_means.shape[1]
+    axes[0, 2].xaxis.set_major_locator(MaxNLocator(nbins=num_ticks, integer=True))
+    axes[0, 2].yaxis.set_major_locator(MaxNLocator(nbins=num_ticks, integer=True))
+#    axes[0, 2].set_xticklabels([int(t) + 1 for t in axes[0, 2].get_xticks()])
+#    axes[0, 2].set_yticklabels([int(t) + 1 for t in axes[0, 2].get_yticks()])
+
+    if num_features > 15:
+        axes[0, 2].tick_params(axis='x', rotation=45)
+
     cbar2 = fig.colorbar(im2, ax=axes[0, 2])
-    cbar2.set_ticks(np.linspace(state_means.min(), state_means.max(), num=num_ticks).round(2))
-    # Set ticks and labels
-    ticks = np.linspace(0, state_means.shape[1]-1, num_ticks).astype(int)
-    axes[0, 2].set_xticks(ticks)
-    axes[0, 2].set_xticklabels(ticks + 1)  # Increment ticks by 1 for labels
-    axes[0, 2].set_yticks(np.linspace(1, state_means.shape[0], num_ticks).astype(int))
+    cbar2.locator = MaxNLocator(nbins=num_ticks)
+    cbar2.update_ticks()
+    cbar2.ax.tick_params(labelsize=tick_size)
 
-    # Plot state covariances
-    min_value = np.min(state_FC)
-    max_value = np.max(state_FC)
-    # Limits the number of ticks
-    if len(ticks)>10:
-        num_state = num_ticks
-    else:
-        num_state = len(ticks)
-        
-    ticks = np.linspace(0, state_FC.shape[0] - 1, num_state).astype(int)
-    # Plot state covariances
-    for k in range((num_cols*num_rows) -3): # have to fill the remaning number of subplots
-        row_idx = (k + 3) // 3  # Shift row index by 3 to start from the second row
-        col_idx = (k + 3) % 3
-        if k < num_plots - 3:
-            im = axes[row_idx, col_idx].imshow(state_FC[:, :, k], cmap=cmap, vmin=min_value, vmax=max_value)
-            axes[row_idx, col_idx].set_title("State covariance\nstate #%s" % (k + 1))
-            # Adjust tick locations
-            axes[row_idx, col_idx].set_xticks(ticks)
-            axes[row_idx, col_idx].set_yticks(ticks)
-            axes[row_idx, col_idx].set_xticklabels(ticks + 1)  # Increment ticks by 1 for labels
-            axes[row_idx, col_idx].set_yticklabels(ticks + 1) # Increment ticks by 1 for
-            cbar = fig.colorbar(im, ax=axes[row_idx, col_idx])
-            cbar.set_ticks(np.linspace(min_value, max_value, num=num_ticks).round(2))
+    # === Covariances ===
+    min_val, max_val = np.min(state_FC), np.max(state_FC)
+    cov_ticks = MaxNLocator(nbins=num_ticks).tick_values(0, state_FC.shape[0] - 1).astype(int)
+    cov_ticks = cov_ticks[cov_ticks < state_FC.shape[0]]
+
+    for k in range((num_cols * num_rows) - 3):
+        row_idx = (k + 3) // num_cols
+        col_idx = (k + 3) % num_cols
+
+        if k < num_cov_states:
+            ax = axes[row_idx, col_idx]
+            im = ax.imshow(state_FC[:, :, k], cmap=cmap, vmin=min_val, vmax=max_val)
+            ax.set_title(f"State covariance\nstate #{k + 1}", fontsize=title_size)
+            ax.tick_params(labelsize=tick_size)
+
+            ax.set_xticks(cov_ticks)
+            ax.set_yticks(cov_ticks)
+            ax.set_xticklabels(cov_ticks + 1, rotation=45 if len(cov_ticks) > 10 else 0)
+            ax.set_yticklabels(cov_ticks + 1)
+
+            cbar = fig.colorbar(im, ax=ax)
+            cbar.locator = MaxNLocator(nbins=num_ticks)
+            cbar.update_ticks()
+            cbar.ax.tick_params(labelsize=tick_size)
         else:
-            axes[row_idx, col_idx].axis('off')  # Leave empty plots blank
+            axes[row_idx, col_idx].axis('off')
 
-    plt.subplots_adjust(hspace=0.5, wspace=0.5)
-    # Save the figure if save_path is provided
     if save_path is not None:
-        plt.savefig(save_path, bbox_inches='tight') 
+        plt.savefig(save_path, bbox_inches='tight')
     plt.show()
-    
+
 
 def plot_condition_difference(
     Gamma_epoch, R_trials, 
