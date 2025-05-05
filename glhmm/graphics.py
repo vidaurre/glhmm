@@ -620,7 +620,7 @@ def plot_p_value_matrix(pval_in, alpha = 0.05, normalize_vals=True, figsize=(9, 
 
     # Ensure p-values are within the log range
     pval_min = -3
-    pval = np.clip(pval, 10**pval_min, 1)
+    pval[pval != 0] = np.clip(pval[pval != 0], 10**pval_min, 1)
     # Convert to log scale
     color_array = np.logspace(pval_min, 0, num_colors).reshape(1, -1)
     
