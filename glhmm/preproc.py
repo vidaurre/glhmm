@@ -12,8 +12,13 @@ from sklearn.decomposition import PCA
 from sklearn.decomposition import FastICA
 from scipy import signal
 import scipy.io
+import os
+from pathlib import Path
+from scipy.io import loadmat
 
 from . import auxiliary
+from .auxiliary import make_indices_from_T
+
 # import auxiliary
 
 def apply_pca(X,d,whitening=False, exact=True):
@@ -58,9 +63,15 @@ def apply_pca(X,d,whitening=False, exact=True):
         d = ncomp
 
     # sign convention equal to Matlab's
+    flip_signs = np.ones(d)
+    values = np.zeros(d)
     for j in range(d):
         jj = np.where(np.abs(X[:,j]) == np.abs(np.max(X[:,j])) )[0][0]
-        if X[jj,j] < 0: X[:,j] *= -1
+        values[j] = X[jj,j]
+        if X[jj,j] < 0: 
+            X[:,j] *= -1 
+            flip_signs[j] = -1
+            print("Flipping sign of component %d" % j)
 
     return X, pcamodel
 
@@ -130,7 +141,176 @@ def dampen_peaks(X,strength=5):
     return X_transformed
 
 
-def preprocess_data(data,indices,
+
+def load_X(file_path):
+    """
+    Load a data array from a file.
+
+    Parameters:
+    -----------
+    INPUT_FILE_PATH : str or Path
+        Path to the input file (.npy, .npz, or .mat).
+
+    Returns:
+    --------
+    X : ndarray of shape (n_samples, n_features)
+        The loaded data array, reshaped to 2D if needed.
+    """
+    ext = os.path.splitext(file_path)[1].lower()
+    if ext == '.npy':
+        X = np.load(file_path)
+    elif ext == '.npz':
+        data = np.load(file_path)
+        X = data[data.files[0]]
+    elif ext == '.mat':
+        mat = loadmat(file_path)
+        keys = [k for k in mat if not k.startswith("__")]
+        if not keys:
+            raise ValueError(f"No data found in {file_path}")
+        X = mat[keys[0]]
+    else:
+        raise ValueError(f"Unsupported file format: {file_path}")
+    if X.ndim > 2:
+        X = X.reshape(X.shape[0], -1)
+    return np.array(X)
+
+
+def resolve_files(files, file_type="npz"):
+    supported_types = {"npz", "npy", "mat"}
+    ext = f".{file_type.lower().lstrip('.')}"
+    if file_type not in supported_types:
+        raise ValueError(f"'file_type' must be one of {supported_types}")
+
+    if isinstance(files, (str, Path)) and Path(files).is_dir():
+        directory = Path(files)
+        return sorted(str(p) for p in directory.glob(f"*{ext}") if p.is_file())
+
+    if isinstance(files, (list, tuple)) and all(isinstance(p, (str, Path)) for p in files):
+        return [str(p) for p in files]
+
+    raise ValueError("The 'files' argument must be a list of file paths or a directory containing data files.")
+
+
+def highdim_pca(C, n_components=None):
+    """
+    Perform PCA on a high-dimensional correlation or covariance matrix.
+
+    Parameters:
+    -----------
+    C : ndarray of shape (p, p)
+        The input correlation or covariance matrix.
+    n_components : int or float or None
+        Number of components or proportion of explained variance to retain.
+
+    Returns:
+    --------
+    eigvecs : ndarray of shape (p, n_components)
+        The principal component directions.
+    eigvals : ndarray of shape (n_components,)
+        The corresponding eigenvalues indicating variance explained.
+    """
+    eigvals, eigvecs = np.linalg.eigh(C)
+    idx = np.argsort(eigvals)[::-1]
+    eigvals = eigvals[idx]
+    eigvecs = eigvecs[:, idx]
+
+    if isinstance(n_components, int):
+        eigvecs = eigvecs[:, :n_components]
+        eigvals = eigvals[:n_components]
+    elif isinstance(n_components, float):
+        explained = np.cumsum(eigvals) / np.sum(eigvals)
+        k = np.searchsorted(explained, n_components) + 1
+        eigvecs = eigvecs[:, :k]
+        eigvals = eigvals[:k]
+    elif n_components is not None:
+        raise ValueError("Invalid type for n_components")
+
+    # Apply Matlab-like sign convention (apply_pca)
+    for j in range(eigvecs.shape[1]):
+        max_idx = np.argmax(np.abs(eigvecs[:, j]))
+        if eigvecs[max_idx, j] < 0:
+            eigvecs[:, j] *= -1
+
+    return eigvecs, eigvals
+
+
+def highdim_ica(C, n_components):
+    """
+    Compute whitening matrix for ICA using high-dimensional PCA.
+
+    Parameters:
+    -----------
+    C : ndarray of shape (p, p)
+        The input correlation or covariance matrix.
+    n_components : int or float
+        Number of components or proportion of explained variance to retain.
+
+    Returns:
+    --------
+    whitening_matrix : ndarray
+        Whitening matrix to apply before ICA.
+    n_components_used : int
+        Number of components used in whitening.
+    """
+    eigvals, eigvecs = np.linalg.eigh(C)
+    idx = np.argsort(eigvals)[::-1]
+    eigvals = eigvals[idx]
+    eigvecs = eigvecs[:, idx]
+
+    if isinstance(n_components, int):
+        ncomp = n_components
+    elif isinstance(n_components, float):
+        explained = np.cumsum(eigvals) / np.sum(eigvals)
+        ncomp = np.searchsorted(explained, n_components) + 1
+    else:
+        raise ValueError("Invalid type for n_components")
+
+    eigvecs = eigvecs[:, :ncomp]
+    eigvals = eigvals[:ncomp]
+    whitening_matrix = eigvecs / np.sqrt(eigvals[np.newaxis, :])
+    return whitening_matrix, ncomp
+
+
+def apply_ica(X,d,algorithm='parallel'):
+    """Applies ICA to the input data X.
+
+    Parameters:
+    -----------
+    X : array-like of shape (n_samples, n_parcels)
+        The input data to be transformed.
+    d : int or float
+        If int, the number of components to keep.
+        If float, the percentage of explained variance to keep (according to a PCA decomposition)
+    algorithm : {"parallel", "deflation"}, default="parallel"
+        Specify which algorithm to use for FastICA.
+
+    Returns:
+    --------
+    X : array-like of shape (n_samples, n_components)
+        The transformed data after applying ICA.
+    icamode : sklearn estimator
+        The estimated ICA model
+    """
+
+    if d < 1:
+        pcamodel = PCA()
+        pcamodel.fit(X)
+        ncomp = np.where(np.cumsum(pcamodel.explained_variance_ratio_)>=d)[0][0] + 1
+    else: 
+        ncomp = d
+
+    icamodel = FastICA(n_components=ncomp,whiten='unit-variance',algorithm=algorithm)
+    icamodel.fit(X)
+    X = icamodel.transform(X)
+
+    # sign convention equal to Matlab's
+    for j in range(ncomp):
+        jj = np.where(np.abs(X[:,j]) == np.abs(np.max(X[:,j])) )[0][0]
+        if X[jj,j] < 0: X[:,j] *= -1
+
+    return X, icamodel
+
+def preprocess_data(data = None,indices = None,
         fs = 1, # frequency of the data
         dampen_extreme_peaks=None, # it can be None, True, or an int with the strength of dampening
         standardise=True, # True / False
@@ -143,84 +323,239 @@ def preprocess_data(data,indices,
         ica=None, # Number of independent components, % explained variance, or None (if specified, pca is not used)
         ica_algorithm='parallel', # related to how to run PCA
         post_standardise=None, # True / False, standardise the ICA/PCA components?
-        downsample=None # new frequency, or None
+        downsample=None, # new frequency, or None
+        files=None, # list of files to be preprocessed
+        output_dir=None,
+        file_name = None,
+        file_type= "npy",
+        lags=None
         ):
     
-    """Preprocess the input data.
+    """
+    Preprocess the input data or files, with support for stochastic training and optional TDE embedding.
 
     Parameters:
     -----------
-    data : array-like of shape (n_samples, n_parcels)
-        The input data to be preprocessed.
-
-    indices : array-like of shape (n_sessions, 2)
-        The start and end indices of each trial/session in the input data.
-
+    data : array-like, optional
+        Raw input data of shape (n_samples, n_parcels), used for in-memory processing.
+    indices : array-like of shape (n_sessions, 2), optional
+        Start and end indices of each session (only required for in-memory data).
     fs : int or float, default=1
-        The frequency of the input data.
-        
-    dampen_extreme_peaks : int, True or None, default=None
-        determines whether to dampen extreme peaks in the data and the strength of the dampening. 
-        If this is chosen, the data are centered first (per subject).
-        If int, the strength of dampening
-        If True, the dampening is done with default value 5.
-        If None, no dampening will be applied.
-
-    standardise : bool, default=True. 
-        Whether to standardize the input data. 
-
-    filter : tuple of length 2 or None, default=None
-        The low-pass and high-pass thresholds to apply to the input data.
-        If None, no filtering will be applied.
-        If a tuple, the first element is the low-pass threshold and the second is the high-pass threshold.    
-
+        Sampling frequency of the data.
+    dampen_extreme_peaks : int, bool, or None, default=None
+        Dampens extreme peaks in the data. If True, uses default strength of 5. If int, specifies strength.
+    standardise : bool, default=True
+        Whether to standardise (zero-mean, unit-variance) each session.
+    filter : tuple of two floats or None, default=None
+        Bandpass (low, high), lowpass (0, high), or highpass (low, None) filter.
     detrend : bool, default=False
-        Whether to detrend the input data.
-
+        Whether to linearly detrend the data.
     onpower : bool, default=False
-        Whether to calculate the power of the input data using the Hilbert transform.
-
+        Whether to extract signal power using the Hilbert transform.
     onphase : bool, default=False
-        Whether to calculate the phase of the input data using the Hilbert transform.
-        If both onpower and onphase are set to True, power and phase will be included as separate columns in the output array
-
-    pca : int or float or None, default=None
-        If int, the number of components to keep after applying PCA.
-        If float, the percentage of explained variance to keep after applying PCA (must be >=0 and >=1)
-        If None, no PCA will be applied.
-
+        Whether to extract phase using the Hilbert transform. If both `onpower` and `onphase` are True,
+        power and phase are concatenated.
+    pca : int, float, array-like, or None, default=None
+        PCA dimensionality reduction. If int, number of components. If float, proportion of variance to retain.
+        If array, treated as precomputed PCA matrix.
     exact_pca : bool, default=True
-        Whether to use full SVD solver for PCA.
-        
+        Whether to use full SVD in PCA (only relevant for in-memory mode).
     ica : int or float or None, default=None
-        determines whether to apply ICA (if pca is also specified, it is overridden, and only ica is used)
-        If int, the number of independent components to estimate
-        If float, the number of components is given by the percentage of explained variance from PCA.
-        If None, no PCA will be applied.       
-
-    ica_algorithm : {"parallel", "deflation"}, default="parallel"
-        Specify which algorithm to use for ICA (based on FastICA).     
-
-    post_standardise : bool, default=False if pca is used; =True if ica is used; 
-        Whether to standardize after applying PCA/ICA (recommended when using the TDE-HMM)
-
+        ICA dimensionality reduction. If int, number of components. If float, proportion of variance to retain.
+    ica_algorithm : str, default='parallel'
+        ICA algorithm to use (e.g., 'parallel', 'deflation').
+    post_standardise : bool or None, default=None
+        Whether to standardise data after PCA or ICA. Defaults to True if ICA is used.
     downsample : int or float or None, default=None
-        The new frequency of the input data after downsampling.
-        If None, no downsampling will be applied.
+        New sampling frequency. If None, no downsampling.
+    files : list of str or Path, optional
+        If set, enables file-based preprocessing with one file at a time for stochastic training.
+    output_dir : str or Path, optional
+        Directory to save processed files (only used in file mode).
+    file_name : str or None, optional
+        Optional suffix to append to output filenames.
+    file_type : str, default="npy"
+        File format type for loading files.
+    lags : list or array-like, optional
+        If specified, applies temporal delay embedding (TDE) using these lags.
+        This prepares the data for use with a Time-Delay Embedded HMM (HMM-TDE).
+        This should be a list of integers indicating how many time steps before and after to include.
+        For example, use:
+            lags = np.arange(-7, 8)
+        to include 15 lagged versions of the signal: from 7 time steps before to 7 time steps after.
 
     Returns:
     --------
-    data : array-like of shape (n_samples_processed, n_parcels)
-        The preprocessed input data.
+    For in-memory mode:
+        data : np.ndarray
+            The preprocessed (and optionally embedded/reduced) data.
+        indices_new : np.ndarray
+            Updated indices after preprocessing and embedding.
+        log : dict
+            Dictionary containing the preprocessing parameters and models.
 
-    indices_new : array-like of shape (n_sessions_processed, 2)
-        The start and end indices of each trial/session in the preprocessed data.
-
-    log : dict
-        Dictionary logging which preprocessing has been applied, to be passed onto the
-        glhmm object instance. This contains the variables passed to the function and (where relevant) 
-        the estimators (PCA/ICA models)
+    For file-based mode:
+        output_file_paths : list of str
+            List of paths to saved preprocessed files.
+        log : dict
+            Dictionary with accumulated preprocessing parameters and PCA statistics.
     """
+
+
+    # Validate lags if specified
+    if lags is not None:
+        if not isinstance(lags, (list, np.ndarray)):
+            raise ValueError("`lags` must be a list or NumPy array of integers.")
+        lags = np.asarray(lags)
+        if lags.ndim != 1 or not np.issubdtype(lags.dtype, np.integer):
+            raise ValueError("`lags` must be a 1D array or list of integers.")
+        if np.any(lags != np.sort(lags)):
+            raise ValueError("`lags` must be sorted in ascending order.")
+        else:
+            print("Applying TDE embedding.")
+    # file-based preprocessing for stochastic learning
+    if files is not None:
+        if ica is not None:
+            raise NotImplementedError("ICA cannot be applied in file-wise mode without concatenating data.")
+        log = {**locals()}
+        del(log["data"], log["indices"], log["files"])
+        files = resolve_files(files, file_type=file_type)
+        INPUT_FILE_PATHS = [str(p) for p in files]
+        if output_dir is None:
+            OUTPUT_DIR_PATH = Path(files[0]).parent
+        else:
+            OUTPUT_DIR_PATH = Path(output_dir)
+        OUTPUT_DIR_PATH.mkdir(parents=True, exist_ok=True)
+
+        TEMP_PATHS = []
+        all_indices = []
+        first = True
+        total_T = 0
+
+        if pca is not None or ica is not None:
+            accumulate_stats = True
+        else:
+            accumulate_stats = False
+
+        # Step 1 + 2: Preprocess each file (except PCA), optionally apply TDE, save temp, accumulate PCA stats
+        for INPUT_FILE_PATH in INPUT_FILE_PATHS:
+            X = load_X(INPUT_FILE_PATH)
+            T = X.shape[0]
+            indices = np.array([[0, T]])
+            p = X.shape[1]
+
+            if dampen_extreme_peaks:
+                X -= np.mean(X, axis=0)
+                strength = dampen_extreme_peaks if isinstance(dampen_extreme_peaks, int) else 5
+                X = dampen_peaks(X, strength)
+
+            if standardise:
+                X -= np.mean(X, axis=0)
+                X /= np.std(X, axis=0)
+
+            if filter is not None:
+                filterorder = 6
+                if filter[0] == 0:
+                    sos = signal.butter(filterorder, filter[1], 'lowpass', output='sos', fs=fs)
+                elif filter[1] is None:
+                    sos = signal.butter(filterorder, filter[0], 'highpass', output='sos', fs=fs)
+                else:
+                    sos = signal.butter(filterorder, filter, 'bandpass', output='sos', fs=fs)
+                X = signal.sosfilt(sos, X, axis=0)
+
+            if detrend:
+                X = signal.detrend(X, axis=0)
+
+            if onpower and not onphase:
+                X = np.abs(signal.hilbert(X, axis=0))
+
+            if onphase and not onpower:
+                X = np.unwrap(np.angle(signal.hilbert(X, axis=0)), axis=0)
+
+            if onpower and onphase:
+                analytic = signal.hilbert(X, axis=0)
+                X_power = np.abs(analytic)
+                X_phase = np.unwrap(np.angle(analytic), axis=0)
+                X = np.concatenate((X_power, X_phase), axis=1)
+                p = X.shape[1]
+
+
+            if accumulate_stats==False and post_standardise:
+                X -= np.mean(X, axis=0)
+                X /= np.std(X, axis=0)
+
+            if downsample is not None:
+                factor = downsample / fs
+                indices_new = np.array([[0, int(np.ceil(T * factor))]])
+                gcd = math.gcd(int(downsample), int(fs))
+                X = signal.resample_poly(X, int(downsample // gcd), int(fs // gcd), axis=0)
+                indices = indices_new
+
+            # Apply TDE embedding if requested
+            if lags is not None:
+                X, indices_new = build_data_tde(X, indices, lags)
+            else:
+                indices_new = indices
+
+            TEMP_PATH = OUTPUT_DIR_PATH / f"temp_{Path(INPUT_FILE_PATH).stem}.npy"
+            np.save(TEMP_PATH, X)
+            TEMP_PATHS.append(str(TEMP_PATH))
+            all_indices.append(indices_new)
+
+            if accumulate_stats:
+            # Accumulate PCA stats
+                T, p = X.shape
+                total_T += T
+                if first:
+                    meanX = np.zeros(p)
+                    sum_squares_X = np.zeros(p)
+                    C = np.zeros((p, p))
+                    first = False
+                meanX += X.sum(axis=0)
+                sum_squares_X += np.sum(X ** 2, axis=0)
+                C += X.T @ X  # Gram matrix
+        
+        # Run PCA if requested
+        if accumulate_stats:
+            meanX /= total_T #  Global mean vector.
+            varX = sum_squares_X / total_T - meanX ** 2 # Variance using E[X²] - (E[X])² identity
+            stdX = np.sqrt(varX)
+            stdX[stdX == 0] = 1  # Avoid division by zero for flat signals (std = 0); they won't be scaled during correlation normalization
+            C = C / total_T - np.outer(meanX, meanX) # center the Gram matrix => covariance
+            C = C / np.outer(stdX, stdX) # normalizes the covariance matrix => correlation matrix. 
+        
+        if pca is not None:
+            pca_matrix, _ = highdim_pca(C, n_components=pca)
+
+        # Save files with PCA/ICA applied
+        OUTPUT_FILE_PATHS = []
+        for path, INPUT_FILE_PATH, indices in zip(TEMP_PATHS, INPUT_FILE_PATHS, all_indices):
+            X = np.load(path)
+            if pca is not None:
+                X = (X - meanX) / stdX
+                X = X @ pca_matrix # Apply PCA
+                if post_standardise:
+                    X -= np.mean(X, axis=0)
+                    X /= np.std(X, axis=0)
+                log['meanX'] = meanX
+                log['stdX'] = stdX
+                log['pca_matrix'] = pca_matrix
+    
+            # Save the result regardless of PCA
+            BASE_FILENAME = Path(INPUT_FILE_PATH).stem
+            append_name = f"_{file_name}" if isinstance(file_name, str) else "_preprocessed"
+            OUTPUT_FILE_PATH = OUTPUT_DIR_PATH / f"{BASE_FILENAME}{append_name}.npz"
+            np.savez(OUTPUT_FILE_PATH, X=np.empty((0,)), Y=X, indices=indices)
+            OUTPUT_FILE_PATHS.append(str(OUTPUT_FILE_PATH))
+            os.remove(path)
+
+        log_suffix = f"_{file_name}" if isinstance(file_name, str) else ""
+        log_file_path = OUTPUT_DIR_PATH / f"log_preprocessing{log_suffix}.npz"
+        np.savez(log_file_path, **log)
+
+        return OUTPUT_FILE_PATHS, log
+   
+    # In memory preprocessing
     p = data.shape[1]
     N = indices.shape[0]
     log = {**locals()}
@@ -281,6 +616,9 @@ def preprocess_data(data,indices,
             data[t,:p] = np.abs(analytical_signal)
             data[t,p:] = np.unwrap(np.angle(analytical_signal))
         p = data.shape[1]
+
+    if lags is not None:
+        data, indices = build_data_tde(data, indices, lags)
 
     if (pca != None) and (ica is None):
         data, pcamodel = apply_pca(data,pca,exact_pca)
@@ -361,7 +699,7 @@ def build_data_autoregressive(data,indices,autoregressive_order=1,
     
     X = np.zeros((T - N*autoregressive_order,p*autoregressive_order))
     Y = np.zeros((T - N*autoregressive_order,p))
-    indices_new = np.zeros((N,2)).astype(int)
+    indices_new = np.zeros((N,2))
 
     for j in range(N):
         ind_1 = np.arange(indices[j,0]+autoregressive_order,indices[j,1],dtype=np.int64)
@@ -475,79 +813,183 @@ def build_data_partial_connectivity(X,Y,connectivity=None,center_data=True):
     return X_new,Y_new,connectivity_new
 
 
-def build_data_tde(data,indices,lags,pca=None,standardise_pc=True):
-    """Builds X for the temporal delay embedded HMM, as well as an adapted indices array.
+def build_data_tde(data=None, indices=None, lags=None, pca=None, standardise_pc=True, files=None, output_dir=None, file_name=None):
+    """
+    Builds delay-embedded data for TDE-HMM. Supports in-memory or file-based input.
 
     Parameters:
     -----------
-    data : numpy array of shape (n_samples, n_parcels)
-        The data matrix.
-    indices : array-like of shape (n_sessions, 2)
-        The start and end indices of each trial/session in the input data.
+    data : ndarray or None
+        Raw data (n_samples, n_parcels) to embed in memory.
+    indices : ndarray or None
+        Start and end indices for each session (n_sessions, 2).
     lags : list or array-like
-        The lags to use for the embedding.
-    pca : None or int or float or numpy array, default=None
-        The number of components for PCA, the explained variance for PCA, the precomputed PCA projection matrix, 
-        or None to skip PCA.
-    standardise_pc : bool, default=True
-        Whether or not to standardise the principal components before returning.
+        Lags to apply for temporal embedding.
+    pca : int, float, array or None
+        PCA options.
+    standardise_pc : bool
+        Whether to standardise PCA components.
+    files : list of str or Path, optional
+        If set, reads files instead of using `data`/`indices`.
+    output_dir : str or Path, optional
+        Where to save output files if using file input.
+    file_name : str or None, optional
+        Custom string to append to each output file name before extension.
 
     Returns:
     --------
-    X : numpy array of shape (n_samples - n_sessions*rwindow, n_parcels*n_lags)
-        The delay-embedded timeseries data.
-    indices_new : numpy array of shape (n_sessions, 2)
-        The adapted indices for each segment of delay-embedded data.
-    pcamodel : sklearn estimator, optional
-        If doing PCA, the estimated PCA model
-
-    PCA can be run optionally: if pca >=1, that is the number of components;
-    if pca < 1, that is explained variance;
-    if pca is a numpy array, then it is a precomputed PCA projection matrix;
-    if pca is None, then no PCA is run.
+    If using files: list of output file paths, and log dictionary if PCA is applied.
+    If using in-memory data: X_emb, indices_emb (+ pcamodel if PCA).
     """
 
-    T,p = data.shape
+    if files is not None:
+        OUTPUT_FILE_PATHS = []
+        # Determine output directory
+        if output_dir is None:
+            output_dir = Path(files[0]).parent
+        else:
+            output_dir = Path(output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        # accumulate statistics for global PCA 
+        if pca is not None:
+            first = True
+            total_T = 0
+            for file in files:
+                _, data, indices = load_files([file], do_only_indices=False)
+                T, p = data.shape
+                N = indices.shape[0]
+                L = len(lags)
+                minlag, maxlag = np.min(lags), np.max(lags)
+                rwindow = maxlag - minlag
+                # Apply delay embedding to each file individually
+                X = np.zeros((T - N * rwindow, p * L))
+                for j in range(N):
+                    ind_1 = np.arange(indices[j, 0], indices[j, 1])
+                    ind_2 = np.arange(indices[j, 0], indices[j, 1] - rwindow) - j * rwindow
+                    for i, l in enumerate(lags):
+                        X_l = np.roll(data[ind_1], l, axis=0)
+                        X_l = X_l[-minlag:-maxlag]
+                        X[ind_2, i * p:(i + 1) * p] = X_l
+
+                # Initialize accumulators on the first file
+                if first:
+                    D = X.shape[1]
+                    sum_X = np.zeros(D)
+                    sumsq_X = np.zeros(D)
+                    C = np.zeros((D, D))
+                    first = False
+                 # Accumulate total samples, means, and covariance
+                total_T += X.shape[0]
+                sum_X += X.sum(axis=0)
+                sumsq_X += np.einsum("ij,ij->j", X, X)
+                C += X.T @ X
+            # Compute global mean and standard deviation
+            meanX = sum_X / total_T
+            varX = sumsq_X / total_T - meanX ** 2
+            stdX = np.sqrt(varX)
+            stdX[stdX == 0] = 1
+            # Normalize the covariance matrix to compute correlation
+            C = C / total_T - np.outer(meanX, meanX)
+            C = C / np.outer(stdX, stdX)
+
+            # Compute PCA matrix using updated highdim_pca
+            pca_matrix, _ = highdim_pca(C, n_components=pca)
+
+        # apply TDE and shared PCA 
+        for file in files:
+            _, data, indices = load_files([file], do_only_indices=False)
+            T, p = data.shape
+            N = indices.shape[0]
+            L = len(lags)
+            minlag, maxlag = np.min(lags), np.max(lags)
+            rwindow = maxlag - minlag
+
+            X = np.zeros((T - N * rwindow, p * L))
+            indices_new = np.zeros((N, 2), dtype=int)
+
+            for j in range(N):
+                ind_1 = np.arange(indices[j, 0], indices[j, 1])
+                ind_2 = np.arange(indices[j, 0], indices[j, 1] - rwindow) - j * rwindow
+                for i, l in enumerate(lags):
+                    X_l = np.roll(data[ind_1], l, axis=0)
+                    X_l = X_l[-minlag:-maxlag]
+                    X[ind_2, i * p:(i + 1) * p] = X_l
+                indices_new[j] = [ind_2[0], ind_2[-1] + 1]
+
+            X -= np.mean(X, axis=0)
+            X /= np.std(X, axis=0)
+
+            if pca is not None:
+                X = (X - meanX) / stdX
+                X = X @ pca_matrix
+                if standardise_pc:
+                    X /= np.std(X, axis=0)
+
+            # Save output for this file
+            base_filename = Path(file).stem
+            append_name = f"_{file_name}" if isinstance(file_name, str) else ("_pca_tde" if pca is not None else "_tde")
+            output_file = output_dir / f"{base_filename}{append_name}.npz"
+            np.savez(output_file, X=np.empty((0,)), Y=X, indices=indices_new)
+            OUTPUT_FILE_PATHS.append(str(output_file))
+
+        # Prepare log for reproducibility
+        log = {"n_lags": len(lags)}
+        if pca is not None:
+            log.update({
+                "meanX": meanX,
+                "stdX": stdX,
+                "pca_matrix": pca_matrix,
+                "n_components": pca_matrix.shape[1]
+            })
+
+        # Save log
+        log_suffix = f"_{file_name}" if isinstance(file_name, str) else ""
+        log_file_path = output_dir / f"log_tde{log_suffix}.npz"
+        np.savez(log_file_path, **log)
+
+        return OUTPUT_FILE_PATHS, log
+
+
+    # In-memory mode
+    T, p = data.shape
     N = indices.shape[0]
-    
+
     L = len(lags)
     minlag = np.min(lags)
     maxlag = np.max(lags)
-    rwindow = maxlag-minlag
+    rwindow = maxlag - minlag
 
-    X = np.zeros((T - N*rwindow,p*L))
-    indices_new = np.zeros((N,2)).astype(int)
+    X = np.zeros((T - N * rwindow, p * L))
+    indices_new = np.zeros((N, 2), dtype=int)
 
-    # Embedding
     for j in range(N):
-        ind_1 = np.arange(indices[j,0],indices[j,1],dtype=np.int64)
-        ind_2 = np.arange(indices[j,0],indices[j,1]-rwindow,dtype=np.int64) - j * rwindow
+        ind_1 = np.arange(indices[j, 0], indices[j, 1], dtype=np.int64)
+        ind_2 = np.arange(indices[j, 0], indices[j, 1] - rwindow, dtype=np.int64) - j * rwindow
         for i in range(L):
             l = lags[i]
-            X_l = np.roll(data[ind_1,:],l,axis=0)
-            X_l = X_l[-minlag:-maxlag,:]
-            ind_ch = np.arange(i,L*p,L)
-            X[ind_2,ind_ch[:,np.newaxis]] = X_l.T
-        indices_new[j,0] = ind_2[0]
-        indices_new[j,1] = ind_2[-1] + 1
+            X_l = np.roll(data[ind_1, :], l, axis=0)
+            X_l = X_l[-minlag:-maxlag, :]
+            ind_ch = np.arange(i, L * p, L)
+            X[ind_2, ind_ch[:, np.newaxis]] = X_l.T
+        indices_new[j, 0] = ind_2[0]
+        indices_new[j, 1] = ind_2[-1] + 1
 
-    # Standardise (in Matlab's HMM-MAR we only centered pre-embedding)
-    # note that this is done for the entire data set and not per sessions
-    X -= np.mean(X,axis=0)
-    X /= np.std(X,axis=0)
-
-    # PCA and whitening 
-    if pca is not None:
-        X, pcamodel = apply_pca(X,pca,standardise_pc)
+    X -= np.mean(X, axis=0)
+    X /= np.std(X, axis=0)
 
     if pca is not None:
-        return X,indices_new,pcamodel
+        X, pcamodel = apply_pca(X, pca, standardise_pc)
+        return X, indices_new, pcamodel
     else:
-        return X,indices_new
+        return X, indices_new
+
+
 
 
 def load_files(files,I=None,do_only_indices=False):        
-
+    # Convert Path objects to strings if needed
+    files = [str(f) if isinstance(f, Path) else f for f in files]
     X = []
     Y = []
     indices = []
