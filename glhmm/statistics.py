@@ -1646,6 +1646,8 @@ def deconfound_values(D_data, R_data, confounds=None):
     
 
     if confounds is not None:
+        if confounds.ndim == 1:
+            confounds = np.expand_dims(confounds, axis=1)
         # Center confounds
         confounds_centered = confounds - np.nanmean(confounds, axis=0)
 
