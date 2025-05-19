@@ -1888,6 +1888,8 @@ class glhmm():
         
         if self.preproclogY and orig_space:
             q = self.preproclogY["p"]
+            if self.preproclogY["lags"] is not None:
+                q *= self.preproclogY["lags"].shape[0]
         else:
             q = self.Sigma[0]["rate"].shape[0]
 
@@ -1964,6 +1966,8 @@ class glhmm():
         
         if self.preproclogY and orig_space:
             q = self.preproclogY["p"]
+            if self.preproclogY["lags"] is not None:
+                q *= self.preproclogY["lags"].shape[0]
         else:
             q = self.Sigma[0]["rate"].shape[0]
 
@@ -2180,6 +2184,8 @@ class glhmm():
 
         if self.preproclogY and orig_space:
             q = self.preproclogY["p"]
+            if self.preproclogY["lags"] is not None:
+                q *= self.preproclogY["lags"].shape[0]
         else:
             q = self.Sigma[0]["rate"].shape[0]
 
