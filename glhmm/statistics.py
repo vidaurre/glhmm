@@ -3800,7 +3800,7 @@ def get_indices_update_nan(idx_data, nan_mask):
     
     return idx_data_update
 
-def get_concatenate_data_memmap(D_raw, filename="D_con.dat"):
+def get_concatenate_data_memmap(D_raw, filename="D_con.dat", dtype=np.float32):
     """
     Saves a list of NumPy arrays (D_raw) into a memory-mapped file to optimize RAM usage.
     
@@ -3824,23 +3824,17 @@ def get_concatenate_data_memmap(D_raw, filename="D_con.dat"):
     num_features = D_raw[0].shape[1]
     
     # Create a memory-mapped file
-    D_con_dat = np.memmap(filename, dtype=D_raw[0].dtype, mode="w+", shape=(total_samples, num_features))
+    D_con = np.memmap(filename, dtype=dtype, mode="w+", shape=(total_samples, num_features))
     
     # Write data incrementally
     start = 0
     for d in D_raw:
+        d = d.astype(dtype, copy=False)  # Safely cast to float32 without extra copy
         end = start + d.shape[0]
-        D_con_dat[start:end] = d  # Copy data into memory-mapped file
+        D_con[start:end] = d
         start = end
 
-    # Convert memmap to a regular NumPy array
-    D_con = np.array(D_con_dat)
-    
-    # Explicitly delete the memmap object before removing the file
-    del D_con_dat
-    
-    # Remove the temporary memory-mapped file
-    os.remove(filename)
+    D_con.flush()
 
     return D_con 
 
