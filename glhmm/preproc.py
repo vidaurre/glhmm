@@ -251,7 +251,8 @@ def preprocess_data(data = None,indices = None,
         output_dir=None,
         file_name = None,
         file_type= "npy",
-        lags=None
+        lags=None,
+        autoregressive_order= None
         ):
     
     """
@@ -299,13 +300,15 @@ def preprocess_data(data = None,indices = None,
         Optional suffix to append to output filenames.
     file_type : str, default="npy"
         File format type for loading files.
-    lags : list or array-like, optional
+    lags : list, optional
         If specified, applies temporal delay embedding (TDE) using these lags.
         This prepares the data for use with a Time-Delay Embedded HMM (HMM-TDE).
         This should be a list of integers indicating how many time steps before and after to include.
         For example, use:
             lags = np.arange(-7, 8)
         to include 15 lagged versions of the signal: from 7 time steps before to 7 time steps after.
+    autoregressive_order : int, default=None
+        Number of lags to include.
 
     Returns:
     --------
@@ -323,8 +326,15 @@ def preprocess_data(data = None,indices = None,
         log : dict
             Dictionary with accumulated preprocessing parameters and PCA statistics.
     """
+    if lags is not None and autoregressive_order is not None:
+        raise ValueError("Specify either `lags` (for TDE) or `autoregressive_order` (for AR), not both.")
 
-
+    if autoregressive_order is not None:
+        if not isinstance(autoregressive_order, int):
+            raise ValueError("`autoregressive_order` must be an integer.")
+        if autoregressive_order < 1:
+            raise ValueError("`autoregressive_order` must be >= 1.")
+    
     # Validate lags if specified
     if lags is not None:
         if not isinstance(lags, (list, np.ndarray)):
@@ -414,11 +424,18 @@ def preprocess_data(data = None,indices = None,
                 X = signal.resample_poly(X, int(downsample // gcd), int(fs // gcd), axis=0)
                 indices = indices_new
 
-            # Apply TDE embedding if requested
-            if lags is not None:
+            if autoregressive_order is not None:
+                X, Y, indices_new, _ = build_data_autoregressive(
+                    data=X,
+                    indices=indices,
+                    autoregressive_order=autoregressive_order,
+                    center_data=post_standardise  # Use same logic
+                )
+            elif lags is not None:
                 X, indices_new = build_data_tde(X, indices, lags)
             else:
                 indices_new = indices
+                Y = X  # fallback for consistency
 
             TEMP_PATH = OUTPUT_DIR_PATH / f"temp_{Path(INPUT_FILE_PATH).stem}.npy"
             np.save(TEMP_PATH, X)
@@ -468,7 +485,7 @@ def preprocess_data(data = None,indices = None,
             BASE_FILENAME = Path(INPUT_FILE_PATH).stem
             append_name = f"_{file_name}" if isinstance(file_name, str) else "_preprocessed"
             OUTPUT_FILE_PATH = OUTPUT_DIR_PATH / f"{BASE_FILENAME}{append_name}.npz"
-            np.savez(OUTPUT_FILE_PATH, X=np.empty((0,)), Y=X, indices=indices)
+            np.savez(OUTPUT_FILE_PATH, X=np.empty((0,)), Y=Y, indices=indices)
             OUTPUT_FILE_PATHS.append(str(OUTPUT_FILE_PATH))
             os.remove(path)
 
@@ -540,7 +557,15 @@ def preprocess_data(data = None,indices = None,
             data[t,p:] = np.unwrap(np.angle(analytical_signal))
         p = data.shape[1]
 
-    if lags is not None:
+    if autoregressive_order is not None:
+        X, Y, indices, _ = build_data_autoregressive(
+            data=data,
+            indices=indices,
+            autoregressive_order=autoregressive_order,
+            center_data=post_standardise
+        )
+        data = Y  # Use Y as the transformed signal
+    elif lags is not None:
         data, indices = build_data_tde(data, indices, lags)
 
     if (pca != None) and (ica is None):
@@ -582,23 +607,29 @@ def preprocess_data(data = None,indices = None,
 
 
 def build_data_autoregressive(data,indices,autoregressive_order=1,
-        connectivity=None,center_data=True):
-    """Builds X and Y for the autoregressive model, 
-    as well as an adapted indices array and predefined connectivity 
-    matrix in the right format. X and Y are centered by default.
-    
+        connectivity=None,center_data=True,  files=None, output_dir=None, file_name=None):
+    """
+    Builds X and Y for the autoregressive model. Supports both in-memory and file-based input.
+    Saves output when processing files.
+
     Parameters:
     -----------
-    data : array-like of shape (n_samples,n_parcels)
-        The data timeseries.
-    indices : array-like of shape (n_sessions, 2)
-        The start and end indices of each trial/session in the input data.
-    autoregressive_order : int, optional, default=1
-        The number of lags to include in the autoregressive model.
-    connectivity : array-like of shape (n_parcels, n_parcels), optional, default=None
-        The matrix indicating which regressors should be used for each variable.
-    center_data : bool, optional, default=True
-        If True, the data will be centered.
+    data : ndarray, shape (n_samples, n_parcels)
+        In-memory time series data.
+    indices : ndarray, shape (n_sessions, 2)
+        Session boundaries in data.
+    autoregressive_order : int
+        Number of lags to include.
+    connectivity : ndarray, optional
+        Mask of shape (n_parcels, n_parcels).
+    center_data : bool
+        Whether to mean-center X and Y.
+    files : list of str or Path, optional
+        Input `.npz` or `.mat` files to process.
+    output_dir : str or Path, optional
+        Directory to save processed files.
+    file_name : str, optional
+        Custom suffix to append to each output file name.
 
     Returns:
     --------
@@ -612,61 +643,101 @@ def build_data_autoregressive(data,indices,autoregressive_order=1,
         The new connectivity matrix indicating which regressors should be used for each variable.
 
     """
+    if files is not None:
+        output_paths = []
+        log = {"autoregressive_order": autoregressive_order}
 
-    T,p = data.shape
-    N = indices.shape[0]
+        if output_dir is None:
+            output_dir = Path(files[0]).parent
+        else:
+            output_dir = Path(output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
 
-    if autoregressive_order == 0:
-        warnings.warn("autoregressive_order is 0 so nothing to be done")
-        return np.empty(0),data,indices,connectivity
-    
-    X = np.zeros((T - N*autoregressive_order,p*autoregressive_order))
-    Y = np.zeros((T - N*autoregressive_order,p))
-    indices_new = np.zeros((N,2))
+        for file in files:
+            _, data, indices = load_files([file], do_only_indices=False)
+            X, Y, indices_new, conn_new = build_data_autoregressive(
+                data=data,
+                indices=indices,
+                autoregressive_order=autoregressive_order,
+                connectivity=connectivity,
+                center_data=center_data,
+                files=None
+            )
 
-    for j in range(N):
-        ind_1 = np.arange(indices[j,0]+autoregressive_order,indices[j,1],dtype=np.int64)
-        ind_2 = np.arange(indices[j,0],indices[j,1]-autoregressive_order,dtype=np.int64) \
-            - j * autoregressive_order
-        Y[ind_2,:] = data[ind_1,:]
-        for i in range(autoregressive_order):
-            ind_3 = np.arange(indices[j,0]+autoregressive_order-(i+1),indices[j,1]-(i+1),dtype=np.int64)
-            ind_ch = np.arange(p) + i * p
-            X[ind_2,ind_ch[:,np.newaxis]] = data[ind_3,:].T
-        indices_new[j,0] = ind_2[0]
-        indices_new[j,1] = ind_2[-1] + 1
+            base_name = Path(file).stem
+            suffix = f"_{file_name}" if isinstance(file_name, str) else "_ar"
+            output_file = output_dir / f"{base_name}{suffix}.npz"
 
-    # center
-    if center_data:
-        Y -= np.mean(Y,axis=0)
-        X -= np.mean(X,axis=0)
+            # Save AR data: put Y as main, X optional (for legacy)
+            np.savez(output_file, X=np.empty((0,)), Y=Y, indices=indices_new)
+            output_paths.append(str(output_file))
 
-    if connectivity is not None:
-        # connectivity_new : (regressors by regressed) 
-        connectivity_new = np.zeros((autoregressive_order*p,p))
-        for i in range(autoregressive_order):
-            ind_ch = np.arange(p) + i * p
-            connectivity_new[ind_ch,:] = connectivity
-        # regress out when asked
-        for j in range(p):
-            jj = np.where(connectivity_new[:,j]==0)[0]
-            if len(jj)==0: continue
-            b = np.linalg.inv(X[:,jj].T @ X[:,jj] + 0.001 * np.eye(len(jj))) \
-                @ (X[:,jj].T @ Y[:,j])
-            Y[:,j] -= X[:,jj] @ b
-        # remove unused variables
-        active_X = np.zeros(p,dtype=bool)
-        active_Y = np.zeros(p,dtype=bool)
-        for j in range(p):
-            active_X[j] = np.sum(connectivity[j,:]==1) > 0
-            active_Y[j] = np.sum(connectivity[:,j]==1) > 0
-        active_X = np.tile(active_X,autoregressive_order)
-        active_X = np.where(active_X)[0]
-        active_Y = np.where(active_Y)[0]
-        Y = Y[:,active_Y]
-        X = X[:,active_X]
-        connectivity_new = connectivity_new[active_X,active_Y[:,np.newaxis]].T
-    else: connectivity_new = None
+        # Add optional metadata
+        if connectivity is not None:
+            log["connectivity_shape"] = connectivity.shape
+        log["n_files"] = len(files)
+        log["output_dir"] = str(output_dir)
+
+        log_file = output_dir / f"log_ar{suffix}.npz"
+        np.savez(log_file, **log)
+
+        return output_paths, log
+
+    else:
+        T,p = data.shape
+        N = indices.shape[0]
+
+        if autoregressive_order == 0:
+            warnings.warn("autoregressive_order is 0 so nothing to be done")
+            return np.empty(0),data,indices,connectivity
+        
+        X = np.zeros((T - N*autoregressive_order,p*autoregressive_order))
+        Y = np.zeros((T - N*autoregressive_order,p))
+        indices_new = np.zeros((N,2))
+
+        for j in range(N):
+            ind_1 = np.arange(indices[j,0]+autoregressive_order,indices[j,1],dtype=np.int64)
+            ind_2 = np.arange(indices[j,0],indices[j,1]-autoregressive_order,dtype=np.int64) \
+                - j * autoregressive_order
+            Y[ind_2,:] = data[ind_1,:]
+            for i in range(autoregressive_order):
+                ind_3 = np.arange(indices[j,0]+autoregressive_order-(i+1),indices[j,1]-(i+1),dtype=np.int64)
+                ind_ch = np.arange(p) + i * p
+                X[ind_2,ind_ch[:,np.newaxis]] = data[ind_3,:].T
+            indices_new[j,0] = ind_2[0]
+            indices_new[j,1] = ind_2[-1] + 1
+
+        # center
+        if center_data:
+            Y -= np.mean(Y,axis=0)
+            X -= np.mean(X,axis=0)
+
+        if connectivity is not None:
+            # connectivity_new : (regressors by regressed) 
+            connectivity_new = np.zeros((autoregressive_order*p,p))
+            for i in range(autoregressive_order):
+                ind_ch = np.arange(p) + i * p
+                connectivity_new[ind_ch,:] = connectivity
+            # regress out when asked
+            for j in range(p):
+                jj = np.where(connectivity_new[:,j]==0)[0]
+                if len(jj)==0: continue
+                b = np.linalg.inv(X[:,jj].T @ X[:,jj] + 0.001 * np.eye(len(jj))) \
+                    @ (X[:,jj].T @ Y[:,j])
+                Y[:,j] -= X[:,jj] @ b
+            # remove unused variables
+            active_X = np.zeros(p,dtype=bool)
+            active_Y = np.zeros(p,dtype=bool)
+            for j in range(p):
+                active_X[j] = np.sum(connectivity[j,:]==1) > 0
+                active_Y[j] = np.sum(connectivity[:,j]==1) > 0
+            active_X = np.tile(active_X,autoregressive_order)
+            active_X = np.where(active_X)[0]
+            active_Y = np.where(active_Y)[0]
+            Y = Y[:,active_Y]
+            X = X[:,active_X]
+            connectivity_new = connectivity_new[active_X,active_Y[:,np.newaxis]].T
+        else: connectivity_new = None
 
     return X,Y,indices_new,connectivity_new
 
