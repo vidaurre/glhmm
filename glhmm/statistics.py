@@ -243,7 +243,7 @@ def test_across_subjects(
             # Permutation across sessions (between blocks/groups only)
             permutation_matrix = permutation_matrix_within_subject_across_sessions(Nnull_samples, R_data, idx_array)
     # handle NaN values in the dataset
-    D_data, R_data, permutation_matrix_update =handle_nan_values(D_data, R_data, permutation_matrix, method)
+    D_data, R_data, confounds, permutation_matrix_update =handle_nan_values(D_data, R_data, confounds, permutation_matrix, method)
             
     for t in tqdm(range(n_T)) if n_T > 1 & verbose ==True else range(n_T):
         # If confounds exist, perform confound regression on the dependent variables
@@ -499,7 +499,7 @@ def test_across_trials(D_data, R_data, idx_data, method="multivariate", Nnull_sa
     outcome_names = [f"Regressor {i+1}" for i in range(n_q)] if outcome_names==[] or len(outcome_names)!=n_q else outcome_names
     
     permutation_matrix = permutation_matrix_across_trials_within_session(Nnull_samples,R_data, idx_array)
-    D_data, R_data, permutation_matrix_update =handle_nan_values(D_data, R_data, permutation_matrix, method)
+    D_data, R_data, confounds, permutation_matrix_update =handle_nan_values(D_data, R_data, confounds, permutation_matrix, method)
 
     for t in tqdm(range(n_T)) if n_T > 1 & verbose ==True else range(n_T):
         # If confounds exist, perform confound regression on the dependent variables
@@ -1450,7 +1450,7 @@ def initialize_arrays(n_p, n_q, n_T, method, Nnull_samples, return_base_statisti
 
     return pval, base_statistics, test_statistics_list, F_stats_list, t_stats_list, R2_stats_list
 
-def handle_nan_values(D_data, R_data, permutation_matrix, method):
+def handle_nan_values(D_data, R_data, confounds, permutation_matrix, method):
     """
     Check for NaN values at the first time point and update data and the permutation matrix if needed.
 
@@ -1485,13 +1485,14 @@ def handle_nan_values(D_data, R_data, permutation_matrix, method):
             # Remove NaN-affected data
             D_data = D_data[:, ~nan_mask, :]
             R_data = R_data[~nan_mask, :]
+            confounds = confounds[~nan_mask, :] if confounds is not None else None
         else:
             permutation_matrix_update = permutation_matrix.copy()
             FLAG_NAN = False  # Disable NaN check for future time points
     else:
         permutation_matrix_update = permutation_matrix.copy()  # Default value
 
-    return D_data, R_data, permutation_matrix_update
+    return D_data, R_data, confounds, permutation_matrix_update
 
 def expand_variable_permute_beta(base_statistics,test_statistics_list,idx_array, method):
     """
@@ -4116,8 +4117,8 @@ def get_event_epochs(input_data, index_data, filtered_R_data, event_markers,
 
         # Iterate over each filtered event
         for event_index in filtered_event_indices:
-            start_index = event_index + stimulus_shift  # Adjust start index to include time before stimulus
-            end_index = start_index + epoch_window_tp  # Define end index for the epoch
+            start_index = int(event_index + stimulus_shift)  # Adjust start index to include time before stimulus
+            end_index = int(start_index + epoch_window_tp)  # Define end index for the epoch
 
             # Append the data for this epoch to the data_epochs_list
             data_epochs_list.append(data_session[start_index:end_index, :])
