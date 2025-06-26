@@ -1699,9 +1699,9 @@ def plot_state_means_activations(state_means, cmap_type='coolwarm', cmap_reverse
 
 def plot_state_covariances(state_FC, cmap='coolwarm',
                            fontsize_title=12, fontsize_labels=10,
-                           tick_size=8, figsize_per_plot=(2.5, 2.5),
-                           wspace=None, hspace=None, same_scale=False,
-                           num_ticks=6, save_path=None):
+                           tick_size=8, figsize_per_plot=(2.5, 2.8),
+                           wspace=None, hspace=None, same_scale=False, num_cols =3,
+                           num_ticks=6, save_path=None, return_fig=False):
     """
     Plot state-specific covariance matrices (e.g., functional connectivity) in a grid layout.
 
@@ -1730,9 +1730,9 @@ def plot_state_covariances(state_FC, cmap='coolwarm',
     """
     n_channels, _, K = state_FC.shape
 
-    num_cols = min(4, K)
-    num_rows = (K + num_cols - 1) // num_cols
-    fig_width = num_cols * figsize_per_plot[0]
+    num_cols_new = min(num_cols, K)
+    num_rows = (K + num_cols_new - 1) // num_cols_new
+    fig_width = num_cols_new * figsize_per_plot[0]
     fig_height = num_rows * figsize_per_plot[1]
 
     fig, axes = plt.subplots(num_rows, num_cols, figsize=(fig_width, fig_height))
@@ -1778,6 +1778,9 @@ def plot_state_covariances(state_FC, cmap='coolwarm',
 
     if save_path:
         plt.savefig(save_path, bbox_inches="tight")
+    
+    if return_fig:
+        return fig
     else:
         plt.show()
 
