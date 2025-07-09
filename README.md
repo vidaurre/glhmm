@@ -15,7 +15,7 @@ Crucially, the toolbox has a focus on finding associations at various levels bet
 
 The required dependencies to use glhmm are:
 
-- Python >= 3.6
+- Python >= 3.10
 - NumPy
 - numba
 - scikit-learn
@@ -39,3 +39,18 @@ pip install git+https://github.com/vidaurre/glhmm
 ```bash
 pip install glhmm
 ```
+
+## Graphical User Interface (GUI)
+In addition to using the GLHMM toolbox as a Python package, a graphical user interface (GUI) is now available. The GUI offers an intuitive, code-free way to load data, train models, run statistical tests, and visualise results.
+
+#### Access the GUI
+To access the GUI, visit the companion repository: 
+**[https://github.com/Nick7900/glhmm_protocols](https://github.com/Nick7900/glhmm_protocols)**
+
+The GUI is built using Streamlit and can be launched locally. Instructions for setup and use are provided in that repository.
+
+#### Video Tutorial
+An introductory walkthrough of the GUI is available here:  
+[GLHMM GUI Tutorial – YouTube](https://www.youtube.com/watch?v=XPcoK5zCPtU&t=1497s)
+
+
