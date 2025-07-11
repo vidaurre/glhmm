@@ -8,8 +8,15 @@ Crucially, the toolbox has a focus on finding associations at various levels bet
 ## Important links
 
 - Official source code repo: <https://github.com/vidaurre/glhmm>
+- Jupyter notebooks with examples: <https://github.com/vidaurre/glhmm/tree/main/docs/notebooks>
 - GLHMM documentation: <https://glhmm.readthedocs.io/en/latest/index.html>
 - Paper: <https://direct.mit.edu/imag/article/doi/10.1162/imag_a_00460/127499>
+
+In addition to using the GLHMM toolbox as a Python package, a graphical user interface (GUI) is now available. The GUI offers an intuitive, code-free way to load data, train models, run statistical tests, and visualise results. To access the GUI, visit the companion repository: 
+**[https://github.com/Nick7900/glhmm_protocols](https://github.com/Nick7900/glhmm_protocols)**
+
+The GUI is built using Streamlit and can be launched locally. Instructions for setup and use are provided in that repository. An introductory walkthrough of the GUI is available here:  
+[GLHMM GUI Tutorial – YouTube](https://www.youtube.com/watch?v=XPcoK5zCPtU&t=1497s)
 
 ## Dependencies
 
@@ -40,17 +47,6 @@ pip install git+https://github.com/vidaurre/glhmm
 pip install glhmm
 ```
 
-## Graphical User Interface (GUI)
-In addition to using the GLHMM toolbox as a Python package, a graphical user interface (GUI) is now available. The GUI offers an intuitive, code-free way to load data, train models, run statistical tests, and visualise results.
 
-#### Access the GUI
-To access the GUI, visit the companion repository: 
-**[https://github.com/Nick7900/glhmm_protocols](https://github.com/Nick7900/glhmm_protocols)**
-
-The GUI is built using Streamlit and can be launched locally. Instructions for setup and use are provided in that repository.
-
-#### Video Tutorial
-An introductory walkthrough of the GUI is available here:  
-[GLHMM GUI Tutorial – YouTube](https://www.youtube.com/watch?v=XPcoK5zCPtU&t=1497s)
 
 
