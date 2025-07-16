@@ -485,7 +485,8 @@ def preprocess_data(data = None,indices = None,
             BASE_FILENAME = Path(INPUT_FILE_PATH).stem
             append_name = f"_{file_name}" if isinstance(file_name, str) else "_preprocessed"
             OUTPUT_FILE_PATH = OUTPUT_DIR_PATH / f"{BASE_FILENAME}{append_name}.npz"
-            np.savez(OUTPUT_FILE_PATH, X=np.empty((0,)), Y=Y, indices=indices)
+            # Everything is stored in variable X, so we save X in Y
+            np.savez(OUTPUT_FILE_PATH, X=np.empty((0,)), Y=X, indices=indices)
             OUTPUT_FILE_PATHS.append(str(OUTPUT_FILE_PATH))
             os.remove(path)
 
