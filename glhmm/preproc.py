@@ -944,7 +944,7 @@ def build_data_tde(data=None, indices=None, lags=None, pca=None, standardise_pc=
         np.savez(log_file_path, **log)
 
         return OUTPUT_FILE_PATHS, log
-
+else:
 
     # In-memory mode
     T, p = data.shape
