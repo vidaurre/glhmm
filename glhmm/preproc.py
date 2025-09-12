@@ -1037,3 +1037,192 @@ def load_files(files,I=None,do_only_indices=False):
     if len(X) == 0: X = None
 
     return X,Y,indices
+
+
+
+
+def delay_embed_window(data, lags):
+    """
+    Embedding:
+    - roll, then crop interior [-minlag : -maxlag]
+    - lag-major column order: [lag_0 all channels | lag_1 all channels | ...]
+    """
+    T, p = data.shape
+    lags = np.asarray(lags)
+    minlag, maxlag = np.min(lags), np.max(lags)
+    rwindow = maxlag - minlag
+    n_out = T - rwindow
+    if n_out <= 0:
+        raise ValueError("Not enough samples for given lags.")
+
+    X = np.empty((n_out, p * len(lags)), dtype=np.float32)
+
+    for i, l in enumerate(lags):
+        X_l = np.roll(data, l, axis=0)          # circular shift
+        X_l = X_l[-minlag:-maxlag, :]           # crop interior
+        X[:, i*p:(i+1)*p] = X_l                 # lag-major layout
+
+    return X
+
+
+def build_data_tde_v2(
+    data=None,
+    indices=None,
+    lags=None,
+    pca=None,
+    standardise_pc=True,
+    files=None,
+    output_dir=None,
+    file_name=None
+):
+    """
+    Memory-efficient version of build_data_tde using delay_embed_window.
+    Same outputs, but processes each file sequentially.
+
+    Parameters:
+    -----------
+    data : ndarray or None
+        Raw data (n_samples, n_parcels) to embed in memory.
+    indices : ndarray or None
+        Start and end indices for each session (n_sessions, 2).
+    lags : list or array-like
+        Lags to apply for temporal embedding.
+    pca : int, float, array or None
+        PCA options.
+    standardise_pc : bool
+        Whether to standardise PCA components.
+    files : list of str or Path, optional
+        If set, reads files instead of using `data`/`indices`.
+    output_dir : str or Path, optional
+        Where to save output files if using file input.
+    file_name : str or None, optional
+        Custom string to append to each output file name before extension.
+
+    Returns:
+    --------
+    If using files: list of output file paths, and log dictionary if PCA is applied.
+    If using in-memory data: X_emb, indices_emb (+ pcamodel if PCA).
+
+    """
+
+    if files is not None:
+        output_dir = Path(output_dir or Path(files[0]).parent)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        OUTPUT_FILE_PATHS = []
+
+        # --- PCA statistics pass ---
+        if pca is not None:
+            first = True
+            total_T = 0
+            for file in files:
+                _, data_file, indices_file = load_files([file], do_only_indices=False)
+                data_file = data_file.astype(np.float32)
+                X_list = [delay_embed_window(data_file[seg[0]:seg[1], :], lags)
+                          for seg in indices_file]
+                X_file = np.vstack(X_list)
+
+                if first:
+                    D = X_file.shape[1]
+                    sum_X = np.zeros(D, dtype=float)
+                    sumsq_X = np.zeros(D, dtype=float)
+                    C = np.zeros((D, D), dtype=float)
+                    first = False
+
+                total_T += X_file.shape[0]
+                sum_X += X_file.sum(axis=0)
+                sumsq_X += np.einsum("ij,ij->j", X_file, X_file)
+                C += X_file.T @ X_file
+                del X_file
+
+            if total_T <= 0:
+                raise ValueError('No samples found during PCA stats pass')
+
+            meanX = sum_X / total_T
+            varX = sumsq_X / total_T - meanX ** 2
+            stdX = np.sqrt(varX)
+            stdX[stdX == 0] = 1.0
+            C = C / total_T - np.outer(meanX, meanX)
+            C = C / np.outer(stdX, stdX)
+
+            pca_matrix, _ = highdim_pca(C, n_components=pca)
+
+        # --- File pass: compute embeddings, normalize, apply PCA, save ---
+        for file in files:
+            _, data_file, indices_file = load_files([file], do_only_indices=False)
+            data_file = data_file.astype(np.float32)
+            X_list = [delay_embed_window(data_file[seg[0]:seg[1], :], lags)
+                      for seg in indices_file]
+            X_emb = np.vstack(X_list)
+
+            # Normalize & PCA
+            if pca is not None:
+                X_emb = (X_emb - meanX) / stdX
+                X_emb = X_emb @ pca_matrix
+                if standardise_pc:
+                    X_emb /= np.std(X_emb, axis=0)
+            else:
+                X_emb -= np.mean(X_emb, axis=0)
+                X_emb /= np.std(X_emb, axis=0)
+
+            # Build updated indices
+            start = 0
+            indices_new = np.zeros_like(indices_file)
+            for j, seg in enumerate(indices_file):
+                seg_len = seg[1] - seg[0] - (np.max(lags)-np.min(lags))
+                indices_new[j] = [start, start + seg_len]
+                start += seg_len
+
+            base_filename = Path(file).stem
+            suffix = f"_{file_name}" if file_name else ("_pca_tde" if pca else "_tde")
+            output_file = output_dir / f"{base_filename}{suffix}.npz"
+            np.savez_compressed(output_file, X=np.empty((0,)), Y=X_emb, indices=indices_new)
+            OUTPUT_FILE_PATHS.append(str(output_file))
+            del X_emb
+
+        # --- Build log ---
+        log = {"n_lags": len(lags)}
+        if pca is not None:
+            log.update({
+                "meanX": meanX,
+                "stdX": stdX,
+                "pca_matrix": pca_matrix,
+                "n_components": pca_matrix.shape[1],
+            })
+        log_suffix = f"_{file_name}" if file_name else ""
+        log_file_path = output_dir / f"log_tde{log_suffix}.npz"
+        np.savez(log_file_path, **log)
+
+        return OUTPUT_FILE_PATHS, log
+
+    else:
+        # In-memory mode
+        T, p = data.shape
+        N = indices.shape[0]
+
+        L = len(lags)
+        minlag = np.min(lags)
+        maxlag = np.max(lags)
+        rwindow = maxlag - minlag
+
+        X = np.zeros((T - N * rwindow, p * L))
+        indices_new = np.zeros((N, 2), dtype=int)
+
+        for j in range(N):
+            ind_1 = np.arange(indices[j, 0], indices[j, 1], dtype=np.int64)
+            ind_2 = np.arange(indices[j, 0], indices[j, 1] - rwindow, dtype=np.int64) - j * rwindow
+            for i in range(L):
+                l = lags[i]
+                X_l = np.roll(data[ind_1, :], l, axis=0)
+                X_l = X_l[-minlag:-maxlag, :]
+                X[ind_2, i * p:(i + 1) * p] = X_l  # <- lag-major assignment
+            indices_new[j, 0] = ind_2[0]
+            indices_new[j, 1] = ind_2[-1] + 1
+
+        X -= np.mean(X, axis=0)
+        X /= np.std(X, axis=0)
+
+        if pca is not None:
+            X, pcamodel = apply_pca(X, pca, standardise_pc)
+            return X, indices_new, pcamodel
+        else:
+            return X, indices_new
