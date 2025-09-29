@@ -423,7 +423,8 @@ def preprocess_data(data = None,indices = None,
         log = {**locals()}
         del(log["data"], log["indices"], log["files"])
         files = resolve_files(files, file_type=file_type)
-        INPUT_FILE_PATHS = [str(p) for p in files]
+        INPUT_FILE_PATHS = [str(path) for path in files]
+        log['p'] = None
         uid_map = compute_unique_suffixes(INPUT_FILE_PATHS)
         if output_dir is None:
             OUTPUT_DIR_PATH = Path(files[0]).parent
@@ -447,6 +448,10 @@ def preprocess_data(data = None,indices = None,
             T = X.shape[0]
             indices = np.array([[0, T]])
             p = X.shape[1]
+            if log['p'] is None:
+                log['p'] = int(p)
+            elif log['p'] != int(p):
+                warnings.warn(f"Inconsistent feature dimension across files: first file p={log['p']}, this file p={int(p)}")
 
             if dampen_extreme_peaks:
                 X -= np.mean(X, axis=0)
