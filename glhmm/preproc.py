@@ -149,13 +149,14 @@ def load_X(file_path):
     Parameters:
     -----------
     INPUT_FILE_PATH : str or Path
-        Path to the input file (.npy, .npz, or .mat).
+        Path to the input file (.npy, .npz, .mat, or .txt).
 
     Returns:
     --------
     X : ndarray of shape (n_samples, n_features)
         The loaded data array, reshaped to 2D if needed.
     """
+    file_path = str(file_path)
     ext = os.path.splitext(file_path)[1].lower()
     if ext == '.npy':
         X = np.load(file_path)
@@ -168,6 +169,8 @@ def load_X(file_path):
         if not keys:
             raise ValueError(f"No data found in {file_path}")
         X = mat[keys[0]]
+    elif ext == '.txt':
+        X = np.loadtxt(file_path, dtype=float)
     else:
         raise ValueError(f"Unsupported file format: {file_path}")
     if X.ndim > 2:
@@ -176,19 +179,49 @@ def load_X(file_path):
 
 
 def resolve_files(files, file_type="npz"):
-    supported_types = {"npz", "npy", "mat"}
-    ext = f".{file_type.lower().lstrip('.')}"
+    supported_types = {"npz", "npy", "mat", "txt"}
     if file_type not in supported_types:
         raise ValueError(f"'file_type' must be one of {supported_types}")
-
-    if isinstance(files, (str, Path)) and Path(files).is_dir():
-        directory = Path(files)
-        return sorted(str(p) for p in directory.glob(f"*{ext}") if p.is_file())
+    
+    if isinstance(files, np.ndarray):
+        if files.dtype.kind in {'U', 'S', 'O'}:
+            return [str(p) for p in files.ravel().tolist()]
+        else:
+            raise ValueError("NumPy array 'files' must contain strings (file paths).")
 
     if isinstance(files, (list, tuple)) and all(isinstance(p, (str, Path)) for p in files):
         return [str(p) for p in files]
+    
+    if isinstance(files, (str, Path)):
+        files = Path(files)
+        if files.is_dir():
+            ext = f".{file_type.lower().lstrip('.')}"
+            return sorted(str(p) for p in files.glob(f"*{ext}") if p.is_file())
+        if files.suffix.lower() == ".txt" and files.is_file():
+            # Use np.loadtxt to read a NumPy-like array of strings or a simple one-per-line list
+            try:
+                paths = np.loadtxt(str(files), dtype=str, ndmin=1)
+            except Exception:
+                # Fallback: robust line-by-line read (handles spaces, commas, etc.)
+                with open(files, "r", encoding="utf-8") as f:
+                    lines = [ln.strip() for ln in f.readlines()]
+                paths = [ln for ln in lines if ln]
+            
+            if isinstance(paths, np.ndarray):
+                paths = paths.ravel().tolist()
+            paths = [str(p).strip() for p in paths if str(p).strip()]
 
-    raise ValueError("The 'files' argument must be a list of file paths or a directory containing data files.")
+            if not paths:
+                raise ValueError(f"Manifest {files} is empty or unreadable.")
+            return paths
+
+        if files.is_file():
+            return [str(files)]
+
+    raise ValueError(
+        "The 'files' argument must be a list/tuple/ndarray of file paths, a directory containing data files, "
+        "or a txt-file listing paths."
+    )
 
 
 def highdim_pca(C, n_components=None):
@@ -437,8 +470,11 @@ def preprocess_data(data = None,indices = None,
                 indices_new = indices
                 Y = X  # fallback for consistency
 
-            TEMP_PATH = OUTPUT_DIR_PATH / f"temp_{Path(INPUT_FILE_PATH).stem}.npy"
+            uid = np.base_repr(abs(hash(str(INPUT_FILE_PATH))) % (36**6), 36).lower()
+            TEMP_PATH = OUTPUT_DIR_PATH / f"temp_{Path(INPUT_FILE_PATH).stem}_{uid}.npy"
             np.save(TEMP_PATH, X)
+            if not os.path.exists(TEMP_PATH):
+                raise RuntimeError(f"Expected temp file not found: {TEMP_PATH}")
             TEMP_PATHS.append(str(TEMP_PATH))
             all_indices.append(indices_new)
 
