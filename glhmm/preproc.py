@@ -13,6 +13,7 @@ from sklearn.decomposition import FastICA
 from scipy import signal
 import scipy.io
 import os
+import re
 from pathlib import Path
 from scipy.io import loadmat
 
@@ -223,6 +224,36 @@ def resolve_files(files, file_type="npz"):
         "or a txt-file listing paths."
     )
 
+def _safe_uid(s: str, maxlen: int = 120) -> str:
+    s = re.sub(r'[^A-Za-z0-9._-]+', '-', s)
+    return s[-maxlen:]
+
+def compute_unique_suffixes(paths):
+    P = [Path(p).resolve() for p in paths]
+    parts_list = [p.parts for p in P]
+    max_depth = max(len(parts) for parts in parts_list)
+
+    k = 1
+    while True:
+        keys = []
+        for parts in parts_list:
+            key = parts[-k:] if k <= len(parts) else parts
+            keys.append(tuple(key))
+        if len(set(keys)) == len(paths) or k >= max_depth:
+            break
+        k += 1
+
+    temp_uids = []
+    out_stems = []
+    for key in keys:
+        temp_uid = '__'.join(key)
+        *head, last = list(key)
+        last_stem = Path(last).stem
+        out_stem = '__'.join(head + [last_stem]) if head else last_stem
+        temp_uids.append(_safe_uid(temp_uid))
+        out_stems.append(_safe_uid(out_stem))
+
+    return {str(p): (tuid, ostem) for p, tuid, ostem in zip(P, temp_uids, out_stems)}
 
 def highdim_pca(C, n_components=None):
     """
@@ -387,6 +418,7 @@ def preprocess_data(data = None,indices = None,
         del(log["data"], log["indices"], log["files"])
         files = resolve_files(files, file_type=file_type)
         INPUT_FILE_PATHS = [str(p) for p in files]
+        uid_map = compute_unique_suffixes(INPUT_FILE_PATHS)
         if output_dir is None:
             OUTPUT_DIR_PATH = Path(files[0]).parent
         else:
@@ -470,8 +502,8 @@ def preprocess_data(data = None,indices = None,
                 indices_new = indices
                 Y = X  # fallback for consistency
 
-            uid = np.base_repr(abs(hash(str(INPUT_FILE_PATH))) % (36**6), 36).lower()
-            TEMP_PATH = OUTPUT_DIR_PATH / f"temp_{Path(INPUT_FILE_PATH).stem}_{uid}.npy"
+            temp_uid, out_stem = uid_map[str(Path(INPUT_FILE_PATH).resolve())]
+            TEMP_PATH = OUTPUT_DIR_PATH / f"temp_{temp_uid}.npy"
             np.save(TEMP_PATH, X)
             if not os.path.exists(TEMP_PATH):
                 raise RuntimeError(f"Expected temp file not found: {TEMP_PATH}")
@@ -518,9 +550,9 @@ def preprocess_data(data = None,indices = None,
                 log['pca_matrix'] = pca_matrix
     
             # Save the result regardless of PCA
-            BASE_FILENAME = Path(INPUT_FILE_PATH).stem
+            _, out_stem = uid_map[str(Path(INPUT_FILE_PATH).resolve())]
             append_name = f"_{file_name}" if isinstance(file_name, str) else "_preprocessed"
-            OUTPUT_FILE_PATH = OUTPUT_DIR_PATH / f"{BASE_FILENAME}{append_name}.npz"
+            OUTPUT_FILE_PATH = OUTPUT_DIR_PATH / f"{out_stem}{append_name}.npz"
             # Everything is stored in variable X, so we save X in Y
             np.savez(OUTPUT_FILE_PATH, X=np.empty((0,)), Y=X, indices=indices)
             OUTPUT_FILE_PATHS.append(str(OUTPUT_FILE_PATH))
