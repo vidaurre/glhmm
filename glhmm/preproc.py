@@ -312,6 +312,8 @@ def preprocess_data(data = None,indices = None,
         post_standardise=None, # True / False, standardise the ICA/PCA components?
         downsample=None, # new frequency, or None
         files=None, # list of files to be preprocessed
+        combine_outputs=True,
+        combined_name=None,
         output_dir=None,
         file_name = None,
         file_type= "npy",
@@ -358,6 +360,10 @@ def preprocess_data(data = None,indices = None,
         New sampling frequency. If None, no downsampling.
     files : list of str or Path, optional
         If set, enables file-based preprocessing with one file at a time for stochastic training.
+    combine_outputs : bool, default=True
+        When using file inputs whether to write output as individual files or combine the output
+    combined_name : str, default="combined"
+        Stem for output file name (only when using files and combine_outputs=True)
     output_dir : str or Path, optional
         Directory to save processed files (only used in file mode).
     file_name : str or None, optional
@@ -537,29 +543,73 @@ def preprocess_data(data = None,indices = None,
 
         # Save files with PCA/ICA applied
         OUTPUT_FILE_PATHS = []
-        for path, INPUT_FILE_PATH, indices in zip(TEMP_PATHS, INPUT_FILE_PATHS, all_indices):
-            X = np.load(path)
-            if pca is not None:
-                X = (X - meanX) / stdX
-                X = X @ pca_matrix # Apply PCA
-                if post_standardise:
-                    X -= np.mean(X, axis=0)
-                    X /= np.std(X, axis=0)
-                log['meanX'] = meanX
-                log['stdX'] = stdX
-                log['pca_matrix'] = pca_matrix
-    
-            # Save the result regardless of PCA
-            _, out_stem = uid_map[str(Path(INPUT_FILE_PATH).resolve())]
+        if not combine_outputs:
+            for path, INPUT_FILE_PATH, indices in zip(TEMP_PATHS, INPUT_FILE_PATHS, all_indices):
+                if not os.path.exists(path):
+                    raise FileNotFoundError(f"Temp file missing: {path} (created from {INPUT_FILE_PATH})")
+                X = np.load(path)
+                if pca is not None:
+                    X = (X - meanX) / stdX
+                    X = X @ pca_matrix # Apply PCA
+                    if post_standardise:
+                        X -= np.mean(X, axis=0)
+                        X /= np.std(X, axis=0)
+                    log['meanX'] = meanX
+                    log['stdX'] = stdX
+                    log['pca_matrix'] = pca_matrix
+        
+                # Save the result regardless of PCA
+                _, out_stem = uid_map[str(Path(INPUT_FILE_PATH).resolve())]
+                append_name = f"_{file_name}" if isinstance(file_name, str) else "_preprocessed"
+                OUTPUT_FILE_PATH = OUTPUT_DIR_PATH / f"{out_stem}{append_name}.npz"
+                # Everything is stored in variable X, so we save X in Y
+                np.savez(OUTPUT_FILE_PATH, X=np.empty((0,)), Y=X, indices=indices)
+                OUTPUT_FILE_PATHS.append(str(OUTPUT_FILE_PATH))
+                os.remove(path)
+
+        else:
+            combined_name = "combined" if not isinstance(combined_name, str) or not combined_name.strip() else combined_name.strip()
             append_name = f"_{file_name}" if isinstance(file_name, str) else "_preprocessed"
-            OUTPUT_FILE_PATH = OUTPUT_DIR_PATH / f"{out_stem}{append_name}.npz"
-            # Everything is stored in variable X, so we save X in Y
-            np.savez(OUTPUT_FILE_PATH, X=np.empty((0,)), Y=X, indices=indices)
+
+            Y_list = []
+            indices_list = []
+            offset = 0
+
+            for path, indices in zip(TEMP_PATHS, all_indices):
+                if not os.path.exists(path):
+                    raise FileNotFoundError(f"Temp file missing: {path}")
+                X = np.load(path)
+                if pca is not None:
+                    X = (X - meanX) / stdX
+                    X = X @ pca_matrix
+                    if post_standardise:
+                        X -= np.mean(X, axis=0)
+                        X /= np.std(X, axis=0)
+                    log['meanX'] = meanX
+                    log['stdX'] = stdX
+                    log['pca_matrix'] = pca_matrix
+
+                Y_list.append(X)
+                # offset indices for concatenation
+                ind = np.array(indices, dtype=np.int64)
+                ind[:, 0] += offset
+                ind[:, 1] += offset
+                indices_list.append(ind)
+                offset += X.shape[0]
+
+                os.remove(path)
+
+            Y_combined = np.vstack(Y_list) if Y_list else np.empty((0, 0))
+            indices_combined = np.vstack(indices_list) if indices_list else np.empty((0, 2), dtype=np.int64)
+
+            OUTPUT_FILE_PATH = OUTPUT_DIR_PATH / f"{combined_name}{append_name}.npz"
+            np.savez(OUTPUT_FILE_PATH, X=np.empty((0,)), Y=Y_combined, indices=indices_combined)
             OUTPUT_FILE_PATHS.append(str(OUTPUT_FILE_PATH))
-            os.remove(path)
 
         log_suffix = f"_{file_name}" if isinstance(file_name, str) else ""
         log_file_path = OUTPUT_DIR_PATH / f"log_preprocessing{log_suffix}.npz"
+        log['combine_outputs'] = combine_outputs
+        log['n_input_files'] = len(INPUT_FILE_PATHS)
         np.savez(log_file_path, **log)
 
         return OUTPUT_FILE_PATHS, log
