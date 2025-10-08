@@ -451,7 +451,7 @@ def preprocess_data(data = None,indices = None,
             if log['p'] is None:
                 log['p'] = int(p)
             elif log['p'] != int(p):
-                warnings.warn(f"Inconsistent feature dimension across files: first file p={log['p']}, this file p={int(p)}")
+                warnings.warn(f"Inconsistent feature dimension across files: first file p={log['p']}, this file p={int(p)}", stacklevel=2)
 
             if dampen_extreme_peaks:
                 X -= np.mean(X, axis=0)
@@ -812,7 +812,7 @@ def build_data_autoregressive(data,indices,autoregressive_order=1,
         N = indices.shape[0]
 
         if autoregressive_order == 0:
-            warnings.warn("autoregressive_order is 0 so nothing to be done")
+            warnings.warn("autoregressive_order is 0 so nothing to be done", stacklevel=2)
             return np.empty(0),data,indices,connectivity
         
         X = np.zeros((T - N*autoregressive_order,p*autoregressive_order))

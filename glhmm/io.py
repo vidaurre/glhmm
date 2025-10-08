@@ -322,7 +322,7 @@ def load_hmm(filename, directory=None):
         
     # Check if the directory exists
     if directory and not os.path.exists(directory):
-        warnings.warn(f"The specified directory '{directory}' does not exist.")
+        warnings.warn(f"The specified directory '{directory}' does not exist.", stacklevel=2)
 
     # Load the glhmm object from the specified file
     with open(filepath, 'rb') as inp:
