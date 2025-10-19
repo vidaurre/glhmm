@@ -14,6 +14,7 @@
 :maxdepth: 2
 
 notebooks/tutorial
+notebooks/Preprocessing
 modules
 glossary
 
