@@ -13,7 +13,6 @@
 import os
 import sys
 import re
-from datetime import datetime
 
 sys.path.insert(0, os.path.abspath('..'))
 
@@ -21,8 +20,7 @@ sys.path.insert(0, os.path.abspath('..'))
 # -- Project information -----------------------------------------------------
 
 project = 'GLHMM'
-current_year = datetime.now().year
-copyright = f"{start_year}-{current_year}, Sonsoles Alonso"
+copyright = '2025, Sonsoles Alonso'
 author = 'Sonsoles Alonso'
 
 # version
