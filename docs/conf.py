@@ -13,15 +13,19 @@
 import os
 import sys
 import re
+from datetime import datetime
+
 sys.path.insert(0, os.path.abspath('..'))
 
 
 # -- Project information -----------------------------------------------------
 
 project = 'GLHMM'
-copyright = '2023, Sonsoles Alonso'
+current_year = datetime.now().year
+copyright = f"{start_year}-{current_year}, Sonsoles Alonso"
 author = 'Sonsoles Alonso'
-# Path to setup.py to extract version
+
+# version
 setup_path = os.path.abspath(os.path.join('..', 'setup.py'))
 with open(setup_path, 'r') as f:
     setup_contents = f.read()
