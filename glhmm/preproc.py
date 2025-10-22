@@ -13,7 +13,6 @@ from sklearn.decomposition import FastICA
 from scipy import signal
 import scipy.io
 import os
-import re
 from pathlib import Path
 from scipy.io import loadmat
 
@@ -64,15 +63,9 @@ def apply_pca(X,d,whitening=False, exact=True):
         d = ncomp
 
     # sign convention equal to Matlab's
-    flip_signs = np.ones(d)
-    values = np.zeros(d)
     for j in range(d):
         jj = np.where(np.abs(X[:,j]) == np.abs(np.max(X[:,j])) )[0][0]
-        values[j] = X[jj,j]
-        if X[jj,j] < 0: 
-            X[:,j] *= -1 
-            flip_signs[j] = -1
-            print("Flipping sign of component %d" % j)
+        if X[jj,j] < 0: X[:,j] *= -1
 
     return X, pcamodel
 
@@ -150,14 +143,13 @@ def load_X(file_path):
     Parameters:
     -----------
     INPUT_FILE_PATH : str or Path
-        Path to the input file (.npy, .npz, .mat, or .txt).
+        Path to the input file (.npy, .npz, or .mat).
 
     Returns:
     --------
     X : ndarray of shape (n_samples, n_features)
         The loaded data array, reshaped to 2D if needed.
     """
-    file_path = str(file_path)
     ext = os.path.splitext(file_path)[1].lower()
     if ext == '.npy':
         X = np.load(file_path)
@@ -170,8 +162,6 @@ def load_X(file_path):
         if not keys:
             raise ValueError(f"No data found in {file_path}")
         X = mat[keys[0]]
-    elif ext == '.txt':
-        X = np.loadtxt(file_path, dtype=float)
     else:
         raise ValueError(f"Unsupported file format: {file_path}")
     if X.ndim > 2:
@@ -180,80 +170,20 @@ def load_X(file_path):
 
 
 def resolve_files(files, file_type="npz"):
-    supported_types = {"npz", "npy", "mat", "txt"}
+    supported_types = {"npz", "npy", "mat"}
+    ext = f".{file_type.lower().lstrip('.')}"
     if file_type not in supported_types:
         raise ValueError(f"'file_type' must be one of {supported_types}")
-    
-    if isinstance(files, np.ndarray):
-        if files.dtype.kind in {'U', 'S', 'O'}:
-            return [str(p) for p in files.ravel().tolist()]
-        else:
-            raise ValueError("NumPy array 'files' must contain strings (file paths).")
+
+    if isinstance(files, (str, Path)) and Path(files).is_dir():
+        directory = Path(files)
+        return sorted(str(p) for p in directory.glob(f"*{ext}") if p.is_file())
 
     if isinstance(files, (list, tuple)) and all(isinstance(p, (str, Path)) for p in files):
         return [str(p) for p in files]
-    
-    if isinstance(files, (str, Path)):
-        files = Path(files)
-        if files.is_dir():
-            ext = f".{file_type.lower().lstrip('.')}"
-            return sorted(str(p) for p in files.glob(f"*{ext}") if p.is_file())
-        if files.suffix.lower() == ".txt" and files.is_file():
-            # Use np.loadtxt to read a NumPy-like array of strings or a simple one-per-line list
-            try:
-                paths = np.loadtxt(str(files), dtype=str, ndmin=1)
-            except Exception:
-                # Fallback: robust line-by-line read (handles spaces, commas, etc.)
-                with open(files, "r", encoding="utf-8") as f:
-                    lines = [ln.strip() for ln in f.readlines()]
-                paths = [ln for ln in lines if ln]
-            
-            if isinstance(paths, np.ndarray):
-                paths = paths.ravel().tolist()
-            paths = [str(p).strip() for p in paths if str(p).strip()]
 
-            if not paths:
-                raise ValueError(f"Manifest {files} is empty or unreadable.")
-            return paths
+    raise ValueError("The 'files' argument must be a list of file paths or a directory containing data files.")
 
-        if files.is_file():
-            return [str(files)]
-
-    raise ValueError(
-        "The 'files' argument must be a list/tuple/ndarray of file paths, a directory containing data files, "
-        "or a txt-file listing paths."
-    )
-
-def _safe_uid(s: str, maxlen: int = 120) -> str:
-    s = re.sub(r'[^A-Za-z0-9._-]+', '-', s)
-    return s[-maxlen:]
-
-def compute_unique_suffixes(paths):
-    P = [Path(p).resolve() for p in paths]
-    parts_list = [p.parts for p in P]
-    max_depth = max(len(parts) for parts in parts_list)
-
-    k = 1
-    while True:
-        keys = []
-        for parts in parts_list:
-            key = parts[-k:] if k <= len(parts) else parts
-            keys.append(tuple(key))
-        if len(set(keys)) == len(paths) or k >= max_depth:
-            break
-        k += 1
-
-    temp_uids = []
-    out_stems = []
-    for key in keys:
-        temp_uid = '__'.join(key)
-        *head, last = list(key)
-        last_stem = Path(last).stem
-        out_stem = '__'.join(head + [last_stem]) if head else last_stem
-        temp_uids.append(_safe_uid(temp_uid))
-        out_stems.append(_safe_uid(out_stem))
-
-    return {str(p): (tuid, ostem) for p, tuid, ostem in zip(P, temp_uids, out_stems)}
 
 def highdim_pca(C, n_components=None):
     """
@@ -289,19 +219,15 @@ def highdim_pca(C, n_components=None):
     elif n_components is not None:
         raise ValueError("Invalid type for n_components")
 
-    # Apply Matlab-like sign convention (apply_pca)
-    for j in range(eigvecs.shape[1]):
-        max_idx = np.argmax(np.abs(eigvecs[:, j]))
-        if eigvecs[max_idx, j] < 0:
-            eigvecs[:, j] *= -1
-
     return eigvecs, eigvals
+
 
 def preprocess_data(data = None,indices = None,
         fs = 1, # frequency of the data
         dampen_extreme_peaks=None, # it can be None, True, or an int with the strength of dampening
         standardise=True, # True / False
         filter=None, # Tuple with low-pass high-pass thresholds, or None
+        notch_filter = None,
         detrend=False, # True / False
         onpower=False, # True / False
         onphase=False, # True / False
@@ -312,146 +238,127 @@ def preprocess_data(data = None,indices = None,
         post_standardise=None, # True / False, standardise the ICA/PCA components?
         downsample=None, # new frequency, or None
         files=None, # list of files to be preprocessed
-        combine_outputs=True,
-        combined_name=None,
         output_dir=None,
         file_name = None,
-        file_type= "npy",
-        lags=None,
-        autoregressive_order= None
+        file_type= "npy"
         ):
     
     """
-    Preprocess the input data or files, with support for stochastic training and optional TDE embedding.
+    Preprocess the input data or files.
 
     Parameters:
     -----------
-    data : array-like, optional
-        Raw input data of shape (n_samples, n_parcels), used for in-memory processing.
+    data : array-like or list of file paths
+        If array-like of shape (n_samples, n_parcels), the raw input data to be preprocessed in memory.
+        If list of file paths, raw data files to be preprocessed individually.
     indices : array-like of shape (n_sessions, 2), optional
-        Start and end indices of each session (only required for in-memory data).
+        The start and end indices of each trial/session in the input data (only used when data is array-like).
     fs : int or float, default=1
-        Sampling frequency of the data.
-    dampen_extreme_peaks : int, bool, or None, default=None
-        Dampens extreme peaks in the data. If True, uses default strength of 5. If int, specifies strength.
+        Sampling frequency of the input data.
+    notch_filter: Base notch frequency (e.g., 50 or 60 Hz)
+    dampen_extreme_peaks : int, True, or None, default=None
+        Whether to dampen extreme peaks in the data. 
+        If int, specifies the dampening strength.
+        If True, default strength of 5 is used.
+        If None, no dampening is applied.
     standardise : bool, default=True
-        Whether to standardise (zero-mean, unit-variance) each session.
-    filter : tuple of two floats or None, default=None
-        Bandpass (low, high), lowpass (0, high), or highpass (low, None) filter.
+        Whether to standardize the input data (zero mean, unit variance).
+    filter : tuple of length 2 or None, default=None
+        Filtering thresholds. 
+        If tuple, (low-pass, high-pass) values.
+        If None, no filtering is applied.
     detrend : bool, default=False
-        Whether to linearly detrend the data.
+        Whether to detrend the input data.
     onpower : bool, default=False
-        Whether to extract signal power using the Hilbert transform.
+        Whether to calculate signal power using the Hilbert transform.
     onphase : bool, default=False
-        Whether to extract phase using the Hilbert transform. If both `onpower` and `onphase` are True,
-        power and phase are concatenated.
-    pca : int, float, array-like, or None, default=None
-        PCA dimensionality reduction. If int, number of components. If float, proportion of variance to retain.
-        If array, treated as precomputed PCA matrix.
+        Whether to calculate signal phase using the Hilbert transform.
+        If both `onpower` and `onphase` are True, power and phase are concatenated.
+    pca : int, float, or None, default=None
+        If int, number of PCA components to retain.
+        If float, proportion of explained variance to retain.
+        If None, no PCA is applied.
     exact_pca : bool, default=True
-        Whether to use full SVD in PCA (only relevant for in-memory mode).
-    ica : int or float or None, default=None
-        ICA dimensionality reduction. If int, number of components. If float, proportion of variance to retain.
-    ica_algorithm : str, default='parallel'
-        ICA algorithm to use (e.g., 'parallel', 'deflation').
+        Whether to use full SVD for PCA (only relevant for in-memory mode).
+    ica : int, float, or None, default=None
+        Whether to apply ICA instead of PCA.
+        If int, number of independent components.
+        If float, proportion of explained variance.
+        If None, no ICA is applied.
+    ica_algorithm : {'parallel', 'deflation'}, default='parallel'
+        ICA algorithm to use.
     post_standardise : bool or None, default=None
-        Whether to standardise data after PCA or ICA. Defaults to True if ICA is used.
-    downsample : int or float or None, default=None
-        New sampling frequency. If None, no downsampling.
-    files : list of str or Path, optional
-        If set, enables file-based preprocessing with one file at a time for stochastic training.
-    combine_outputs : bool, default=True
-        When using file inputs whether to write output as individual files or combine the output
-    combined_name : str, default="combined"
-        Stem for output file name (only when using files and combine_outputs=True)
-    output_dir : str or Path, optional
-        Directory to save processed files (only used in file mode).
-    file_name : str or None, optional
-        Optional suffix to append to output filenames.
-    file_type : str, default="npy"
-        File format type for loading files.
-    lags : list, optional
-        If specified, applies temporal delay embedding (TDE) using these lags.
-        This prepares the data for use with a Time-Delay Embedded HMM (HMM-TDE).
-        This should be a list of integers indicating how many time steps before and after to include.
-        For example, use:
-            lags = np.arange(-7, 8)
-        to include 15 lagged versions of the signal: from 7 time steps before to 7 time steps after.
-    autoregressive_order : int, default=None
-        Number of lags to include.
+        Whether to standardize again after PCA/ICA. 
+        Defaults to True if ICA is used.
+    downsample : int, float, or None, default=None
+        New sampling frequency if downsampling.
+        If None, no downsampling is applied.
+    output_folder : str or Path, optional
+        If data is file-based, directory where preprocessed files are saved. 
+        If None, files are saved in the same folder as input files.
 
     Returns:
     --------
-    For in-memory mode:
-        data : np.ndarray
-            The preprocessed (and optionally embedded/reduced) data.
-        indices_new : np.ndarray
-            Updated indices after preprocessing and embedding.
+    If input is an array:
+        data : array-like of shape (n_samples_processed, n_parcels)
+            Preprocessed data.    
+        indices_new : array-like of shape (n_sessions_processed, 2)
+            Updated indices after processing.
         log : dict
-            Dictionary containing the preprocessing parameters and models.
+            Information about the preprocessing steps and any fitted models (e.g., PCA, ICA).
 
-    For file-based mode:
+    If input is a list of files:
         output_file_paths : list of str
-            List of paths to saved preprocessed files.
+            Paths to saved preprocessed files.
         log : dict
-            Dictionary with accumulated preprocessing parameters and PCA statistics.
+            Dictionary containing preprocessing statistics (mean, std, PCA matrix, etc.) used.
     """
-    if lags is not None and autoregressive_order is not None:
-        raise ValueError("Specify either `lags` (for TDE) or `autoregressive_order` (for AR), not both.")
 
-    if autoregressive_order is not None:
-        if not isinstance(autoregressive_order, int):
-            raise ValueError("`autoregressive_order` must be an integer.")
-        if autoregressive_order < 1:
-            raise ValueError("`autoregressive_order` must be >= 1.")
-    
-    # Validate lags if specified
-    if lags is not None:
-        if not isinstance(lags, (list, np.ndarray)):
-            raise ValueError("`lags` must be a list or NumPy array of integers.")
-        lags = np.asarray(lags)
-        if lags.ndim != 1 or not np.issubdtype(lags.dtype, np.integer):
-            raise ValueError("`lags` must be a 1D array or list of integers.")
-        if np.any(lags != np.sort(lags)):
-            raise ValueError("`lags` must be sorted in ascending order.")
-        else:
-            print("Applying TDE embedding.")
-    # file-based preprocessing for stochastic learning
+    # New mode: file-based preprocessing for stochastic learning
     if files is not None:
-        if ica is not None:
-            raise NotImplementedError("ICA cannot be applied in file-wise mode without concatenating data.")
-        log = {**locals()}
-        del(log["data"], log["indices"], log["files"])
         files = resolve_files(files, file_type=file_type)
-        INPUT_FILE_PATHS = [str(path) for path in files]
-        log['p'] = None
-        uid_map = compute_unique_suffixes(INPUT_FILE_PATHS)
+        INPUT_FILE_PATHS = [str(p) for p in files]
         if output_dir is None:
             OUTPUT_DIR_PATH = Path(files[0]).parent
         else:
-            OUTPUT_DIR_PATH = Path(output_dir)
+            OUTPUT_DIR_PATH = output_dir
+        OUTPUT_DIR_PATH = Path(OUTPUT_DIR_PATH)
         OUTPUT_DIR_PATH.mkdir(parents=True, exist_ok=True)
 
-        TEMP_PATHS = []
-        all_indices = []
         first = True
         total_T = 0
+        # collect aggregated statistics - One file at the time
+        for INPUT_FILE_PATH in INPUT_FILE_PATHS:
+            X = load_X(INPUT_FILE_PATH)
+            T, p = X.shape
+            total_T += T
+            if first:
+                meanX = np.zeros(p)
+                sum_squares_X = np.zeros(p)
+                C = np.zeros((p, p))
+                first = False
+            meanX += X.sum(axis=0)
+            sum_squares_X += np.einsum("ij,ij->j", X, X)
+            C += X.T @ X  # Gram matrix.
+            del X
 
-        if pca is not None or ica is not None:
-            accumulate_stats = True
-        else:
-            accumulate_stats = False
+        meanX /= total_T #  Global mean vector.
+        varX = sum_squares_X / total_T - meanX ** 2 # Variance using E[X²] - (E[X])² identity
+        stdX = np.sqrt(varX)
+        # Avoid division by zero for flat signals (std = 0); they won't be scaled during correlation normalization
+        stdX[stdX == 0] = 1
 
-        # Step 1 + 2: Preprocess each file (except PCA), optionally apply TDE, save temp, accumulate PCA stats
+        C = C / total_T - np.outer(meanX, meanX) # center the Gram matrix => covariance
+        C = C / np.outer(stdX, stdX) # normalizes the covariance matrix => correlation matrix.
+        pca_matrix, _ = highdim_pca(C, n_components=pca) # run PCA on that
+
+        OUTPUT_FILE_PATHS = []
+
         for INPUT_FILE_PATH in INPUT_FILE_PATHS:
             X = load_X(INPUT_FILE_PATH)
             T = X.shape[0]
             indices = np.array([[0, T]])
             p = X.shape[1]
-            if log['p'] is None:
-                log['p'] = int(p)
-            elif log['p'] != int(p):
-                warnings.warn(f"Inconsistent feature dimension across files: first file p={log['p']}, this file p={int(p)}")
 
             if dampen_extreme_peaks:
                 X -= np.mean(X, axis=0)
@@ -472,6 +379,11 @@ def preprocess_data(data = None,indices = None,
                     sos = signal.butter(filterorder, filter, 'bandpass', output='sos', fs=fs)
                 X = signal.sosfilt(sos, X, axis=0)
 
+            if notch_filter is not None:
+                for freq in notch_filter:
+                    b, a = signal.iirnotch(freq, Q=30, fs=fs)
+                    X = signal.lfilter(b, a, X, axis=0)
+
             if detrend:
                 X = signal.detrend(X, axis=0)
 
@@ -488,8 +400,18 @@ def preprocess_data(data = None,indices = None,
                 X = np.concatenate((X_power, X_phase), axis=1)
                 p = X.shape[1]
 
+            if pca is not None:
+                X = (X - meanX) / stdX
+                X = X @ pca_matrix # Project onto shared PCA basis
 
-            if accumulate_stats==False and post_standardise:
+            if ica is not None:
+                X, icamodel = apply_ica(X, ica, ica_algorithm)
+                p = X.shape[1]
+
+            if post_standardise is None:
+                post_standardise = bool(ica)
+
+            if (pca or ica) and post_standardise:
                 X -= np.mean(X, axis=0)
                 X /= np.std(X, axis=0)
 
@@ -500,126 +422,26 @@ def preprocess_data(data = None,indices = None,
                 X = signal.resample_poly(X, int(downsample // gcd), int(fs // gcd), axis=0)
                 indices = indices_new
 
-            if autoregressive_order is not None:
-                X, Y, indices_new, _ = build_data_autoregressive(
-                    data=X,
-                    indices=indices,
-                    autoregressive_order=autoregressive_order,
-                    center_data=post_standardise  # Use same logic
-                )
-            elif lags is not None:
-                X, indices_new = build_data_tde(X, indices, lags)
-            else:
-                indices_new = indices
-                Y = X  # fallback for consistency
-
-            temp_uid, out_stem = uid_map[str(Path(INPUT_FILE_PATH).resolve())]
-            TEMP_PATH = OUTPUT_DIR_PATH / f"temp_{temp_uid}.npy"
-            np.save(TEMP_PATH, X)
-            if not os.path.exists(TEMP_PATH):
-                raise RuntimeError(f"Expected temp file not found: {TEMP_PATH}")
-            TEMP_PATHS.append(str(TEMP_PATH))
-            all_indices.append(indices_new)
-
-            if accumulate_stats:
-            # Accumulate PCA stats
-                T, p = X.shape
-                total_T += T
-                if first:
-                    meanX = np.zeros(p)
-                    sum_squares_X = np.zeros(p)
-                    C = np.zeros((p, p))
-                    first = False
-                meanX += X.sum(axis=0)
-                sum_squares_X += np.sum(X ** 2, axis=0)
-                C += X.T @ X  # Gram matrix
-        
-        # Run PCA if requested
-        if accumulate_stats:
-            meanX /= total_T #  Global mean vector.
-            varX = sum_squares_X / total_T - meanX ** 2 # Variance using E[X²] - (E[X])² identity
-            stdX = np.sqrt(varX)
-            stdX[stdX == 0] = 1  # Avoid division by zero for flat signals (std = 0); they won't be scaled during correlation normalization
-            C = C / total_T - np.outer(meanX, meanX) # center the Gram matrix => covariance
-            C = C / np.outer(stdX, stdX) # normalizes the covariance matrix => correlation matrix. 
-        
-        if pca is not None:
-            pca_matrix, _ = highdim_pca(C, n_components=pca)
-
-        # Save files with PCA/ICA applied
-        OUTPUT_FILE_PATHS = []
-        if not combine_outputs:
-            for path, INPUT_FILE_PATH, indices in zip(TEMP_PATHS, INPUT_FILE_PATHS, all_indices):
-                if not os.path.exists(path):
-                    raise FileNotFoundError(f"Temp file missing: {path} (created from {INPUT_FILE_PATH})")
-                X = np.load(path)
-                if pca is not None:
-                    X = (X - meanX) / stdX
-                    X = X @ pca_matrix # Apply PCA
-                    if post_standardise:
-                        X -= np.mean(X, axis=0)
-                        X /= np.std(X, axis=0)
-                    log['meanX'] = meanX
-                    log['stdX'] = stdX
-                    log['pca_matrix'] = pca_matrix
-        
-                # Save the result regardless of PCA
-                _, out_stem = uid_map[str(Path(INPUT_FILE_PATH).resolve())]
-                append_name = f"_{file_name}" if isinstance(file_name, str) else "_preprocessed"
-                OUTPUT_FILE_PATH = OUTPUT_DIR_PATH / f"{out_stem}{append_name}.npz"
-                # Everything is stored in variable X, so we save X in Y
-                np.savez(OUTPUT_FILE_PATH, X=np.empty((0,)), Y=X, indices=indices)
-                OUTPUT_FILE_PATHS.append(str(OUTPUT_FILE_PATH))
-                os.remove(path)
-
-        else:
-            combined_name = "combined" if not isinstance(combined_name, str) or not combined_name.strip() else combined_name.strip()
+            BASE_FILENAME = Path(INPUT_FILE_PATH).stem
             append_name = f"_{file_name}" if isinstance(file_name, str) else "_preprocessed"
-
-            Y_list = []
-            indices_list = []
-            offset = 0
-
-            for path, indices in zip(TEMP_PATHS, all_indices):
-                if not os.path.exists(path):
-                    raise FileNotFoundError(f"Temp file missing: {path}")
-                X = np.load(path)
-                if pca is not None:
-                    X = (X - meanX) / stdX
-                    X = X @ pca_matrix
-                    if post_standardise:
-                        X -= np.mean(X, axis=0)
-                        X /= np.std(X, axis=0)
-                    log['meanX'] = meanX
-                    log['stdX'] = stdX
-                    log['pca_matrix'] = pca_matrix
-
-                Y_list.append(X)
-                # offset indices for concatenation
-                ind = np.array(indices, dtype=np.int64)
-                ind[:, 0] += offset
-                ind[:, 1] += offset
-                indices_list.append(ind)
-                offset += X.shape[0]
-
-                os.remove(path)
-
-            Y_combined = np.vstack(Y_list) if Y_list else np.empty((0, 0))
-            indices_combined = np.vstack(indices_list) if indices_list else np.empty((0, 2), dtype=np.int64)
-
-            OUTPUT_FILE_PATH = OUTPUT_DIR_PATH / f"{combined_name}{append_name}.npz"
-            np.savez(OUTPUT_FILE_PATH, X=np.empty((0,)), Y=Y_combined, indices=indices_combined)
+            OUTPUT_FILE_PATH = OUTPUT_DIR_PATH / f"{BASE_FILENAME}{append_name}.npz"
+            np.savez(OUTPUT_FILE_PATH, X=np.empty((0,)), Y=X, indices=indices)
             OUTPUT_FILE_PATHS.append(str(OUTPUT_FILE_PATH))
 
+        log = {
+            "meanX": meanX,
+            "stdX": stdX,
+            "pca_matrix": pca_matrix,
+            "total_T": total_T,
+            "n_components": pca_matrix.shape[1]
+        }
+        
+        # Save the log file in the same output directory
         log_suffix = f"_{file_name}" if isinstance(file_name, str) else ""
-        log_file_path = OUTPUT_DIR_PATH / f"log_preprocessing{log_suffix}.npz"
-        log['combine_outputs'] = combine_outputs
-        log['n_input_files'] = len(INPUT_FILE_PATHS)
+        log_file_path = OUTPUT_DIR_PATH / f"log_preprocessing_{log_suffix}.npz"
         np.savez(log_file_path, **log)
-
         return OUTPUT_FILE_PATHS, log
-   
-    # In memory preprocessing
+
     p = data.shape[1]
     N = indices.shape[0]
     log = {**locals()}
@@ -681,17 +503,6 @@ def preprocess_data(data = None,indices = None,
             data[t,p:] = np.unwrap(np.angle(analytical_signal))
         p = data.shape[1]
 
-    if autoregressive_order is not None:
-        X, Y, indices, _ = build_data_autoregressive(
-            data=data,
-            indices=indices,
-            autoregressive_order=autoregressive_order,
-            center_data=post_standardise
-        )
-        data = Y  # Use Y as the transformed signal
-    elif lags is not None:
-        data, indices = build_data_tde(data, indices, lags)
-
     if (pca != None) and (ica is None):
         data, pcamodel = apply_pca(data,pca,exact_pca)
         p = data.shape[1]
@@ -731,29 +542,23 @@ def preprocess_data(data = None,indices = None,
 
 
 def build_data_autoregressive(data,indices,autoregressive_order=1,
-        connectivity=None,center_data=True,  files=None, output_dir=None, file_name=None):
-    """
-    Builds X and Y for the autoregressive model. Supports both in-memory and file-based input.
-    Saves output when processing files.
-
+        connectivity=None,center_data=True):
+    """Builds X and Y for the autoregressive model, 
+    as well as an adapted indices array and predefined connectivity 
+    matrix in the right format. X and Y are centered by default.
+    
     Parameters:
     -----------
-    data : ndarray, shape (n_samples, n_parcels)
-        In-memory time series data.
-    indices : ndarray, shape (n_sessions, 2)
-        Session boundaries in data.
-    autoregressive_order : int
-        Number of lags to include.
-    connectivity : ndarray, optional
-        Mask of shape (n_parcels, n_parcels).
-    center_data : bool
-        Whether to mean-center X and Y.
-    files : list of str or Path, optional
-        Input `.npz` or `.mat` files to process.
-    output_dir : str or Path, optional
-        Directory to save processed files.
-    file_name : str, optional
-        Custom suffix to append to each output file name.
+    data : array-like of shape (n_samples,n_parcels)
+        The data timeseries.
+    indices : array-like of shape (n_sessions, 2)
+        The start and end indices of each trial/session in the input data.
+    autoregressive_order : int, optional, default=1
+        The number of lags to include in the autoregressive model.
+    connectivity : array-like of shape (n_parcels, n_parcels), optional, default=None
+        The matrix indicating which regressors should be used for each variable.
+    center_data : bool, optional, default=True
+        If True, the data will be centered.
 
     Returns:
     --------
@@ -767,101 +572,61 @@ def build_data_autoregressive(data,indices,autoregressive_order=1,
         The new connectivity matrix indicating which regressors should be used for each variable.
 
     """
-    if files is not None:
-        output_paths = []
-        log = {"autoregressive_order": autoregressive_order}
 
-        if output_dir is None:
-            output_dir = Path(files[0]).parent
-        else:
-            output_dir = Path(output_dir)
-        output_dir.mkdir(parents=True, exist_ok=True)
+    T,p = data.shape
+    N = indices.shape[0]
 
-        for file in files:
-            _, data, indices = load_files([file], do_only_indices=False)
-            X, Y, indices_new, conn_new = build_data_autoregressive(
-                data=data,
-                indices=indices,
-                autoregressive_order=autoregressive_order,
-                connectivity=connectivity,
-                center_data=center_data,
-                files=None
-            )
+    if autoregressive_order == 0:
+        warnings.warn("autoregressive_order is 0 so nothing to be done")
+        return np.empty(0),data,indices,connectivity
+    
+    X = np.zeros((T - N*autoregressive_order,p*autoregressive_order))
+    Y = np.zeros((T - N*autoregressive_order,p))
+    indices_new = np.zeros((N,2))
 
-            base_name = Path(file).stem
-            suffix = f"_{file_name}" if isinstance(file_name, str) else "_ar"
-            output_file = output_dir / f"{base_name}{suffix}.npz"
+    for j in range(N):
+        ind_1 = np.arange(indices[j,0]+autoregressive_order,indices[j,1],dtype=np.int64)
+        ind_2 = np.arange(indices[j,0],indices[j,1]-autoregressive_order,dtype=np.int64) \
+            - j * autoregressive_order
+        Y[ind_2,:] = data[ind_1,:]
+        for i in range(autoregressive_order):
+            ind_3 = np.arange(indices[j,0]+autoregressive_order-(i+1),indices[j,1]-(i+1),dtype=np.int64)
+            ind_ch = np.arange(p) + i * p
+            X[ind_2,ind_ch[:,np.newaxis]] = data[ind_3,:].T
+        indices_new[j,0] = ind_2[0]
+        indices_new[j,1] = ind_2[-1] + 1
 
-            # Save AR data: put Y as main, X optional (for legacy)
-            np.savez(output_file, X=np.empty((0,)), Y=Y, indices=indices_new)
-            output_paths.append(str(output_file))
+    # center
+    if center_data:
+        Y -= np.mean(Y,axis=0)
+        X -= np.mean(X,axis=0)
 
-        # Add optional metadata
-        if connectivity is not None:
-            log["connectivity_shape"] = connectivity.shape
-        log["n_files"] = len(files)
-        log["output_dir"] = str(output_dir)
-
-        log_file = output_dir / f"log_ar{suffix}.npz"
-        np.savez(log_file, **log)
-
-        return output_paths, log
-
-    else:
-        T,p = data.shape
-        N = indices.shape[0]
-
-        if autoregressive_order == 0:
-            warnings.warn("autoregressive_order is 0 so nothing to be done")
-            return np.empty(0),data,indices,connectivity
-        
-        X = np.zeros((T - N*autoregressive_order,p*autoregressive_order))
-        Y = np.zeros((T - N*autoregressive_order,p))
-        indices_new = np.zeros((N,2))
-
-        for j in range(N):
-            ind_1 = np.arange(indices[j,0]+autoregressive_order,indices[j,1],dtype=np.int64)
-            ind_2 = np.arange(indices[j,0],indices[j,1]-autoregressive_order,dtype=np.int64) \
-                - j * autoregressive_order
-            Y[ind_2,:] = data[ind_1,:]
-            for i in range(autoregressive_order):
-                ind_3 = np.arange(indices[j,0]+autoregressive_order-(i+1),indices[j,1]-(i+1),dtype=np.int64)
-                ind_ch = np.arange(p) + i * p
-                X[ind_2,ind_ch[:,np.newaxis]] = data[ind_3,:].T
-            indices_new[j,0] = ind_2[0]
-            indices_new[j,1] = ind_2[-1] + 1
-
-        # center
-        if center_data:
-            Y -= np.mean(Y,axis=0)
-            X -= np.mean(X,axis=0)
-
-        if connectivity is not None:
-            # connectivity_new : (regressors by regressed) 
-            connectivity_new = np.zeros((autoregressive_order*p,p))
-            for i in range(autoregressive_order):
-                ind_ch = np.arange(p) + i * p
-                connectivity_new[ind_ch,:] = connectivity
-            # regress out when asked
-            for j in range(p):
-                jj = np.where(connectivity_new[:,j]==0)[0]
-                if len(jj)==0: continue
-                b = np.linalg.inv(X[:,jj].T @ X[:,jj] + 0.001 * np.eye(len(jj))) \
-                    @ (X[:,jj].T @ Y[:,j])
-                Y[:,j] -= X[:,jj] @ b
-            # remove unused variables
-            active_X = np.zeros(p,dtype=bool)
-            active_Y = np.zeros(p,dtype=bool)
-            for j in range(p):
-                active_X[j] = np.sum(connectivity[j,:]==1) > 0
-                active_Y[j] = np.sum(connectivity[:,j]==1) > 0
-            active_X = np.tile(active_X,autoregressive_order)
-            active_X = np.where(active_X)[0]
-            active_Y = np.where(active_Y)[0]
-            Y = Y[:,active_Y]
-            X = X[:,active_X]
-            connectivity_new = connectivity_new[active_X,active_Y[:,np.newaxis]].T
-        else: connectivity_new = None
+    if connectivity is not None:
+        # connectivity_new : (regressors by regressed) 
+        connectivity_new = np.zeros((autoregressive_order*p,p))
+        for i in range(autoregressive_order):
+            ind_ch = np.arange(p) + i * p
+            connectivity_new[ind_ch,:] = connectivity
+        # regress out when asked
+        for j in range(p):
+            jj = np.where(connectivity_new[:,j]==0)[0]
+            if len(jj)==0: continue
+            b = np.linalg.inv(X[:,jj].T @ X[:,jj] + 0.001 * np.eye(len(jj))) \
+                @ (X[:,jj].T @ Y[:,j])
+            Y[:,j] -= X[:,jj] @ b
+        # remove unused variables
+        active_X = np.zeros(p,dtype=bool)
+        active_Y = np.zeros(p,dtype=bool)
+        for j in range(p):
+            active_X[j] = np.sum(connectivity[j,:]==1) > 0
+            active_Y[j] = np.sum(connectivity[:,j]==1) > 0
+        active_X = np.tile(active_X,autoregressive_order)
+        active_X = np.where(active_X)[0]
+        active_Y = np.where(active_Y)[0]
+        Y = Y[:,active_Y]
+        X = X[:,active_X]
+        connectivity_new = connectivity_new[active_X,active_Y[:,np.newaxis]].T
+    else: connectivity_new = None
 
     return X,Y,indices_new,connectivity_new
 
@@ -1068,39 +833,39 @@ def build_data_tde(data=None, indices=None, lags=None, pca=None, standardise_pc=
 
         return OUTPUT_FILE_PATHS, log
 
-
-    # In-memory mode
-    T, p = data.shape
-    N = indices.shape[0]
-
-    L = len(lags)
-    minlag = np.min(lags)
-    maxlag = np.max(lags)
-    rwindow = maxlag - minlag
-
-    X = np.zeros((T - N * rwindow, p * L))
-    indices_new = np.zeros((N, 2), dtype=int)
-
-    for j in range(N):
-        ind_1 = np.arange(indices[j, 0], indices[j, 1], dtype=np.int64)
-        ind_2 = np.arange(indices[j, 0], indices[j, 1] - rwindow, dtype=np.int64) - j * rwindow
-        for i in range(L):
-            l = lags[i]
-            X_l = np.roll(data[ind_1, :], l, axis=0)
-            X_l = X_l[-minlag:-maxlag, :]
-            ind_ch = np.arange(i, L * p, L)
-            X[ind_2, ind_ch[:, np.newaxis]] = X_l.T
-        indices_new[j, 0] = ind_2[0]
-        indices_new[j, 1] = ind_2[-1] + 1
-
-    X -= np.mean(X, axis=0)
-    X /= np.std(X, axis=0)
-
-    if pca is not None:
-        X, pcamodel = apply_pca(X, pca, standardise_pc)
-        return X, indices_new, pcamodel
     else:
-        return X, indices_new
+        # In-memory mode
+        T, p = data.shape
+        N = indices.shape[0]
+
+        L = len(lags)
+        minlag = np.min(lags)
+        maxlag = np.max(lags)
+        rwindow = maxlag - minlag
+
+        X = np.zeros((T - N * rwindow, p * L))
+        indices_new = np.zeros((N, 2), dtype=int)
+
+        for j in range(N):
+            ind_1 = np.arange(indices[j, 0], indices[j, 1], dtype=np.int64)
+            ind_2 = np.arange(indices[j, 0], indices[j, 1] - rwindow, dtype=np.int64) - j * rwindow
+            for i in range(L):
+                l = lags[i]
+                X_l = np.roll(data[ind_1, :], l, axis=0)
+                X_l = X_l[-minlag:-maxlag, :]
+                ind_ch = np.arange(i, L * p, L)
+                X[ind_2, ind_ch[:, np.newaxis]] = X_l.T
+            indices_new[j, 0] = ind_2[0]
+            indices_new[j, 1] = ind_2[-1] + 1
+
+        X -= np.mean(X, axis=0)
+        X /= np.std(X, axis=0)
+
+        if pca is not None:
+            X, pcamodel = apply_pca(X, pca, standardise_pc)
+            return X, indices_new, pcamodel
+        else:
+            return X, indices_new
 
 
 
@@ -1160,192 +925,3 @@ def load_files(files,I=None,do_only_indices=False):
     if len(X) == 0: X = None
 
     return X,Y,indices
-
-
-
-
-def delay_embed_window(data, lags):
-    """
-    Embedding:
-    - roll, then crop interior [-minlag : -maxlag]
-    - lag-major column order: [lag_0 all channels | lag_1 all channels | ...]
-    """
-    T, p = data.shape
-    lags = np.asarray(lags)
-    minlag, maxlag = np.min(lags), np.max(lags)
-    rwindow = maxlag - minlag
-    n_out = T - rwindow
-    if n_out <= 0:
-        raise ValueError("Not enough samples for given lags.")
-
-    X = np.empty((n_out, p * len(lags)), dtype=np.float32)
-
-    for i, l in enumerate(lags):
-        X_l = np.roll(data, l, axis=0)          # circular shift
-        X_l = X_l[-minlag:-maxlag, :]           # crop interior
-        X[:, i*p:(i+1)*p] = X_l                 # lag-major layout
-
-    return X
-
-
-def build_data_tde_v2(
-    data=None,
-    indices=None,
-    lags=None,
-    pca=None,
-    standardise_pc=True,
-    files=None,
-    output_dir=None,
-    file_name=None
-):
-    """
-    Memory-efficient version of build_data_tde using delay_embed_window.
-    Same outputs, but processes each file sequentially.
-
-    Parameters:
-    -----------
-    data : ndarray or None
-        Raw data (n_samples, n_parcels) to embed in memory.
-    indices : ndarray or None
-        Start and end indices for each session (n_sessions, 2).
-    lags : list or array-like
-        Lags to apply for temporal embedding.
-    pca : int, float, array or None
-        PCA options.
-    standardise_pc : bool
-        Whether to standardise PCA components.
-    files : list of str or Path, optional
-        If set, reads files instead of using `data`/`indices`.
-    output_dir : str or Path, optional
-        Where to save output files if using file input.
-    file_name : str or None, optional
-        Custom string to append to each output file name before extension.
-
-    Returns:
-    --------
-    If using files: list of output file paths, and log dictionary if PCA is applied.
-    If using in-memory data: X_emb, indices_emb (+ pcamodel if PCA).
-
-    """
-
-    if files is not None:
-        output_dir = Path(output_dir or Path(files[0]).parent)
-        output_dir.mkdir(parents=True, exist_ok=True)
-        OUTPUT_FILE_PATHS = []
-
-        # --- PCA statistics pass ---
-        if pca is not None:
-            first = True
-            total_T = 0
-            for file in files:
-                _, data_file, indices_file = load_files([file], do_only_indices=False)
-                data_file = data_file.astype(np.float32)
-                X_list = [delay_embed_window(data_file[seg[0]:seg[1], :], lags)
-                          for seg in indices_file]
-                X_file = np.vstack(X_list)
-
-                if first:
-                    D = X_file.shape[1]
-                    sum_X = np.zeros(D, dtype=float)
-                    sumsq_X = np.zeros(D, dtype=float)
-                    C = np.zeros((D, D), dtype=float)
-                    first = False
-
-                total_T += X_file.shape[0]
-                sum_X += X_file.sum(axis=0)
-                sumsq_X += np.einsum("ij,ij->j", X_file, X_file)
-                C += X_file.T @ X_file
-                del X_file
-
-            if total_T <= 0:
-                raise ValueError('No samples found during PCA stats pass')
-
-            meanX = sum_X / total_T
-            varX = sumsq_X / total_T - meanX ** 2
-            stdX = np.sqrt(varX)
-            stdX[stdX == 0] = 1.0
-            C = C / total_T - np.outer(meanX, meanX)
-            C = C / np.outer(stdX, stdX)
-
-            pca_matrix, _ = highdim_pca(C, n_components=pca)
-
-        # --- File pass: compute embeddings, normalize, apply PCA, save ---
-        for file in files:
-            _, data_file, indices_file = load_files([file], do_only_indices=False)
-            data_file = data_file.astype(np.float32)
-            X_list = [delay_embed_window(data_file[seg[0]:seg[1], :], lags)
-                      for seg in indices_file]
-            X_emb = np.vstack(X_list)
-
-            # Normalize & PCA
-            if pca is not None:
-                X_emb = (X_emb - meanX) / stdX
-                X_emb = X_emb @ pca_matrix
-                if standardise_pc:
-                    X_emb /= np.std(X_emb, axis=0)
-            else:
-                X_emb -= np.mean(X_emb, axis=0)
-                X_emb /= np.std(X_emb, axis=0)
-
-            # Build updated indices
-            start = 0
-            indices_new = np.zeros_like(indices_file)
-            for j, seg in enumerate(indices_file):
-                seg_len = seg[1] - seg[0] - (np.max(lags)-np.min(lags))
-                indices_new[j] = [start, start + seg_len]
-                start += seg_len
-
-            base_filename = Path(file).stem
-            suffix = f"_{file_name}" if file_name else ("_pca_tde" if pca else "_tde")
-            output_file = output_dir / f"{base_filename}{suffix}.npz"
-            np.savez_compressed(output_file, X=np.empty((0,)), Y=X_emb, indices=indices_new)
-            OUTPUT_FILE_PATHS.append(str(output_file))
-            del X_emb
-
-        # --- Build log ---
-        log = {"n_lags": len(lags)}
-        if pca is not None:
-            log.update({
-                "meanX": meanX,
-                "stdX": stdX,
-                "pca_matrix": pca_matrix,
-                "n_components": pca_matrix.shape[1],
-            })
-        log_suffix = f"_{file_name}" if file_name else ""
-        log_file_path = output_dir / f"log_tde{log_suffix}.npz"
-        np.savez(log_file_path, **log)
-
-        return OUTPUT_FILE_PATHS, log
-
-    else:
-        # In-memory mode
-        T, p = data.shape
-        N = indices.shape[0]
-
-        L = len(lags)
-        minlag = np.min(lags)
-        maxlag = np.max(lags)
-        rwindow = maxlag - minlag
-
-        X = np.zeros((T - N * rwindow, p * L))
-        indices_new = np.zeros((N, 2), dtype=int)
-
-        for j in range(N):
-            ind_1 = np.arange(indices[j, 0], indices[j, 1], dtype=np.int64)
-            ind_2 = np.arange(indices[j, 0], indices[j, 1] - rwindow, dtype=np.int64) - j * rwindow
-            for i in range(L):
-                l = lags[i]
-                X_l = np.roll(data[ind_1, :], l, axis=0)
-                X_l = X_l[-minlag:-maxlag, :]
-                X[ind_2, i * p:(i + 1) * p] = X_l  # <- lag-major assignment
-            indices_new[j, 0] = ind_2[0]
-            indices_new[j, 1] = ind_2[-1] + 1
-
-        X -= np.mean(X, axis=0)
-        X /= np.std(X, axis=0)
-
-        if pca is not None:
-            X, pcamodel = apply_pca(X, pca, standardise_pc)
-            return X, indices_new, pcamodel
-        else:
-            return X, indices_new
