@@ -23,7 +23,32 @@ from . import auxiliary
 def load_files(files,I=None,do_only_indices=False):
     """
     Loads data from files and returns the loaded data, indices, and individual indices for each file.
+    I (batch loading) only works for individual input files, not where input was combined into single file.
     """       
+
+    if isinstance(files, (str, Path)):
+        files = [str(files)]
+    else:
+        files = [str(f) for f in files]
+
+    if I is None:
+        I = np.arange(len(files))
+    elif isinstance(I, (int, np.integer)):
+        I = np.array([I], dtype=int)
+    else:
+        I = np.asarray(I)
+        if I.dtype == bool:
+            if I.size != len(files):
+                raise ValueError(f"Boolean mask I has size {I.size}, expected {len(files)}.")
+            I = np.flatnonzero(I)
+        else:
+            I = I.astype(int)
+
+    if len(files) == 0:
+        raise ValueError("No files provided.")
+    bad = (I < 0) | (I >= len(files))
+    if np.any(bad):
+        raise IndexError(f"I contains out-of-range indices {I[bad].tolist()} for {len(files)} file(s).")
 
     X = []
     Y = []
@@ -31,14 +56,11 @@ def load_files(files,I=None,do_only_indices=False):
     indices_individual = []
     sum_T = 0
 
-    if I is None:
-        I = np.arange(len(files))
-    elif type(I) is int:
-        I = np.array([I])
-
     for ij in range(I.shape[0]):
 
         j = I[ij]
+        p=Path(files[j])
+        suffix = p.suffix.lower()
 
         # if type(files[j]) is tuple:
         #     if len(files[j][0]) > 0: # X
@@ -46,24 +68,38 @@ def load_files(files,I=None,do_only_indices=False):
         #             X.append(np.load(files[j][0]))
         #         elif files[j][0][-4:] == '.txt':
 
-        if files[j][-4:] == '.mat':
+        if suffix == '.mat':
             # depending on the matlab version used to create the data, 
             #scipy.io or h5py will be used to load them
             try:
-                dat = scipy.io.loadmat(files[j])
+                dat = scipy.io.loadmat(str(p))
             except:
-                dat = h5py.File(files[j],'r')
+                dat = h5py.File(str(p),'r')
                 
+        elif suffix == '.npz':
+            dat = np.load(str(p))
 
-        elif files[j][-4:] == '.npz':
-            dat = np.load(files[j])
+        else:
+            raise ValueError(f"Unsupported file type: {p}")
             
+        has_X = 'X' in dat
+        has_Y = 'Y' in dat
+
+        if not has_Y and has_X:
+            raise ValueError(f"{files[j]} has 'X' but no 'Y' (unsupported).")
+        if not has_Y and not has_X:
+            raise ValueError(f"{files[j]} has neither 'Y' nor 'X'.")
+
+        Y_cur = np.array(dat['Y'])
+        T_cur = int(Y_cur.shape[0])
+
         if not do_only_indices:
-            if ('X' in dat) and (not 'Y' in dat): 
-                Y.append(np.array(dat["X"]))
-            else:
-                if 'X' in dat: X.append(np.array(dat["X"]))
-                Y.append(np.array(dat["Y"]))
+            Y.append(Y_cur)
+            if has_X:
+                X_cur = np.array(dat['X'])
+                if X_cur.size > 0:
+                    X.append(X_cur)
+
         if 'indices' in dat: 
             ind = np.array(dat['indices'])
         elif 'T' in dat:
@@ -71,19 +107,23 @@ def load_files(files,I=None,do_only_indices=False):
         else:
             ind = np.zeros((1,2)).astype(int)
             ind[0,0] = 0
-            ind[0,1] = Y[-1].shape[0]
+            ind[0,1] = T_cur
         if len(ind.shape) == 1: ind = np.expand_dims(ind,axis=0)
         indices_individual.append(ind)
         indices.append(ind + sum_T)
 
-        sum_T += dat["Y"].shape[0]
+        sum_T += T_cur
 
     if not do_only_indices:
-        if len(X) > 0: X = np.concatenate(X)
+        if len(X) > 0: 
+            X = np.concatenate(X)
+            if X.size == 0:
+                X=None
+        else:
+            X = None
         Y = np.concatenate(Y)
     indices = np.concatenate(indices)
     if len(indices.shape) == 1: indices = np.expand_dims(indices,axis=0)
-    if len(X) == 0: X = None
 
     return X,Y,indices,indices_individual
 

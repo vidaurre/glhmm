@@ -12,17 +12,28 @@
 #
 import os
 import sys
+import re
+
 sys.path.insert(0, os.path.abspath('..'))
 
 
 # -- Project information -----------------------------------------------------
 
 project = 'GLHMM'
-copyright = '2023, Sonsoles Alonso'
+copyright = '2025, Sonsoles Alonso'
 author = 'Sonsoles Alonso'
 
-# The full version, including alpha/beta/rc tags
-release = '0.0.1'
+# version
+setup_path = os.path.abspath(os.path.join('..', 'setup.py'))
+with open(setup_path, 'r') as f:
+    setup_contents = f.read()
+match = re.search(r"version\s*=\s*['\"]([^'\"]+)['\"]", setup_contents)
+if match:
+    release = match.group(1)
+    version = '.'.join(release.split('.')[:2])  # short version
+else:
+    release = 'unknown'
+    version = 'unknown'
 
 # -- General configuration ---------------------------------------------------
 

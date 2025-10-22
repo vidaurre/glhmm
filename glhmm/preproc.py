@@ -13,6 +13,7 @@ from sklearn.decomposition import FastICA
 from scipy import signal
 import scipy.io
 import os
+import re
 from pathlib import Path
 from scipy.io import loadmat
 
@@ -149,13 +150,14 @@ def load_X(file_path):
     Parameters:
     -----------
     INPUT_FILE_PATH : str or Path
-        Path to the input file (.npy, .npz, or .mat).
+        Path to the input file (.npy, .npz, .mat, or .txt).
 
     Returns:
     --------
     X : ndarray of shape (n_samples, n_features)
         The loaded data array, reshaped to 2D if needed.
     """
+    file_path = str(file_path)
     ext = os.path.splitext(file_path)[1].lower()
     if ext == '.npy':
         X = np.load(file_path)
@@ -168,6 +170,8 @@ def load_X(file_path):
         if not keys:
             raise ValueError(f"No data found in {file_path}")
         X = mat[keys[0]]
+    elif ext == '.txt':
+        X = np.loadtxt(file_path, dtype=float)
     else:
         raise ValueError(f"Unsupported file format: {file_path}")
     if X.ndim > 2:
@@ -176,20 +180,80 @@ def load_X(file_path):
 
 
 def resolve_files(files, file_type="npz"):
-    supported_types = {"npz", "npy", "mat"}
-    ext = f".{file_type.lower().lstrip('.')}"
+    supported_types = {"npz", "npy", "mat", "txt"}
     if file_type not in supported_types:
         raise ValueError(f"'file_type' must be one of {supported_types}")
-
-    if isinstance(files, (str, Path)) and Path(files).is_dir():
-        directory = Path(files)
-        return sorted(str(p) for p in directory.glob(f"*{ext}") if p.is_file())
+    
+    if isinstance(files, np.ndarray):
+        if files.dtype.kind in {'U', 'S', 'O'}:
+            return [str(p) for p in files.ravel().tolist()]
+        else:
+            raise ValueError("NumPy array 'files' must contain strings (file paths).")
 
     if isinstance(files, (list, tuple)) and all(isinstance(p, (str, Path)) for p in files):
         return [str(p) for p in files]
+    
+    if isinstance(files, (str, Path)):
+        files = Path(files)
+        if files.is_dir():
+            ext = f".{file_type.lower().lstrip('.')}"
+            return sorted(str(p) for p in files.glob(f"*{ext}") if p.is_file())
+        if files.suffix.lower() == ".txt" and files.is_file():
+            # Use np.loadtxt to read a NumPy-like array of strings or a simple one-per-line list
+            try:
+                paths = np.loadtxt(str(files), dtype=str, ndmin=1)
+            except Exception:
+                # Fallback: robust line-by-line read (handles spaces, commas, etc.)
+                with open(files, "r", encoding="utf-8") as f:
+                    lines = [ln.strip() for ln in f.readlines()]
+                paths = [ln for ln in lines if ln]
+            
+            if isinstance(paths, np.ndarray):
+                paths = paths.ravel().tolist()
+            paths = [str(p).strip() for p in paths if str(p).strip()]
 
-    raise ValueError("The 'files' argument must be a list of file paths or a directory containing data files.")
+            if not paths:
+                raise ValueError(f"Manifest {files} is empty or unreadable.")
+            return paths
 
+        if files.is_file():
+            return [str(files)]
+
+    raise ValueError(
+        "The 'files' argument must be a list/tuple/ndarray of file paths, a directory containing data files, "
+        "or a txt-file listing paths."
+    )
+
+def _safe_uid(s: str, maxlen: int = 120) -> str:
+    s = re.sub(r'[^A-Za-z0-9._-]+', '-', s)
+    return s[-maxlen:]
+
+def compute_unique_suffixes(paths):
+    P = [Path(p).resolve() for p in paths]
+    parts_list = [p.parts for p in P]
+    max_depth = max(len(parts) for parts in parts_list)
+
+    k = 1
+    while True:
+        keys = []
+        for parts in parts_list:
+            key = parts[-k:] if k <= len(parts) else parts
+            keys.append(tuple(key))
+        if len(set(keys)) == len(paths) or k >= max_depth:
+            break
+        k += 1
+
+    temp_uids = []
+    out_stems = []
+    for key in keys:
+        temp_uid = '__'.join(key)
+        *head, last = list(key)
+        last_stem = Path(last).stem
+        out_stem = '__'.join(head + [last_stem]) if head else last_stem
+        temp_uids.append(_safe_uid(temp_uid))
+        out_stems.append(_safe_uid(out_stem))
+
+    return {str(p): (tuid, ostem) for p, tuid, ostem in zip(P, temp_uids, out_stems)}
 
 def highdim_pca(C, n_components=None):
     """
@@ -248,6 +312,8 @@ def preprocess_data(data = None,indices = None,
         post_standardise=None, # True / False, standardise the ICA/PCA components?
         downsample=None, # new frequency, or None
         files=None, # list of files to be preprocessed
+        combine_outputs=True,
+        combined_name=None,
         output_dir=None,
         file_name = None,
         file_type= "npy",
@@ -294,6 +360,10 @@ def preprocess_data(data = None,indices = None,
         New sampling frequency. If None, no downsampling.
     files : list of str or Path, optional
         If set, enables file-based preprocessing with one file at a time for stochastic training.
+    combine_outputs : bool, default=True
+        When using file inputs whether to write output as individual files or combine the output
+    combined_name : str, default="combined"
+        Stem for output file name (only when using files and combine_outputs=True)
     output_dir : str or Path, optional
         Directory to save processed files (only used in file mode).
     file_name : str or None, optional
@@ -353,7 +423,9 @@ def preprocess_data(data = None,indices = None,
         log = {**locals()}
         del(log["data"], log["indices"], log["files"])
         files = resolve_files(files, file_type=file_type)
-        INPUT_FILE_PATHS = [str(p) for p in files]
+        INPUT_FILE_PATHS = [str(path) for path in files]
+        log['p'] = None
+        uid_map = compute_unique_suffixes(INPUT_FILE_PATHS)
         if output_dir is None:
             OUTPUT_DIR_PATH = Path(files[0]).parent
         else:
@@ -376,6 +448,10 @@ def preprocess_data(data = None,indices = None,
             T = X.shape[0]
             indices = np.array([[0, T]])
             p = X.shape[1]
+            if log['p'] is None:
+                log['p'] = int(p)
+            elif log['p'] != int(p):
+                warnings.warn(f"Inconsistent feature dimension across files: first file p={log['p']}, this file p={int(p)}")
 
             if dampen_extreme_peaks:
                 X -= np.mean(X, axis=0)
@@ -437,8 +513,11 @@ def preprocess_data(data = None,indices = None,
                 indices_new = indices
                 Y = X  # fallback for consistency
 
-            TEMP_PATH = OUTPUT_DIR_PATH / f"temp_{Path(INPUT_FILE_PATH).stem}.npy"
+            temp_uid, out_stem = uid_map[str(Path(INPUT_FILE_PATH).resolve())]
+            TEMP_PATH = OUTPUT_DIR_PATH / f"temp_{temp_uid}.npy"
             np.save(TEMP_PATH, X)
+            if not os.path.exists(TEMP_PATH):
+                raise RuntimeError(f"Expected temp file not found: {TEMP_PATH}")
             TEMP_PATHS.append(str(TEMP_PATH))
             all_indices.append(indices_new)
 
@@ -469,29 +548,73 @@ def preprocess_data(data = None,indices = None,
 
         # Save files with PCA/ICA applied
         OUTPUT_FILE_PATHS = []
-        for path, INPUT_FILE_PATH, indices in zip(TEMP_PATHS, INPUT_FILE_PATHS, all_indices):
-            X = np.load(path)
-            if pca is not None:
-                X = (X - meanX) / stdX
-                X = X @ pca_matrix # Apply PCA
-                if post_standardise:
-                    X -= np.mean(X, axis=0)
-                    X /= np.std(X, axis=0)
-                log['meanX'] = meanX
-                log['stdX'] = stdX
-                log['pca_matrix'] = pca_matrix
-    
-            # Save the result regardless of PCA
-            BASE_FILENAME = Path(INPUT_FILE_PATH).stem
+        if not combine_outputs:
+            for path, INPUT_FILE_PATH, indices in zip(TEMP_PATHS, INPUT_FILE_PATHS, all_indices):
+                if not os.path.exists(path):
+                    raise FileNotFoundError(f"Temp file missing: {path} (created from {INPUT_FILE_PATH})")
+                X = np.load(path)
+                if pca is not None:
+                    X = (X - meanX) / stdX
+                    X = X @ pca_matrix # Apply PCA
+                    if post_standardise:
+                        X -= np.mean(X, axis=0)
+                        X /= np.std(X, axis=0)
+                    log['meanX'] = meanX
+                    log['stdX'] = stdX
+                    log['pca_matrix'] = pca_matrix
+        
+                # Save the result regardless of PCA
+                _, out_stem = uid_map[str(Path(INPUT_FILE_PATH).resolve())]
+                append_name = f"_{file_name}" if isinstance(file_name, str) else "_preprocessed"
+                OUTPUT_FILE_PATH = OUTPUT_DIR_PATH / f"{out_stem}{append_name}.npz"
+                # Everything is stored in variable X, so we save X in Y
+                np.savez(OUTPUT_FILE_PATH, X=np.empty((0,)), Y=X, indices=indices)
+                OUTPUT_FILE_PATHS.append(str(OUTPUT_FILE_PATH))
+                os.remove(path)
+
+        else:
+            combined_name = "combined" if not isinstance(combined_name, str) or not combined_name.strip() else combined_name.strip()
             append_name = f"_{file_name}" if isinstance(file_name, str) else "_preprocessed"
-            OUTPUT_FILE_PATH = OUTPUT_DIR_PATH / f"{BASE_FILENAME}{append_name}.npz"
-            # Everything is stored in variable X, so we save X in Y
-            np.savez(OUTPUT_FILE_PATH, X=np.empty((0,)), Y=X, indices=indices)
+
+            Y_list = []
+            indices_list = []
+            offset = 0
+
+            for path, indices in zip(TEMP_PATHS, all_indices):
+                if not os.path.exists(path):
+                    raise FileNotFoundError(f"Temp file missing: {path}")
+                X = np.load(path)
+                if pca is not None:
+                    X = (X - meanX) / stdX
+                    X = X @ pca_matrix
+                    if post_standardise:
+                        X -= np.mean(X, axis=0)
+                        X /= np.std(X, axis=0)
+                    log['meanX'] = meanX
+                    log['stdX'] = stdX
+                    log['pca_matrix'] = pca_matrix
+
+                Y_list.append(X)
+                # offset indices for concatenation
+                ind = np.array(indices, dtype=np.int64)
+                ind[:, 0] += offset
+                ind[:, 1] += offset
+                indices_list.append(ind)
+                offset += X.shape[0]
+
+                os.remove(path)
+
+            Y_combined = np.vstack(Y_list) if Y_list else np.empty((0, 0))
+            indices_combined = np.vstack(indices_list) if indices_list else np.empty((0, 2), dtype=np.int64)
+
+            OUTPUT_FILE_PATH = OUTPUT_DIR_PATH / f"{combined_name}{append_name}.npz"
+            np.savez(OUTPUT_FILE_PATH, X=np.empty((0,)), Y=Y_combined, indices=indices_combined)
             OUTPUT_FILE_PATHS.append(str(OUTPUT_FILE_PATH))
-            os.remove(path)
 
         log_suffix = f"_{file_name}" if isinstance(file_name, str) else ""
         log_file_path = OUTPUT_DIR_PATH / f"log_preprocessing{log_suffix}.npz"
+        log['combine_outputs'] = combine_outputs
+        log['n_input_files'] = len(INPUT_FILE_PATHS)
         np.savez(log_file_path, **log)
 
         return OUTPUT_FILE_PATHS, log
