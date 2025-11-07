@@ -720,7 +720,7 @@ def plot_p_value_matrix(pval_in, alpha = 0.05, normalize_vals=True, figsize=(9, 
             # Generate labels like "Hello 1", "Hello 2", ...
             xticklabels = [f"{xticklabels} {i + 1}" for i in range(len(x_tick_labels))]
         elif not isinstance(xticklabels, list) or len(xticklabels) != len(x_tick_labels):
-            warnings.warn(f"xticklabels must be a list matching x_tick_labels, or a string. Using default numeric labels instead.")
+            warnings.warn(f"xticklabels must be a list matching x_tick_labels, or a string. Using default numeric labels instead.", stacklevel=2)
             xticklabels = [f"Feature {i + 1}" for i in range(len(x_tick_labels))]
 
         axes.set_xticks(x_tick_positions + 0.5)
@@ -742,7 +742,7 @@ def plot_p_value_matrix(pval_in, alpha = 0.05, normalize_vals=True, figsize=(9, 
                 # Generate labels like "Label 1", "Label 2", ...
                 yticklabels = [f"{yticklabels} {i + 1}" for i in range(len(y_tick_positions))]
             elif not isinstance(yticklabels, list) or len(yticklabels) != len(y_tick_positions):
-                warnings.warn(f"yticklabels must be a list matching y_tick_positions, or a string. Using default numeric labels instead.")
+                warnings.warn(f"yticklabels must be a list matching y_tick_positions, or a string. Using default numeric labels instead.", stacklevel=2)
                 yticklabels = [f"{i + 1}" for i in range(len(y_tick_positions))]
                 
 
@@ -974,7 +974,7 @@ def plot_vpath(viterbi_path, signal=None, idx_data=None, figsize=(7, 4), fontsiz
                 colors = get_distinct_colors(num_states, cmap)
         else:
             warnings.warn(f"Invalid colormap '{cmap}'. Falling back to 'Set3'. "
-                          f"Use one of: {', '.join(valid_cmaps[:5])}... etc.")
+                          f"Use one of: {', '.join(valid_cmaps[:5])}... etc.", stacklevel=2)
             cmap = plt.get_cmap('Set3')
             colors = [cmap(i) for i in range(num_states)]
     elif num_states <= 10:
@@ -1181,7 +1181,7 @@ def plot_FO(FO, figsize=(8, 4), fontsize_ticks=12, fontsize_labels=14, fontsize_
                 colors = get_distinct_colors(num_states, cmap)
         else:
             warnings.warn(f"Invalid colormap '{cmap}'. Falling back to 'Set3'. "
-                          f"Use one of: {', '.join(valid_cmaps[:5])}... etc.")
+                          f"Use one of: {', '.join(valid_cmaps[:5])}... etc.", stacklevel=2)
             cmap = plt.get_cmap('Set3')
             colors = [cmap(i) for i in range(num_states)]
     elif num_states <= 10:
@@ -1299,8 +1299,8 @@ def plot_switching_rates(SR, figsize=(8, 4), fontsize_ticks=12,fontsize_labels=1
         else:
             warnings.warn(
                 f"Invalid colormap '{cmap}'. Falling back to 'Set3'. "
-                f"Use one of: {', '.join(valid_cmaps[:5])}... etc."
-            )
+                f"Use one of: {', '.join(valid_cmaps[:5])}... etc.", 
+                stacklevel=2)
             cmap = plt.get_cmap('Set3')
             colors = [cmap(i) for i in range(num_states)]
     elif num_states <= 10:
@@ -1425,7 +1425,7 @@ def plot_state_lifetimes(LT, figsize=(8, 4), fontsize_ticks=12, fontsize_labels=
             else:
                 colors = get_distinct_colors(num_states, cmap)
         else:
-            warnings.warn(f"Invalid colormap '{cmap}'. Falling back to 'Set3'.")
+            warnings.warn(f"Invalid colormap '{cmap}'. Falling back to 'Set3'.", stacklevel=2)
             cmap = plt.get_cmap('Set3')
             colors = [cmap(i) for i in range(num_states)]
     elif num_states <= 10:
@@ -2452,7 +2452,7 @@ def plot_p_values_bar(
             # Generate labels like "Hello 1", "Hello 2", ..., "Hello N"
             xticklabels = [f"{xticklabels} {i + 1}" for i in range(len(pval))]
         elif not isinstance(xticklabels, list):
-            warnings.warn(f"xticklabels must be a list or a string, but got {type(xticklabels)}. Using default labels instead.")
+            warnings.warn(f"xticklabels must be a list or a string, but got {type(xticklabels)}. Using default labels instead.", stacklevel=2)
             xticklabels = None
         elif len(xticklabels) != len(pval):
             raise ValueError(f"xticklabels length ({len(xticklabels)}) does not match pval length ({len(pval)}).")
@@ -2786,7 +2786,7 @@ def plot_nnm_spectral_components(nnmf_components, freqs, x_lim=None, highlight_f
             component_colors = [cmap(i) for i in range(n_components)]
         else:
             warnings.warn(f"Invalid colormap '{cmap}'. Falling back to 'Set3'. "
-                          f"Use one of: {', '.join(valid_cmaps[:5])}... etc.")
+                          f"Use one of: {', '.join(valid_cmaps[:5])}... etc.", stacklevel=2)
             cmap = plt.get_cmap('Set3')
             component_colors = [cmap(i) for i in range(n_components)]
     elif n_components <= 10:
@@ -2954,7 +2954,7 @@ def plot_state_psd(psd, freqs, significant_states=None, x_lim=None, cmap=None, h
                 component_colors = get_distinct_colors(num_states, cmap)
         else:
             warnings.warn(f"Invalid colormap '{cmap}'. Falling back to 'Set3'. "
-                          f"Use one of: {', '.join(valid_cmaps[:5])}... etc.")
+                          f"Use one of: {', '.join(valid_cmaps[:5])}... etc.", stacklevel=2)
             cmap = plt.get_cmap('Set3')
             component_colors = [cmap(i) for i in range(num_states)]
     elif num_states ==1:
@@ -2969,7 +2969,7 @@ def plot_state_psd(psd, freqs, significant_states=None, x_lim=None, cmap=None, h
     fig, ax = plt.subplots(figsize=figsize)
     if log_scale_y:
         if np.any(psd <= 0):
-            warnings.warn("log_scale_y=True, but PSD contains non-positive values. Log scale will be skipped.")
+            warnings.warn("log_scale_y=True, but PSD contains non-positive values. Log scale will be skipped.", stacklevel=2)
             log_scale_y = False
         else:
             ax.set_yscale('log')
@@ -3135,7 +3135,8 @@ def plot_state_coherence(coh, freqs, significant_states=None, x_lim=None, cmap=N
                 component_colors = get_distinct_colors(num_states, cmap)
         else:
             warnings.warn(f"Invalid colormap '{cmap}'. Falling back to 'Set3'. "
-                          f"Use one of: {', '.join(valid_cmaps[:5])}... etc.")
+                          f"Use one of: {', '.join(valid_cmaps[:5])}... etc.",
+                          stacklevel=2)
             cmap = plt.get_cmap('Set3')
             component_colors = [cmap(i) for i in range(num_states)]
     elif num_states <= 10:
