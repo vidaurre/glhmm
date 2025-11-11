@@ -17,6 +17,10 @@ from skimage.measure import label, regionprops
 from scipy.stats import ttest_ind, f_oneway, pearsonr, f, norm, t
 from itertools import combinations
 from sklearn.model_selection import train_test_split
+from zipfile import ZipFile
+from tqdm import tqdm
+from pathlib import Path
+import requests
 import os
 import re
 
@@ -215,7 +219,7 @@ def test_across_subjects(
         
     
     # Initialize arrays based on shape of data shape and defined options
-    pval, base_statistics, test_statistics_list, F_stats_list, t_stats_list, R2_stats_list = initialize_arrays(n_p, n_q, n_T, method, Nnull_samples, return_base_statistics, combine_tests, n_cca_components)
+    pval, base_statistics, test_statistics_list, F_stats_list, t_stats_list, R2_stat = initialize_arrays(n_p, n_q, n_T, method, Nnull_samples, return_base_statistics, combine_tests, n_cca_components)
     
     # Custom variable names
     if combine_tests is not False:
@@ -261,8 +265,11 @@ def test_across_subjects(
             Rin = R_t[permutation_matrix_update[:, perm]]
             # Calculate the permutation distribution
             stats_results = test_statistics_calculations(D_t, Rin, perm, test_statistics, reg_pinv, method, category_columns,combine_tests, Nnull_samples=Nnull_samples, n_cca_components=n_cca_components)
-            base_statistics[t, :] = stats_results["base_statistics"] if perm == 0 and stats_results["base_statistics"] is not None else base_statistics[t, :] 
-            pval[t, :] = stats_results["pval_matrix"] if perm == 0 and stats_results["pval_matrix"] is not None else pval[t, :]
+            if perm == 0:
+                base_statistics[t, :] = stats_results["base_statistics"]
+                pval[t, :] = stats_results["pval_matrix"]
+                if R2_stat is not None:
+                    R2_stat[t, :] = stats_results["R2_stats"]
             F_stats_list[t, perm, :] = stats_results["F_stats"] if stats_results["F_stats"] is not None else F_stats_list[t, perm, :]
             t_stats_list[t, perm, :] = stats_results["t_stats"] if stats_results["t_stats"] is not None else t_stats_list[t, perm, :]
         if FLAG_parametric==0:
@@ -286,7 +293,7 @@ def test_across_subjects(
     # Get f and t states when doing a multivariate test
     f_t_stats = get_f_t_stats(D_data, R_data, F_stats_list, t_stats_list, Nnull_samples, n_T) if method =='multivariate' else None
     # Create report summary
-    test_summary =create_test_summary(R_data, base_statistics, pval, predictor_names, outcome_names, method, f_t_stats,n_T, n_N, n_p,n_q, Nnull_samples, category_columns, combine_tests)
+    test_summary =create_test_summary(R_data, base_statistics, pval, predictor_names, outcome_names, method, f_t_stats, R2_stat,n_T, n_N, n_p,n_q, Nnull_samples, category_columns, combine_tests)
     # Change the output to say Nnull_samples=0
     Nnull_samples = 0 if Nnull_samples==1 else Nnull_samples    
     category_columns = {key: value for key, value in category_columns.items() if value}
@@ -495,7 +502,7 @@ def test_across_trials(D_data, R_data, indices_blocks, method="multivariate", Nn
         compute_max_permutations(idx_array, permute_within_blocks=True, permute_between_blocks=False, Nnull_samples=Nnull_samples, verbose=verbose)
 
     # Initialize arrays based on shape of data shape and defined options
-    pval, base_statistics, test_statistics_list, F_stats_list, t_stats_list, R2_stats_list = initialize_arrays(n_p, n_q, n_T, method, Nnull_samples, return_base_statistics, combine_tests, n_cca_components)
+    pval, base_statistics, test_statistics_list, F_stats_list, t_stats_list, R2_stat = initialize_arrays(n_p, n_q, n_T, method, Nnull_samples, return_base_statistics, combine_tests, n_cca_components)
     
     # Custom variable names
     if combine_tests is not False:
@@ -505,7 +512,7 @@ def test_across_trials(D_data, R_data, indices_blocks, method="multivariate", Nn
 
     # Define names for the summary statistics
     predictor_names = [f"Predictor {i+1}" for i in range(n_p)] if predictor_names==[] or len(predictor_names)!=n_p else predictor_names
-    outcome_names = [f"Regressor {i+1}" for i in range(n_q)] if outcome_names==[] or len(outcome_names)!=n_q else outcome_names
+    outcome_names = [f"Response  {i+1}" for i in range(n_q)] if outcome_names==[] or len(outcome_names)!=n_q else outcome_names
     
     permutation_matrix = permutation_matrix_across_trials_within_session(Nnull_samples,R_data, idx_array)
     D_data, R_data, confounds, permutation_matrix_update =handle_nan_values(D_data, R_data, confounds, permutation_matrix, method)
@@ -521,8 +528,11 @@ def test_across_trials(D_data, R_data, indices_blocks, method="multivariate", Nn
             Rin = R_t[permutation_matrix_update[:, perm]]
             # Calculate the permutation distribution
             stats_results = test_statistics_calculations(D_t, Rin, perm, test_statistics, reg_pinv, method, category_columns,combine_tests, n_cca_components=n_cca_components)
-            base_statistics[t, :] = stats_results["base_statistics"] if perm == 0 and stats_results["base_statistics"] is not None else base_statistics[t, :] 
-            pval[t, :] = stats_results["pval_matrix"] if perm == 0 and stats_results["pval_matrix"] is not None else pval[t, :]
+            if perm == 0:
+                base_statistics[t, :] = stats_results["base_statistics"]
+                pval[t, :] = stats_results["pval_matrix"]
+                if R2_stat is not None:
+                    R2_stat[t, :] = stats_results["R2_stats"]
             F_stats_list[t, perm, :] = stats_results["F_stats"] if stats_results["F_stats"] is not None else F_stats_list[t, perm, :]
             t_stats_list[t, perm, :] = stats_results["t_stats"] if stats_results["t_stats"] is not None else t_stats_list[t, perm, :]
             
@@ -543,7 +553,7 @@ def test_across_trials(D_data, R_data, indices_blocks, method="multivariate", Nn
     # Get f and t states when doing a multivariate test
     f_t_stats = get_f_t_stats(D_data, R_data, F_stats_list, t_stats_list, Nnull_samples, n_T) if method =='multivariate' else None
     # Create report summary
-    test_summary =create_test_summary(R_data, base_statistics,pval, predictor_names, outcome_names, method, f_t_stats,n_T, n_N, n_p,n_q, Nnull_samples, category_columns, combine_tests)
+    test_summary =create_test_summary(R_data, base_statistics,pval, predictor_names, outcome_names, method, f_t_stats, R2_stat, n_T, n_N, n_p,n_q, Nnull_samples, category_columns, combine_tests)
 
     category_columns = {key: value for key, value in category_columns.items() if value}
     if len(category_columns)==1:
@@ -733,7 +743,7 @@ def test_across_sessions_within_subject(D_data, R_data, indices_blocks, method="
     category_columns = categorize_columns_by_statistical_method(R_data, method, Nnull_samples, detect_categorical, category_limit, permute_beta)
 
     # Initialize arrays based on shape of data shape and defined options
-    pval, base_statistics, test_statistics_list, F_stats_list, t_stats_list, R2_stats_list = initialize_arrays(n_p, n_q, n_T, method, Nnull_samples, return_base_statistics, combine_tests, n_cca_components)
+    pval, base_statistics, test_statistics_list, F_stats_list, t_stats_list, R2_stat = initialize_arrays(n_p, n_q, n_T, method, Nnull_samples, return_base_statistics, combine_tests, n_cca_components)
 
     # Custom variable names
     if combine_tests is not False:
@@ -742,7 +752,7 @@ def test_across_sessions_within_subject(D_data, R_data, indices_blocks, method="
         n_q = test_com_shape[-1]
 
     predictor_names = [f"Predictor {i+1}" for i in range(n_p)] if predictor_names==[] or len(predictor_names)!=n_p else predictor_names
-    outcome_names = [f"Regressor {i+1}" for i in range(n_q)] if outcome_names==[] or len(outcome_names)!=n_q else outcome_names
+    outcome_names = [f"Response  {i+1}" for i in range(n_q)] if outcome_names==[] or len(outcome_names)!=n_q else outcome_names
     
     # Divide the sessions into two dataset to avoid overfit
     train_indices_list, test_indices_list, nan_R =train_test_indices(R_data, D_data, indices_blocks, method, category_limit) 
@@ -788,8 +798,11 @@ def test_across_sessions_within_subject(D_data, R_data, indices_blocks, method="
         for perm in range(Nnull_samples):
             # Calculate the permutation distribution
             stats_results = test_statistics_calculations(D_t, R_t, perm, test_statistics, reg_pinv, method, category_columns, combine_tests, None, permute_beta, beta, test_indices_list_update, Nnull_samples=Nnull_samples, n_cca_components=n_cca_components)
-            base_statistics[t, :] = stats_results["base_statistics"] if perm == 0 and stats_results["base_statistics"] is not None else base_statistics[t, :] 
-            pval[t, :] = stats_results["pval_matrix"] if perm == 0 and stats_results["pval_matrix"] is not None else pval[t, :]
+            if perm == 0:
+                base_statistics[t, :] = stats_results["base_statistics"]
+                pval[t, :] = stats_results["pval_matrix"]
+                if R2_stat is not None:
+                    R2_stat[t, :] = stats_results["R2_stats"]
             F_stats_list[t, perm, :] = stats_results["F_stats"] if stats_results["F_stats"] is not None else F_stats_list[t, perm, :]
             t_stats_list[t, perm, :] = stats_results["t_stats"] if stats_results["t_stats"] is not None else t_stats_list[t, perm, :]
         
@@ -809,7 +822,7 @@ def test_across_sessions_within_subject(D_data, R_data, indices_blocks, method="
     # Get f and t states when doing a multivariate test
     f_t_stats = get_f_t_stats(D_data, R_data, F_stats_list, t_stats_list, Nnull_samples, n_T) if method =='multivariate' else None
     # Create report summary
-    test_summary =create_test_summary(R_data, base_statistics,pval, predictor_names, outcome_names, method, f_t_stats,n_T, n_N, n_p,n_q, Nnull_samples, category_columns, combine_tests)
+    test_summary =create_test_summary(R_data, base_statistics,pval, predictor_names, outcome_names, method, f_t_stats, R2_stat, n_T, n_N, n_p,n_q, Nnull_samples, category_columns, combine_tests)
     Nnull_samples = 0 if Nnull_samples==1 else Nnull_samples    
     category_columns = {key: value for key, value in category_columns.items() if value}
     if len(category_columns)==1:
@@ -1004,11 +1017,11 @@ def test_across_state_visits(D_data, R_data , method="multivariate", Nnull_sampl
             raise ValueError("Cannot perform FWER_correction")  
 
     # Initialize arrays based on shape of data shape and defined options
-    pval, base_statistics, test_statistics_list, F_stats_list, t_stats_list, R2_stats_list = initialize_arrays(n_p, n_q,n_T, method, Nnull_samples, return_base_statistics)
+    pval, base_statistics, test_statistics_list, F_stats_list, t_stats_list, R2_stat = initialize_arrays(n_p, n_q,n_T, method, Nnull_samples, return_base_statistics)
 
     # Custom variable names
     predictor_names = [f"Predictor {i+1}" for i in range(n_states)] if predictor_names==[] or len(predictor_names)!=n_states else predictor_names
-    outcome_names = [f"Regressor {i+1}" for i in range(pval.shape[-1])] if outcome_names==[] or len(outcome_names)!=pval.shape[-1] else outcome_names
+    outcome_names = [f"Response  {i+1}" for i in range(pval.shape[-1])] if outcome_names==[] or len(outcome_names)!=pval.shape[-1] else outcome_names
 
     # Print tqdm over n_T if there are more than one timepoint
     for t in tqdm(range(n_T)) if n_T > 1 & verbose==True else range(n_T):
@@ -1048,8 +1061,11 @@ def test_across_state_visits(D_data, R_data , method="multivariate", Nnull_sampl
                     # Set the appropriate positions to 1
                     vpath_surrogate_binary[np.arange(len(vpath_surrogate)), vpath_surrogate - 1] = 1
                     stats_results = test_statistics_calculations(vpath_surrogate_binary,data_t, perm,test_statistics, reg_pinv, method, category_columns)
-                    base_statistics[t, :] = stats_results["base_statistics"] if perm == 0 and stats_results["base_statistics"] is not None else base_statistics[t, :] 
-                    pval[t, :] = stats_results["pval_matrix"] if perm == 0 and stats_results["pval_matrix"] is not None else pval[t, :]
+                    if perm == 0:
+                        base_statistics[t, :] = stats_results["base_statistics"]
+                        pval[t, :] = stats_results["pval_matrix"]
+                        if R2_stat is not None:
+                            R2_stat[t, :] = stats_results["R2_stats"]
                     if stats_results["t_stats"] is not None:
                         t_stats_list[t,perm,:] = stats_results["t_stats"]
                 else:
@@ -1106,7 +1122,7 @@ def test_across_state_visits(D_data, R_data , method="multivariate", Nnull_sampl
     # Create report summary
     f_t_stats = get_f_t_stats(D_data, R_data, F_stats_list, t_stats_list, Nnull_samples, n_T) if method =='multivariate' else None
 
-    test_summary =create_test_summary(R_data, base_statistics,pval, predictor_names, outcome_names, method, f_t_stats,n_T, n_N, n_p,n_q, Nnull_samples, category_columns)
+    test_summary =create_test_summary(R_data, base_statistics,pval, predictor_names, outcome_names, method, f_t_stats,R2_stat, n_T, n_N, n_p,n_q, Nnull_samples, category_columns)
     if method =="osr":
         test_summary["state_comparison"] = state_comparison 
     if method =="osa":
@@ -1459,9 +1475,9 @@ def initialize_arrays(n_p, n_q, n_T, method, Nnull_samples, return_base_statisti
     # Create the data to store the F-stats
     F_stats_list = np.zeros((n_T, Nnull_samples, n_q))
     # Create the data to store the R2-stats
-    R2_stats_list = np.zeros((n_T, Nnull_samples, n_q)) if method == "multivariate" else None
+    R2_stat = np.zeros((n_T, n_q)) if method == "multivariate" else None
 
-    return pval, base_statistics, test_statistics_list, F_stats_list, t_stats_list, R2_stats_list
+    return pval, base_statistics, test_statistics_list, F_stats_list, t_stats_list, R2_stat
 
 def handle_nan_values(D_data, R_data, confounds, permutation_matrix, method):
     """
@@ -1472,7 +1488,7 @@ def handle_nan_values(D_data, R_data, confounds, permutation_matrix, method):
     D_data : numpy.ndarray
         Array of shape (n_T, n_samples, n_features) representing the dependent variable data.
     R_data : numpy.ndarray
-        Array of shape (n_samples, n_regressors) representing the independent variable data.
+        Array of shape (n_samples, n_response) representing the independent variable data.
     permutation_matrix : numpy.ndarray
         Permutation matrix used for statistical testing.
     method : str
@@ -1949,7 +1965,8 @@ def get_f_t_stats(D_data, R_data, F_stats_list, t_stats_list, Nnull_samples, n_T
     if Nnull_samples >1:
         n_q = R_data.shape[-1]
         n_p = D_data.shape[-1]
-        if n_T>1 and (n_p==1 or n_q==1) :
+        #if n_T>1 and (n_p==1 or n_q==1) :
+        if n_T>1 :
             perm_p_values_F = np.zeros((n_T,n_q))
             perm_p_values_t = np.zeros((n_T,n_p,n_q))
             perm_ci_lower = np.zeros((n_T,n_p,n_q))
@@ -2621,7 +2638,7 @@ def test_statistics_calculations(Din, Rin, perm, test_statistics, reg_pinv, meth
         Parametric P-values derived from the different tests
     """
     # Account for univariate tests
-    t_stats, F_stats, corr_array= None, None, None  
+    t_stats, F_stats, R2_stats, corr_array= None, None, None, None  
     if permute_beta:
         test_indices_con = np.concatenate(test_indices[0], axis=0) if len(test_indices) == 1 else None
         indices_blocks =get_indices_from_list(test_indices[0]) if len(test_indices) == 1 else indices_blocks
@@ -2928,6 +2945,7 @@ def test_statistics_calculations(Din, Rin, perm, test_statistics, reg_pinv, meth
                      "pval_matrix": pval_matrix,
                      "F_stats": F_stats,
                      "t_stats": t_stats,
+                     "R2_stats": R2_stats,
                      "corr_array": corr_array}
 
     return stats_results
@@ -2967,15 +2985,15 @@ def define_predictor_outcome_names(method, combine_tests, predictor_names, outco
     """
     # Default predictor and outcome names if not provided
     predictor_names = predictor_names if predictor_names and len(predictor_names) == n_p else [f"Predictor {i+1}" for i in range(n_p)]
-    outcome_names = outcome_names if outcome_names and len(outcome_names) == n_q else [f"Regressor {i+1}" for i in range(n_q)]
+    outcome_names = outcome_names if outcome_names and len(outcome_names) == n_q else [f"Response {i+1}" for i in range(n_q)]
     
     # Assign names based on method and test combination
     if method == "cca" or combine_tests is True:
         predictor_name = "Predictors"
-        outcome_name = "Regressors"
+        outcome_name = "Responses"
     elif combine_tests == "across_columns":
         predictor_name = predictor_names  # Keep predictor names as they are
-        outcome_name = "Regressors"
+        outcome_name = "Responses"
     elif combine_tests == "across_rows":
         predictor_name = "Predictors"
         outcome_name = outcome_names  # Keep outcome names as they are
@@ -5597,7 +5615,7 @@ def update_indices(nan_mask, indices_blocks):
     return indices_blocks_update
 
 
-def create_test_summary(Rin, base_statistics,pval, predictor_names, outcome_names, method, f_t_stats ,n_T, n_N, n_p, n_q, Nnull_samples, category_columns=None, combine_tests=False, test_indices_list=None):
+def create_test_summary(Rin, base_statistics,pval, predictor_names, outcome_names, method, f_t_stats, R2_stat, n_T, n_N, n_p, n_q, Nnull_samples, category_columns=None, combine_tests=False, test_indices_list=None):
     """
     Create a summary report for the test.
 
@@ -5725,9 +5743,10 @@ def create_test_summary(Rin, base_statistics,pval, predictor_names, outcome_name
         test_summary = {
             "Predictor": np.repeat(predictor_names, n_q),
             "Outcome": outcome_names,
-            "p-value (F-stat)": pval,
+            "p-value": pval,
             "df1": df1,
             "df2": df2,
+            "R2_stat": R2_stat if n_T>1 and (n_p==1 or n_q==1) else R2_stat.squeeze(),
             "F-stat": f_t_stats['F_stats'],
             "T-stat": f_t_stats['t_stats'],
             "p-value (F-stat)": f_t_stats['perm_p_values_F'],
@@ -5875,12 +5894,14 @@ def create_test_summary(Rin, base_statistics,pval, predictor_names, outcome_name
         test_summary = {
             "Predictor": predictor_names,
             "Outcome": outcome_names,
-            "p-value (F-stat)": pval,
+            "p-value": pval,
             "df1": df1,
             "df2": df2,
+            "R2_stat": R2_stat,
             "F-stat": f_t_stats['F_stats'],
             "T-stat": f_t_stats['t_stats'],
             "p-value (t-stat)": parametric_p_values_t,
+            "Timepoints": n_T
             
         }
 
@@ -5931,6 +5952,7 @@ def display_test_summary(result_dict, output="both", timepoint=0, return_tables=
     """
     predictors = result_dict['test_summary']['Predictor']
     outcomes = result_dict['test_summary']['Outcome']
+    base_statistics = result_dict['base_statistics']
     if result_dict["test_type"]== 'test_across_state_visits':
         result_dict["combine_tests"] = False
         result_dict["Nnull_samples"] = result_dict["Nnull_samples"]
@@ -5940,15 +5962,27 @@ def display_test_summary(result_dict, output="both", timepoint=0, return_tables=
         model_summary = coef_table = None
         
         # Check if T-statistics are 2D or 3D (time-dependent)
-        if t_stats.ndim == 2 or t_stats.ndim == 3 and t_stats.shape[0] == 1:
+        if result_dict["test_summary"]["Timepoints"]==1:
             # Time-independent case
-            if output in ["both", "model"]:
+            if output in ["both", "model"] and 'f_manova_cols' in result_dict["statistical_measures"].keys():
                 model_summary = pd.DataFrame({
                     "Outcome": result_dict["test_summary"]["Outcome"],
                     "F-stat": result_dict["test_summary"]["F-stat"].round(4),
                     "df1": result_dict["test_summary"]["df1"],
                     "df2": result_dict["test_summary"]["df2"],
-                    "p-value (F-stat)": result_dict["test_summary"]["p-value (F-stat)"].round(4),
+                    "p-value": result_dict["pval"].round(4),
+                })
+                if not return_tables:
+                    print("\nModel Summary:")
+                    print(model_summary.to_string(index=False))
+            elif output in ["both", "model"]:
+                model_summary = pd.DataFrame({
+                    "Outcome": result_dict["test_summary"]["Outcome"],
+                    "r2_score": result_dict["test_summary"]["R2_stat"].round(4),
+                    "F-stat": result_dict["test_summary"]["F-stat"].round(4),
+                    "df1": result_dict["test_summary"]["df1"],
+                    "df2": result_dict["test_summary"]["df2"],
+                    "p-value": result_dict["pval"].round(4),
                 })
                 if not return_tables:
                     print("\nModel Summary:")
@@ -5971,33 +6005,44 @@ def display_test_summary(result_dict, output="both", timepoint=0, return_tables=
             # Time-dependent case
             if output in ["both", "model"]:
                 F_stat = result_dict["test_summary"]["F-stat"].round(4)
-                pval_stat =result_dict["test_summary"]["p-value (F-stat)"].round(4)
-                if timepoint >= F_stat.shape[0]:
+                pval_stat =result_dict["test_summary"]["p-value"].round(4)
+                if timepoint > result_dict["test_summary"]["Timepoints"]:
                     raise ValueError(f"Selected time point {timepoint} is out of range. "
-                        f"Maximum available time point index is {base_stat.shape[0] - 1}.")
+                        f"Maximum available time point index is {result_dict['test_summary']['Timepoints'] - 1}.")
                 model_summary = pd.DataFrame({
                     "Outcome": result_dict["test_summary"]["Outcome"],
+                    "r2_score": result_dict["test_summary"]["R2_stat"].round(4) if result_dict["test_summary"]["R2_stat"].ndim==1 else result_dict["test_summary"]["R2_stat"][timepoint,:].round(4),
                     "F-stat": F_stat[timepoint] if F_stat.ndim==1 else F_stat[timepoint,:],
                     "df1": result_dict["test_summary"]["df1"],
                     "df2": result_dict["test_summary"]["df2"],
-                    "p-value (F-stat)": pval_stat[timepoint] if pval_stat.ndim==1 else pval_stat[timepoint,:],
+                    "p-value": pval_stat[timepoint] if pval_stat.ndim==1 else pval_stat[timepoint,:],
                 })
                 if not return_tables:
                     print(f"\nModel Summary (timepoint {timepoint}):")
                     print(model_summary.to_string(index=False))
             
-            expanded_predictors = predictors if isinstance(predictors, str) and len(base_statistics.flatten())==1 else np.repeat(predictors, len(outcomes))
             expanded_outcomes = outcomes if isinstance(outcomes, str) and len(base_statistics.flatten())==1 else np.tile(outcomes, n_predictors)
+            expanded_predictors = predictors if isinstance(predictors, str) and len(base_statistics[timepoint,:].flatten())==1 or len(expanded_outcomes)==len(predictors) else np.repeat(predictors, len(outcomes))
 
             if output in ["both", "coef"]:
-                coef_table = pd.DataFrame({
-                    "Predictor": expanded_predictors,
-                    "Outcome": expanded_outcomes,
-                    "T-stat": result_dict["test_summary"]["T-stat"][timepoint, :].flatten(),
-                    "p-value": result_dict["test_summary"]["p-value (t-stat)"][timepoint, :].flatten(),
-                    "LLCI": result_dict["test_summary"]["LLCI"][timepoint, :].flatten(),
-                    "ULCI": result_dict["test_summary"]["ULCI"][timepoint, :].flatten()
-                })
+                if len(result_dict["test_summary"]["T-stat"].flatten())==len(expanded_outcomes):
+                    coef_table = pd.DataFrame({
+                        "Predictor": expanded_predictors,
+                        "Outcome": expanded_outcomes,
+                        "T-stat": result_dict["test_summary"]["T-stat"].flatten(),
+                        "p-value": result_dict["test_summary"]["p-value (t-stat)"].flatten(),
+                        "LLCI": result_dict["test_summary"]["LLCI"].flatten(),
+                        "ULCI": result_dict["test_summary"]["ULCI"].flatten()
+                    })
+                else:
+                    coef_table = pd.DataFrame({
+                        "Predictor": expanded_predictors,
+                        "Outcome": expanded_outcomes,
+                        "T-stat": result_dict["test_summary"]["T-stat"][timepoint,:].flatten(),
+                        "p-value": result_dict["test_summary"]["p-value (t-stat)"][timepoint,:].flatten(),
+                        "LLCI": result_dict["test_summary"]["LLCI"][timepoint,:].flatten(),
+                        "ULCI": result_dict["test_summary"]["ULCI"][timepoint,:].flatten()
+                    })
                 if not return_tables:
                     print(f"\nCoefficients Table (timepoint {timepoint}):")
                     print(coef_table.to_string(index=False))
@@ -6020,15 +6065,16 @@ def display_test_summary(result_dict, output="both", timepoint=0, return_tables=
         df2_fixed = np.full(len(result_dict["test_summary"]["Outcome"]), result_dict["test_summary"]["df2"])
         
         # Check if T-statistics are 2D or 3D (time-dependent)
-        if t_stats.ndim == 2 or t_stats.ndim == 3 and t_stats.shape[0] == 1:
+        if result_dict["test_summary"]["Timepoints"]==1:
             # Time-independent case
             if output in ["both", "model"]:
                 model_summary = pd.DataFrame({
                     "Outcome": result_dict["test_summary"]["Outcome"],
+                    "r2_score": result_dict["test_summary"]["R2_stat"].round(4).flatten(),
                     "F-stat": result_dict["test_summary"]["F-stat"].round(4).flatten(),
                     "df1": df1_fixed,
                     "df2": df2_fixed,
-                    "p-value (F-stat)": result_dict["test_summary"]["p-value (F-stat)"].round(4).flatten(),
+                    "p-value": result_dict["test_summary"]["p-value"].round(4).flatten(),
                 })
                 if not return_tables:
                     print("\nModel Summary - Parametric-test:")
@@ -6052,20 +6098,22 @@ def display_test_summary(result_dict, output="both", timepoint=0, return_tables=
             # Time-dependent case
             if output in ["both", "model"]:
                 F_stat = result_dict["test_summary"]["F-stat"].round(4)
-                pval_stat =result_dict["test_summary"]["p-value (F-stat)"].round(4)
+                r2_score = result_dict["test_summary"]["R2_stat"].round(4)
+                pval_stat =result_dict["test_summary"]["p-value"].round(4)
                 if timepoint >= F_stat.shape[0]:
                     raise ValueError(f"Selected time point {timepoint} is out of range. "
-                        f"Maximum available time point index is {base_stat.shape[0] - 1}.")
+                        f"Maximum available time point index is {result_dict['test_summary']['Timepoints'] - 1}.")
                 # Ensure df1 and df2 have the correct shape
                 df1_fixed = np.full(len(result_dict["test_summary"]["Outcome"]), result_dict["test_summary"]["df1"])
                 df2_fixed = np.full(len(result_dict["test_summary"]["Outcome"]), result_dict["test_summary"]["df2"])
 
                 model_summary = pd.DataFrame({
                     "Outcome": result_dict["test_summary"]["Outcome"],
+                    "r2_score": r2_score[timepoint] if r2_score.ndim==1 else r2_score[timepoint,:],
                     "F-stat": F_stat[timepoint] if F_stat.ndim==1 else F_stat[timepoint,:],
                     "df1": df1_fixed,
                     "df2": df2_fixed,
-                    "p-value (F-stat)": pval_stat[timepoint] if pval_stat.ndim==1 else pval_stat[timepoint,:],
+                    "p-value": pval_stat[timepoint] if pval_stat.ndim==1 else pval_stat[timepoint,:],
                 })
                 if not return_tables:
                     print(f"\nModel Summary - Parametric-test (timepoint {timepoint}):")
@@ -6116,7 +6164,6 @@ def display_test_summary(result_dict, output="both", timepoint=0, return_tables=
                     print(model_summary.to_string(index=False))
 
         else:
-
             # Time-dependent case
             if output in ["both", "model"]:
                 model_summary = pd.DataFrame({
@@ -6188,6 +6235,7 @@ def display_test_summary(result_dict, output="both", timepoint=0, return_tables=
             if not return_tables:
                 print(f"\nCoefficients Table (OSR-{result_dict['test_summary']['state_comparison']}):")
                 print(coef_table.to_string(index=False))
+                
     elif result_dict["method"] == "osa":
         if result_dict["test_summary"]['Timepoints'] == 1:
             # Extract necessary data from result_dict
@@ -6298,8 +6346,8 @@ def display_test_summary(result_dict, output="both", timepoint=0, return_tables=
         # Extract necessary data from result_dict
         # base_statistics = result_dict['base_statistics'][timepoint,:] if result_dict['base_statistics'].ndim==3 else result_dict['base_statistics']
         # pval = result_dict['pval'][timepoint,:] if result_dict['pval'].ndim==3 else result_dict['pval']
-        base_statistics = result_dict['base_statistics'][timepoint,:]
-        pval = result_dict['pval'][timepoint,:] if  base_statistics.ndim==3 and result_dict['pval'].ndim==3 else result_dict['pval']
+        base_statistics =result_dict['base_statistics'] if result_dict["test_summary"]['Timepoints']==1 else result_dict['base_statistics'][timepoint,:]
+        pval = result_dict['pval'][timepoint,:] if result_dict['base_statistics'].ndim==result_dict['pval'].ndim or result_dict["test_summary"]['Timepoints']>1 else result_dict['pval']
         # Generate Model Summary
         max_stat = np.max(np.abs(base_statistics), axis=0)
         min_pval = np.min(pval, axis=0)
@@ -6351,9 +6399,9 @@ def display_test_summary(result_dict, output="both", timepoint=0, return_tables=
                         print(model_summary.to_string(index=False))
                         
             else:
-                expanded_unit_key =unit_key if len(ensure_list(unit_key))==len(ensure_list(max_stat)) else np.repeat(ensure_list(unit_key),len(min_pval))
-                expanded_Nnull_samples = result_dict["Nnull_samples"] if isinstance(result_dict["Nnull_samples"], int) and len(ensure_list(max_stat))==1 else np.repeat(result_dict["Nnull_samples"],len(min_pval))
-
+                
+                expanded_Nnull_samples = result_dict["Nnull_samples"] if isinstance(result_dict["Nnull_samples"], int) and len(ensure_list(max_stat))==1 or len(ensure_list(unit_key))==1 else np.repeat(result_dict["Nnull_samples"],len(min_pval))
+                expanded_unit_key =unit_key if len(ensure_list(unit_key))==len(ensure_list(max_stat)) or len(ensure_list(unit_key))==1 or len(unit_key)==len(ensure_list(expanded_Nnull_samples)) else np.repeat(ensure_list(unit_key),len(min_pval))
                 # Apply the function to each value
                 model_summary = pd.DataFrame({
                     # "Outcome": ensure_list(outcomes),
@@ -6374,7 +6422,7 @@ def display_test_summary(result_dict, output="both", timepoint=0, return_tables=
             if result_dict['method']=='cca':
                 coef_table = pd.DataFrame({
                     "Predictor": 'Predictors',
-                    "Outcome": 'Regressors',
+                    "Outcome": 'Responses',
                     "Base Statistic": base_statistics.flatten(),
                     "P-value": pval.flatten()
                 })
@@ -6503,6 +6551,185 @@ def assign_family_groups_from_matrix(data_twins):
 
     return fam_array
 
+
 def __palm_quickperms(EB, M=None, nP=1000, CMC=False, EE=True):
     # Call palm_quickperms from palm_functions
     return palm_quickperms(EB, M, nP, CMC, EE)
+
+####### Need to move this code to somewhere else in the future ######################
+
+def download_file_with_progress_bar(url: str, dest_path: Path):
+    """
+    Download a file with a progress bar.
+
+    Parameters
+    ----------
+    url : str
+        URL of the file to download.
+    dest_path : Path
+        Path to save the downloaded file.
+
+    """
+    response = requests.get(url, stream=True)
+    response.raise_for_status()  # Raise an error for bad responses
+    total_size = int(response.headers.get('content-length', 0))  # Get the file size from headers
+    block_size = 1024  # 1 Kilobyte per block
+
+    with open(dest_path, 'wb') as file, tqdm(
+        desc=f"Downloading {dest_path.name}",
+        total=total_size,
+        unit='B',
+        unit_scale=True,
+        unit_divisor=1024,
+    ) as progress:
+        for data in response.iter_content(block_size):
+            file.write(data)
+            progress.update(len(data))
+
+
+def prepare_data_directory(procedure=None, url=None, data_dir=None):
+    """
+    Prepare the local 'data/' directory by downloading and extracting data from Zenodo,
+    or from a custom URL if provided.
+
+    Parameters
+    ----------
+    procedure (str, optional)
+        One of ['procedure_1', 'procedure_2', 'procedure_3', 'procedure_4', 'all'].
+        If None or 'all', downloads 'data.zip'.
+    url (str, optional)
+        Advanced use only: provide a custom URL pointing to a .zip file.
+        This overrides the default Zenodo links.
+    data_dir (str or Path, optional)
+        Custom base path where data should be downloaded and extracted.
+        Defaults to Path.cwd() / "data".
+
+    Returns
+    -------
+    Path
+        Path to the extracted dataset inside the 'data/' directory.
+    """
+    # Set base data directory
+    base_data_dir = Path(data_dir) if data_dir is not None else Path.cwd() / "data"
+    base_data_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Default filename mapping if no custom URL is given
+    default_zip_map = {
+        'procedure_1': 'Procedure_1_data.zip',
+        'procedure_2': 'Procedure_2_and_3_data.zip',
+        'procedure_3': 'Procedure_2_and_3_data.zip',
+        'procedure_4': 'Procedure_4_data.zip',
+        'all': 'data.zip',
+        None: 'data.zip'
+    }
+
+    # Determine the zip filename and URL
+    if url is not None:
+        zip_filename = url.split("/")[-1]
+    else:
+        if procedure not in default_zip_map:
+            raise ValueError(f"Invalid procedure: {procedure}. Must be one of {list(default_zip_map.keys())}")
+        zip_filename = default_zip_map[procedure]
+        url = f"https://zenodo.org/record/15213970/files/{zip_filename}"
+
+    # Paths for zip and extracted data
+    zip_path = base_data_dir / zip_filename
+    expected_folder = zip_filename.replace('_data.zip', '').replace('.zip', '')
+    extracted_path = base_data_dir / str(expected_folder + "_data")
+
+    # Skip if data already exists
+    if extracted_path.exists():
+        print(f"Data already exists at: {extracted_path}")
+        return extracted_path
+
+    # Download and extract
+    print(f"Downloading {zip_filename} from {url}...")
+    download_file_with_progress_bar(url, zip_path)
+
+    print(f"Extracting {zip_filename} into {base_data_dir}...")
+    with ZipFile(zip_path, 'r') as zip_ref:
+        zip_ref.extractall(base_data_dir)
+
+    zip_path.unlink()
+    print(f"Removed zip file: {zip_path}")
+
+    return extracted_path
+
+
+
+
+def resolve_figure_directory(save_figures, filename, default_folder="Figures"):
+    """
+    Resolves the output directory and base filename for figure saving.
+
+    Parameters:
+    ----------------
+    save_figures (bool):
+        Whether figures are to be saved.
+    filename (str or None):
+        Optional filename or path prefix for saved outputs.
+    default_folder (str):
+        Default folder name if no filename is provided.
+
+    Returns:
+    ----------------
+    output_dir (str):
+        Path to the folder where figures will be saved.
+    base_filename (str):
+        Base name used to generate individual filenames.
+    """
+        
+    if not save_figures:
+        return None, None
+
+    if filename:
+        filename = Path(filename)
+        output_dir = filename.parent if filename.parent != Path('.') else Path(default_folder)
+        base_filename = filename.stem
+    else:
+        output_dir = Path(default_folder)
+        base_filename = "figure"
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    return output_dir, base_filename
+
+def generate_filename(base, index, extension):
+    """
+    Generate a sequential filename with a numeric suffix.
+
+    Parameters
+    ----------
+    base (str)
+        Base string for the filename (e.g., "power_map").
+    index : int
+        Index to append to the filename (start from index 0).
+    extension (str)
+        File extension (e.g., 'svg', 'png').
+
+    Returns
+    -------
+    str
+        Constructed filename with numeric suffix and extension.
+    """
+    return f"{base}_{index + 1:02d}.{extension}"
+
+def override_dict_defaults(default_dict, override_dict=None):
+    """
+    Merges a default dictionary with user-specified overrides.
+
+    Parameters:
+    --------------
+    default_dict (dict):
+        Dictionary containing default key-value pairs.
+    override_dict (dict, optional):
+        Dictionary of user-defined key-value pairs that override defaults.
+
+    Returns:
+    --------------
+    dict:
+        Merged dictionary where user-defined keys replace defaults.
+    """
+        
+    if override_dict is None:
+        override_dict = {}
+    return {**default_dict, **override_dict}
