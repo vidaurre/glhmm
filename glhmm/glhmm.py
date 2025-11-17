@@ -90,7 +90,7 @@ class glhmm():
     ):
 
         if (connectivity is not None) and not ((covtype == 'shareddiag') or (covtype == 'diag')):
-            warnings.warn('Parameter connectivity can only be used with a diagonal covariance matrix')
+            warnings.warn('Parameter connectivity can only be used with a diagonal covariance matrix. Parameter \'connectivity\' is ignored', stacklevel=3)
             connectivity = None
 
         self.hyperparameters = {}
@@ -463,10 +463,10 @@ class glhmm():
         if not "min_cyc" in options: options["min_cyc"] = 10
         if ("updateGamma" in options) and (not options["updateGamma"]): 
             options["updateGamma"] = True
-            warnings.warn('updateGamma has to be True for stochastic learning')
+            warnings.warn('updateGamma has to be True for stochastic learning', stacklevel=5)
         if ("updateDyn" in options) and (not options["updateDyn"]): 
             options["updateDyn"] = True
-            warnings.warn('updateDyn has to be True for stochastic learning')
+            warnings.warn('updateDyn has to be True for stochastic learning', stacklevel=5)
         options = glhmm.__check_options(options)
         return options
 
@@ -2410,7 +2410,7 @@ class glhmm():
         stochastic = (options is not None) and ("stochastic" in options) and (options["stochastic"])
         
         if (files is not None) and (Y is not None) and (not stochastic):
-            warnings.warn("Argument 'files' cannot be used if the data (Y) is also provided")
+            warnings.warn("Argument 'files' cannot be used if the data (Y) is also provided", stacklevel=2)
 
         if (files is None) and (Y is None):
             raise Exception("Training needs data")
@@ -2422,7 +2422,7 @@ class glhmm():
             if files is None: 
                 raise Exception("For stochastic learning, argument 'files' must be provided")
             if (X is not None) or (Y is not None):
-                warnings.warn("X and Y are not used in stochastic learning")
+                warnings.warn("X and Y are not used in stochastic learning", stacklevel=2)
             fe = self.__train_stochastic(files,Gamma,options)
             return np.empty(0),np.empty(0),fe
 
@@ -2462,7 +2462,7 @@ class glhmm():
                 Gamma,Xi,scale = self.decode(X,Y,indices,serial=options["serial"],gpu_acceleration=options["gpu_acceleration"],gpuChunks=options["gpuChunks"])
                 status = self.__check_Gamma(Gamma)
                 if status:
-                    warnings.warn('Gamma has almost zero variance: stuck in a weird solution')
+                    warnings.warn('Gamma has almost zero variance: stuck in a weird solution', stacklevel=2)
                 
                 # which states are active? 
                 if options["deactivate_states"]:

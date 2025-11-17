@@ -158,7 +158,7 @@ def test_across_subjects(
         if n_cca_components > max_components:
             warnings.warn(
                 f"'n_cca_components' ({n_cca_components}) exceeds the maximum allowed ({max_components}). "
-                f"Adjusting 'n_cca_components' to {max_components}."
+                f"Adjusting 'n_cca_components' to {max_components}.", stacklevel=2
             )
             n_cca_components = max_components
             
@@ -455,7 +455,7 @@ def test_across_trials(D_data, R_data, indices_blocks, method="multivariate", Nn
         if n_cca_components > max_components:
             warnings.warn(
                 f"'n_cca_components' ({n_cca_components}) exceeds the maximum allowed ({max_components}). "
-                f"Adjusting 'n_cca_components' to {max_components}."
+                f"Adjusting 'n_cca_components' to {max_components}.", stacklevel=2
             )
             n_cca_components = max_components
 
@@ -711,7 +711,7 @@ def test_across_sessions_within_subject(D_data, R_data, indices_blocks, method="
         if n_cca_components > max_components:
             warnings.warn(
                 f"'n_cca_components' ({n_cca_components}) exceeds the maximum allowed ({max_components}). "
-                f"Adjusting 'n_cca_components' to {max_components}."
+                f"Adjusting 'n_cca_components' to {max_components}.", stacklevel=2
             )
             n_cca_components = max_components
     
@@ -1205,7 +1205,7 @@ def remove_nan_values(D_data, R_data, method):
         nan_ratio = np.mean(nan_mask)  # Fraction of rows affected
         # if more than 30 % of the data is missing
         if nan_ratio > 0.30:
-            warnings.warn(f"High proportion of missing data: {nan_ratio:.1%} of rows contain NaNs in both matrices.")
+            warnings.warn(f"High proportion of missing data: {nan_ratio:.1%} of rows contain NaNs in both matrices.", stacklevel=3)
 
     return D_data, R_data, nan_mask
 
@@ -4249,7 +4249,8 @@ def categorize_columns_by_statistical_method(R_data, method, Nnull_samples, dete
                 warnings.warn(
                     f"Detected more than {category_limit} unique numbers in column {idx_cols[np.array(unique_counts)>category_limit]} dataset. "
                     f"If this is not intended as categorical data, you can ignore this warning. "
-                    f"Otherwise, consider defining 'category_limit' to set the maximum allowed categories or specifying the indices of categorical columns."
+                    f"Otherwise, consider defining 'category_limit' to set the maximum allowed categories or specifying the indices of categorical columns.", 
+                    stacklevel=3
                 )
                  
     # Handling cases where no categorical detection is requested
