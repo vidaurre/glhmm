@@ -3442,145 +3442,128 @@ def pval_cluster_based_correction(result_dic = None, test_statistics=[], pval=No
         raise ValueError("Missing required parameters: test_statistics or pval.\n"
                          "Remember to set 'return_base_statistics=True' to export the test_statistics when running the test")
 
+    # One-sided z-threshold corresponding to alpha.
+    zval_thresh = norm.ppf(1 - alpha)
+
+    # Correct each feature separately.
     if individual_feature:
         p_size = test_statistics.shape[-2]
-        p_values = np.zeros_like(pval)
+        p_values = np.zeros_like(pval, dtype=float)
+
         for p_i in range(p_size):
-            # Compute mean and standard deviation under the null hypothesis
-            mean_h0 = np.squeeze(np.mean(test_statistics[:,:,p_i], axis=1))
-            std_h0 = np.std(test_statistics[:,:,p_i], axis=1)
+            # Include observed and null maps for this feature.
+            null_stats = test_statistics[:, :, p_i]
 
-            # Initialize array to store maximum cluster sums for each permutation
-            Nnull_samples = test_statistics[:,:,p_i].shape[1]
-            # Not including the first permuation
-            max_cluster_sums = np.zeros(Nnull_samples-1)
+            # Estimate null mean and standard deviation at each time point.
+            mean_h0 = np.mean(null_stats, axis=1)
+            std_h0 = np.std(null_stats, axis=1)
+            std_h0 = np.where(std_h0 == 0, np.nan, std_h0)
 
-            # Define zval_thresh threshold based on alpha
-            zval_thresh = norm.ppf(1 - alpha)
-            
-            # Iterate over permutations to find maximum cluster sums
-            for perm in range(Nnull_samples-1):
-                # Take each permutation map and transform to Z
-                thresh_Nnull_samples = (test_statistics[:,perm+1,p_i])
-                if np.sum(thresh_Nnull_samples)!=0:
-                    #thresh_Nnull_samples = permmaps[perm, :]
-                    thresh_Nnull_samples = (thresh_Nnull_samples - np.mean(thresh_Nnull_samples)) / np.std(thresh_Nnull_samples)
-                    # Threshold line at p-value
-                    thresh_Nnull_samples[np.abs(thresh_Nnull_samples) < zval_thresh] = 0
+            Nnull_samples = test_statistics[:, :, p_i].shape[1]
+            max_cluster_sums = np.zeros(Nnull_samples - 1)
 
-                    # Find clusters
-                    cluster_label = label(thresh_Nnull_samples > 0)
-                    if len(np.unique(cluster_label)) > 1:
-                        temp_cluster_sums = [np.sum(thresh_Nnull_samples[cluster_label == label]) for label in range(1, len(np.unique(cluster_label)))]
-                        if temp_cluster_sums:
-                            max_cluster_sums[perm] = max(temp_cluster_sums)
-                        else:
-                            max_cluster_sums[perm] = 0  # No clusters
-            # Calculate cluster threshold
+            # Build null distribution of maximum cluster masses.
+            for perm in range(Nnull_samples - 1):
+                thresh_Nnull_samples = test_statistics[:, perm + 1, p_i]
+
+                if np.sum(thresh_Nnull_samples) != 0:
+                    # Standardize permutation map relative to the null.
+                    thresh_Nnull_samples = (thresh_Nnull_samples - mean_h0) / std_h0
+
+                    # Keep only values above the one-sided threshold.
+                    thresh_Nnull_samples[thresh_Nnull_samples < zval_thresh] = 0
+
+                    # Label clusters and compute cluster mass.
+                    max_cluster_sums =_max_cluster_sum_z(thresh_Nnull_samples)
+
+            # Determine the cluster-mass threshold from the null distribution.
             cluster_thresh = np.percentile(max_cluster_sums, 100 - (100 * alpha))
 
-            # Convert p-value map calculated using permutation testing into z-scores
-            pval_zmap = norm.ppf(1 - pval[:,p_i])
-            # Threshold the p-value map based on alpha
-            pval_zmap[(pval_zmap)<zval_thresh] = 0
+            # Standardize the observed map in the same way.
+            obs_map = test_statistics[:, 0, p_i]
+            pval_zmap = (obs_map - mean_h0) / std_h0
+            pval_zmap = np.squeeze(pval_zmap)
+            pval_zmap[pval_zmap < zval_thresh] = 0
 
-            # Find clusters in the real thresholded pval_zmap
-            # If they are too small, set them to zero
-            cluster_labels = label(pval_zmap>0)
-        
-            for cluster in range(1,len(np.unique(cluster_labels))):
+            # Label observed supra-threshold clusters.
+            cluster_labels = label(pval_zmap > 0)
+
+            # Remove clusters whose mass is below the null threshold.
+            for cluster in range(1, len(np.unique(cluster_labels))):
                 if np.sum(pval_zmap[cluster_labels == cluster]) < cluster_thresh:
-                    #print(np.sum(region.intensity_image))
                     pval_zmap[cluster_labels == cluster] = 0
-                    
-            # Convert z-map to p-values
-            p_values[:,p_i] = 1 - norm.cdf(pval_zmap)
-            mask = (p_values[:, p_i, 0] == 0.5)  # ensures we correctly extract a 1D array
-            p_values[mask, p_i, 0] = 1 
-    
-    else:    
-        # Compute mean and standard deviation under the null hypothesis
-        mean_h0 = np.squeeze(np.mean(test_statistics, axis=1))
-        std_h0 = np.std(test_statistics, axis=1)
 
-        # Initialize array to store maximum cluster sums for each permutation
+            # Convert surviving z-values back to p-values.
+            pvals_corr = 1 - norm.cdf(pval_zmap)
+            pvals_corr[pval_zmap == 0] = 1
+            pvals_corr = np.expand_dims(pvals_corr,axis=-1) if pval_zmap.ndim != p_values.ndim else pvals_corr
+            p_values[:, p_i] = pvals_corr
+
+    # Correct the full test-statistic map jointly.
+    else:
+        null_stats = test_statistics.copy()
+
+        # Estimate null mean and standard deviation at each time point.
+        mean_h0 = np.mean(null_stats, axis=1)
+        std_h0 = np.std(null_stats, axis=1)
+        std_h0 = np.where(std_h0 == 0, np.nan, std_h0)
+
         Nnull_samples = test_statistics.shape[1]
-        # Not including the first permuation
-        max_cluster_sums = np.zeros(Nnull_samples-1)
+        max_cluster_sums = np.zeros(Nnull_samples - 1)
 
-        # Define zval_thresh threshold based on alpha
-        zval_thresh = norm.ppf(1 - alpha)
-        
-        # Iterate over permutations to find maximum cluster sums
-        for perm in range(Nnull_samples-1):
-            # when test_statistics is 4D
-            if test_statistics.ndim==4:
-                thresh_Nnull_samples = np.squeeze(test_statistics[:, perm+1, :])
+        # 4D case
+        if test_statistics.ndim == 4:
+            # Build null distribution of maximum cluster masses.
+            for perm in range(Nnull_samples - 1):
+
+                thresh_Nnull_samples = (test_statistics[:, perm + 1, :])
                 thresh_Nnull_samples = (thresh_Nnull_samples - mean_h0) / std_h0
+                thresh_Nnull_samples[thresh_Nnull_samples < zval_thresh] = 0
+                max_cluster_sums[perm] =_max_cluster_sum_z(thresh_Nnull_samples)
 
-                # Threshold image at p-value
-                thresh_Nnull_samples[np.abs(thresh_Nnull_samples) < zval_thresh] = 0
+        # 3D case
+        else:
+            for perm in range(Nnull_samples - 1):
+                thresh_Nnull_samples = test_statistics[:, perm + 1]
+                thresh_Nnull_samples = (thresh_Nnull_samples - mean_h0) / std_h0
+                thresh_Nnull_samples[thresh_Nnull_samples < zval_thresh] = 0
+                max_cluster_sums[perm] =_max_cluster_sum_z(thresh_Nnull_samples)
 
-                # Find clusters using connected components labeling
-                cluster_label = label(thresh_Nnull_samples > 0)
-                regions = regionprops(cluster_label, intensity_image=thresh_Nnull_samples)
-                if regions:
-                    # Sum values inside each cluster
-                    temp_cluster_sums = [np.sum(region.intensity_image) for region in regions]
-                    if temp_cluster_sums:
-                        # Store the sum of values for the biggest cluster
-                        max_cluster_sums[perm] = max(temp_cluster_sums)
-                    else:
-                        max_cluster_sums[perm] = 0  # No clusters
-                    
-            # Otherwise it is a 3D matrix
-            else: 
-                # Take each permutation map and transform to Z
-                thresh_Nnull_samples = (test_statistics[:,perm+1])
-                if np.sum(thresh_Nnull_samples)!=0:
-                    #thresh_Nnull_samples = permmaps[perm, :]
-                    thresh_Nnull_samples = (thresh_Nnull_samples - np.mean(thresh_Nnull_samples)) / np.std(thresh_Nnull_samples)
-                    # Threshold line at p-value
-                    thresh_Nnull_samples[np.abs(thresh_Nnull_samples) < zval_thresh] = 0
-
-                    # Find clusters
-                    cluster_label = label(thresh_Nnull_samples > 0)
-
-                    if len(np.unique(cluster_label)>0) or np.sum(cluster_label)==0:
-                        # Sum values inside each cluster
-                        temp_cluster_sums = [np.sum(thresh_Nnull_samples[cluster_label == label]) for label in range(1, len(np.unique(cluster_label)))]
-                        if temp_cluster_sums:
-                            # Store the sum of values for the biggest cluster
-                            max_cluster_sums[perm] = max(temp_cluster_sums)
-        # Calculate cluster threshold
+        # Determine the cluster-mass threshold from the null distribution.
         cluster_thresh = np.percentile(max_cluster_sums, 100 - (100 * alpha))
 
-        # Convert p-value map calculated using permutation testing into z-scores
-        pval_zmap = norm.ppf(1 - pval)
-        # Threshold the p-value map based on alpha
-        pval_zmap[(pval_zmap)<zval_thresh] = 0
+        # Standardize the observed map.
+        obs_map = test_statistics[:, 0]
+        pval_zmap = (obs_map - mean_h0) / std_h0
+        pval_zmap[pval_zmap < zval_thresh] = 0
 
-        # Find clusters in the real thresholded pval_zmap
-        # If they are too small, set them to zero
-        cluster_labels = label(pval_zmap>0)
+        # Note: this keeps the original behavior from your code.
+        cluster_labels = label(pval_zmap > 0)
+        cluster_ids = np.unique(cluster_labels)
+        cluster_ids = cluster_ids[cluster_ids != 0]
         
-        if test_statistics.ndim==3:
-            regions = regionprops(cluster_labels, intensity_image=pval_zmap)
+        # Remove clusters whose mass is below the null threshold.
+        for cl in cluster_ids:
+            if np.sum(pval_zmap[cluster_labels == cl]) < cluster_thresh:
+                pval_zmap[cluster_labels == cl] = 0
 
-            for region in regions:
-                # If real clusters are too small, remove them by setting to zero
-                if np.sum(region.intensity_image) < cluster_thresh:
-                    pval_zmap[cluster_labels == region.label] = 0
-        else: 
-            for cluster in range(1,len(np.unique(cluster_labels))):
-                if np.sum(pval_zmap[cluster_labels == cluster]) < cluster_thresh:
-                    #print(np.sum(region.intensity_image))
-                    pval_zmap[cluster_labels == cluster] = 0
-                
-        # Convert z-map to p-values
+        # Convert surviving z-values back to p-values.
         p_values = 1 - norm.cdf(pval_zmap)
-        p_values[p_values == 0.5] = 1
+        p_values[pval_zmap == 0] = 1
+            
     return p_values
+
+def _max_cluster_sum_z(thresh_Nnull_samples):
+    """Return the maximum cluster sum"""
+
+    cluster_label = label(thresh_Nnull_samples> 0)
+    cluster_ids = np.unique(cluster_label)
+    cluster_ids = cluster_ids[cluster_ids != 0]
+
+    if cluster_ids.size == 0:
+        return 0.0
+
+    return max(np.sum(thresh_Nnull_samples[cluster_label == cl]) for cl in cluster_ids)
 
 def get_indices_array(indices_blocks):
     """
@@ -4069,65 +4052,227 @@ def pad_vpath(vpath, lag_val, indices_tde=None):
             vpath_pad = np.concatenate(vpath_list,axis=0)
     return vpath_pad
 
-def get_event_epochs(D_data, R_data, indices, event_markers, 
-                     fs, fs_target=None, ms_before_stimulus=0, epoch_window_tp=None):
+# def get_event_epochs(D_data, R_data, indices, event_markers,
+#                      fs, fs_target=None, epoch_window=None):
+#     """
+#     Extract time-locked data epochs based on stimulus events.
+
+#     This function processes 2D input data to extract epochs aligned to specific stimulus events.
+#     The epochs are extracted based on the provided event files and are resampled to the target rate.
+#     The function also returns relevant indices and concatenates filtered R data across sessions.
+
+#     Parameters:
+#     ------------
+#     D_data (numpy.ndarray):
+#         2D array containing gamma values for the session, structured as
+#         ((number of timepoints * number of trials), number of states).
+
+#     R_data (list):
+#         List of filtered R data arrays for each session based on the events.
+
+#     indices (numpy.ndarray):
+#         2D array containing preprocessed indices for the session.
+
+#     event_markers (list):
+#         List of event information for each session.
+
+#     fs (int, optional):
+#         The original sampling frequency in Hz. Defaults to 1000 Hz.
+
+#     fs_target (int, optional):
+#         The target sampling frequency in Hz after resampling. If None, the original
+#         sampling frequency is used.
+
+#     epoch_window (tuple or None, optional):
+#         Time interval relative to stimulus onset in seconds, defined as (start, end).
+#         If None, a default interval of (0, 1) is used, corresponding to 1 second
+#         after stimulus onset.
+#         For example:
+#             (0, 1)      -> from stimulus onset to 1 second after
+#             (-0.2, 1)   -> from 200 ms before onset to 1 second after
+
+#     Returns:
+#     ---------
+#     epoch_data (numpy.ndarray):
+#         3D array of extracted data epochs, structured as
+#         (number of timepoints, number of trials, number of states).
+
+#     epoch_indices (numpy.ndarray):
+#         Array of indices corresponding to the extracted epochs for each session.
+
+#     epoch_R_data (numpy.ndarray):
+#         Concatenated array of R data across all sessions.
+#     """
+#     if fs_target is None:
+#         fs_target = fs
+
+#     # Set default epoch window to 1 second after stimulus onset
+#     if epoch_window is None:
+#         epoch_window = (0, 1)
+
+#     start_sec, end_sec = epoch_window
+
+#     if end_sec <= start_sec:
+#         raise ValueError("epoch_window must be defined as (start, end) with end > start.")
+
+#     # Calculate the downsampling factor
+#     downsampling_factor = fs / fs_target
+
+#     # Convert epoch window from seconds to time points at the target sampling rate
+#     start_tp = int(round(start_sec * fs_target))
+#     end_tp = int(round(end_sec * fs_target))
+#     epoch_window_tp = end_tp - start_tp
+
+#     # Initialize lists to store gamma epochs, filtered R data, and index data
+#     data_epochs_list = []
+#     filtered_R_data_list = []
+#     valid_epoch_counts = []
+
+#     # Iterate over each event file corresponding to a session
+#     for idx, events in enumerate(event_markers):
+#         # Extract data values for the specific session using preprocessed indices
+#         data_session = D_data[indices[idx, 0]:indices[idx, 1], :]
+
+#         # Downsample the event time indices
+#         downsampled_events = np.round(events[:, 0] / downsampling_factor).astype(int)
+
+#         # Calculate differences between consecutive events
+#         event_differences = np.diff(downsampled_events, axis=0)
+
+#         # Identify valid events that are sufficiently spaced apart
+#         valid_event_indices = (event_differences >= epoch_window_tp)
+
+#         # Ensure the first event is included if it meets the spacing condition
+#         if len(downsampled_events) > 1:
+#             if event_differences[0] >= epoch_window_tp:
+#                 valid_event_indices = np.concatenate(([True], valid_event_indices))
+#             else:
+#                 valid_event_indices = np.concatenate(([False], valid_event_indices))
+#         else:
+#             valid_event_indices = np.array([True])
+
+#         # Filter events that fit fully within the data boundaries
+#         epoch_start = downsampled_events + start_tp
+#         epoch_end = downsampled_events + end_tp
+#         valid_event_indices &= (epoch_start >= 0) & (epoch_end <= len(data_session))
+
+#         # Select filtered event indices based on the conditions
+#         filtered_event_indices = downsampled_events[valid_event_indices]
+
+#         # Counter for the number of valid trials
+#         trial_count = 0
+
+#         # Iterate over each filtered event
+#         for event_index in filtered_event_indices:
+#             start_index = int(event_index + start_tp)
+#             end_index = int(event_index + end_tp)
+
+#             # Append the data for this epoch to the data_epochs_list
+#             data_epochs_list.append(data_session[start_index:end_index, :])
+
+#             trial_count += 1
+
+#         # Append the filtered R data to the filtered_R_data_list
+#         filtered_R_data_list.append(R_data[idx][valid_event_indices])
+
+#         # Store the count of valid epochs for this session in valid_epoch_counts
+#         valid_epoch_counts.append(trial_count)
+
+#     # Convert the data_epochs_list to a NumPy array and transpose it for correct dimensions
+#     epoch_data = np.transpose(np.array(data_epochs_list), (1, 0, 2))
+
+#     # Concatenate all filtered R data along the first axis
+#     epoch_R_data = np.concatenate(filtered_R_data_list, axis=0)
+
+#     # Calculate the indices for the epoch data using a custom function
+#     epoch_indices = get_indices_from_list(valid_epoch_counts, count_timestamps=False)
+
+#     # Return the processed data
+#     return epoch_data, epoch_indices, epoch_R_data
+
+def get_event_epochs(D_data, R_data, indices, event_markers,
+                     fs, fs_target=None, epoch_window=None):
     """
     Extract time-locked data epochs based on stimulus events.
 
-    This function processes 2D input data to extract epochs aligned to specific stimulus events. 
-    The epochs are extracted based on provided event files and are resampled to the target rate. 
+    This function processes 2D input data to extract epochs aligned to specific stimulus events.
+    The epochs are extracted based on the provided event files and are resampled to the target rate.
     The function also returns relevant indices and concatenates filtered R data across sessions.
 
     Parameters:
     ------------
-    D_data (numpy.ndarray): 
-        2D array containing gamma values for the session, structured as ((number of timepoints * number of trials), number of states).
-    R_data (list): 
+    D_data (numpy.ndarray):
+        2D array containing gamma values for the session, structured as
+        ((number of timepoints * number of trials), number of states).
+
+    R_data (list):
         List of filtered R data arrays for each session based on the events.
-    indices (numpy.ndarray): 
+
+    indices (numpy.ndarray):
         2D array containing preprocessed indices for the session.
-    event_markers (list): 
+
+    event_markers (list):
         List of event information for each session.
-    fs (int, optional): 
+
+    fs (int, optional):
         The original sampling frequency in Hz. Defaults to 1000 Hz.
-    fs_target (int, optional): 
-        The target sampling frequency in Hz after resampling. Defaults to 250 Hz.
-    ms_pre_stimulus (int, optional): 
-        Time in milliseconds to offset the start of the epoch before the stimulus onset. Defaults to 0 ms.
-    epoch_window_tp
-        Epoch window length in time points. If None, a default duration of 1 second (equal to fs_target) is used.
+
+    fs_target (int, optional):
+        The target sampling frequency in Hz after resampling. If None, the original
+        sampling frequency is used.
+
+    epoch_window (tuple or None, optional):
+        Time interval relative to stimulus onset in seconds, defined as (start, end).
+        If None, a default interval of (0, 1) is used, corresponding to 1 second
+        after stimulus onset.
+        For example:
+            (0, 1)      -> from stimulus onset to 1 second after
+            (-0.2, 1)   -> from 200 ms before onset to 1 second after
 
     Returns:
     ---------
-    epoch_data (numpy.ndarray): 
-        3D array of extracted data epochs, structured as (number of timepoints, number of trials, number of states).
-    epoch_indices (numpy.ndarray): 
+    epoch_data (numpy.ndarray):
+        3D array of extracted data epochs, structured as
+        (number of timepoints, number of trials, number of states).
+
+    epoch_indices (numpy.ndarray):
         Array of indices corresponding to the extracted epochs for each session.
-    concatenated_R_data (numpy.ndarray): 
+
+    epoch_R_data (numpy.ndarray):
         Concatenated array of R data across all sessions.
     """
-    if fs_target== None:
-        fs_target = fs.copy()
+    if fs_target is None:
+        fs_target = fs
+
+    # Set default epoch window to 1 second after stimulus onset
+    if epoch_window is None:
+        epoch_window = (0, 1)
+
+    start_sec, end_sec = epoch_window
+
+    if end_sec <= start_sec:
+        raise ValueError("epoch_window must be defined as (start, end) with end > start.")
+
     # Calculate the downsampling factor
     downsampling_factor = fs / fs_target
-    # Set default duration to 1 second if None
-    epoch_window_tp = fs_target if epoch_window_tp is None else epoch_window_tp 
-    # Calculate the shift for the stimulus onset
-    stimulus_shift = ms_before_stimulus / downsampling_factor if ms_before_stimulus != 0 else 0
+
+    # Convert epoch window from seconds to time points at the target sampling rate
+    start_tp = int(round(start_sec * fs_target))
+    end_tp = int(round(end_sec * fs_target))
+    epoch_window_tp = end_tp - start_tp
 
     # Initialize lists to store gamma epochs, filtered R data, and index data
-    data_epochs_list = []  
-    filtered_R_data_list = []  
-    valid_epoch_counts = []  
+    data_epochs_list = []
+    filtered_R_data_list = []
+    valid_epoch_counts = []
 
     # Iterate over each event file corresponding to a session
     for idx, events in enumerate(event_markers):
         # Extract data values for the specific session using preprocessed indices
         data_session = D_data[indices[idx, 0]:indices[idx, 1], :]
 
-
         # Downsample the event time indices
-        downsampled_events = (events[:, 0] / downsampling_factor).astype(int)
+        downsampled_events = np.round(events[:, 0] / downsampling_factor).astype(int)
 
         # Calculate differences between consecutive events
         event_differences = np.diff(downsampled_events, axis=0)
@@ -4135,34 +4280,41 @@ def get_event_epochs(D_data, R_data, indices, event_markers,
         # Identify valid events that are sufficiently spaced apart
         valid_event_indices = (event_differences >= epoch_window_tp)
 
-        # Ensure the first event is included if it meets the downsample condition
-        if event_differences[0] >= epoch_window_tp:
-            valid_event_indices = np.concatenate(([True], valid_event_indices))
+        # Ensure the first event is included if it meets the spacing condition
+        if len(downsampled_events) > 1:
+            if event_differences[0] >= epoch_window_tp:
+                valid_event_indices = np.concatenate(([True], valid_event_indices))
+            else:
+                valid_event_indices = np.concatenate(([False], valid_event_indices))
+        else:
+            valid_event_indices = np.array([True])
 
-        # Filter events that meet the downsample condition
-        valid_event_indices &= (len(data_session) - downsampled_events >= epoch_window_tp)
+        # Filter events that fit fully within the data boundaries
+        epoch_start = downsampled_events + start_tp
+        epoch_end = downsampled_events + end_tp
+        valid_event_indices &= (epoch_start >= 0) & (epoch_end <= len(data_session))
 
-        # Select filtered event indices based on the downsample condition
+        # Select filtered event indices based on the conditions
         filtered_event_indices = downsampled_events[valid_event_indices]
 
         # Counter for the number of valid trials
-        trial_count = 0  
+        trial_count = 0
 
         # Iterate over each filtered event
         for event_index in filtered_event_indices:
-            start_index = int(event_index + stimulus_shift)  # Adjust start index to include time before stimulus
-            end_index = int(start_index + epoch_window_tp)  # Define end index for the epoch
+            start_index = int(event_index + start_tp)
+            end_index = int(event_index + end_tp)
 
             # Append the data for this epoch to the data_epochs_list
             data_epochs_list.append(data_session[start_index:end_index, :])
 
-            trial_count += 1  # Increment the trial counter
+            trial_count += 1
 
         # Append the filtered R data to the filtered_R_data_list
         filtered_R_data_list.append(R_data[idx][valid_event_indices])
 
-        # Store the count of valid epochs for this session in the valid_epoch_counts
-        valid_epoch_counts.append(np.sum(valid_event_indices))
+        # Store the count of valid epochs for this session in valid_epoch_counts
+        valid_epoch_counts.append(trial_count)
 
     # Convert the data_epochs_list to a NumPy array and transpose it for correct dimensions
     epoch_data = np.transpose(np.array(data_epochs_list), (1, 0, 2))
@@ -4175,7 +4327,6 @@ def get_event_epochs(D_data, R_data, indices, event_markers,
 
     # Return the processed data
     return epoch_data, epoch_indices, epoch_R_data
-
 def categorize_columns_by_statistical_method(R_data, method, Nnull_samples, detect_categorical=False, category_limit=None,permute_beta=False, comparison_statistic=False):
     """
     Detects categorical columns in R_data and categorizes them for later statistical testing (t-tests, F-tests, etc.).

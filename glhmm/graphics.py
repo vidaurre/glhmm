@@ -600,7 +600,7 @@ def plot_p_value_matrix(pval, alpha = 0.05, normalize_vals=True, figsize=(9, 5),
     """
     if pval.ndim>2:
         pval_in = np.squeeze(pval)
-        if pval.ndim>2:
+        if pval_in.ndim>2:
             raise ValueError(f"The p-value is {pval.ndim} dimensional\n"
                     "Adjust your p-values so it becomes 2-dimensional")
 
@@ -2054,7 +2054,7 @@ def plot_condition_difference(
     condition_labels=('Condition 1', 'Condition 2'), fontsize_sup_title=16,
     fontsize_title=14, fontsize_labels=12, figsize=(12, 3), vertical_lines=None, line_colors=None, 
     highlight_boxes=False, stimulus_onset=None, x_tick_min=None, 
-    x_tick_max=None, num_x_ticks=5, num_y_ticks=5, xlabel='Timepoints', save_path=None, return_fig=False):
+    x_tick_max=None, num_x_ticks=5, num_y_ticks=5, xlabel='Timepoints', ylabel='Average Probability', save_path=None, return_fig=False):
     """
     Plots the average probability for each state over time for two conditions and their difference.
 
@@ -2131,23 +2131,51 @@ def plot_condition_difference(
         
     # Generate x-tick labels
     num_timepoints = Gamma_epoch.shape[0]
+    
     x_tick_positions = np.linspace(0, num_timepoints - 1, num_x_ticks).astype(int)
     # Generate x-tick labels based on user input or default to time points
     if x_tick_min is not None and x_tick_max is not None:
-        x_tick_labels = np.linspace(x_tick_min, x_tick_max, num_x_ticks).round(2)
+        x_tick_labels = np.linspace(x_tick_min, x_tick_max, num_x_ticks).round(1)
         if np.all(x_tick_labels == x_tick_labels.astype(int)):
             x_tick_labels = x_tick_labels.astype(int)
     elif x_tick_min is not None:
-        x_tick_labels = np.linspace(x_tick_min, pval.shape[1], num_x_ticks).round(2)
+        x_tick_labels = np.linspace(x_tick_min, x_tick_max, num_x_ticks).round(1)
         if np.all(x_tick_labels == x_tick_labels.astype(int)):
             x_tick_labels = x_tick_labels.astype(int)
     elif x_tick_max is not None:
-        x_tick_labels = np.linspace(0, x_tick_max, num_x_ticks).round(2)
+        x_tick_labels = np.linspace(0, x_tick_max, num_x_ticks).round(1)
         if np.all(x_tick_labels == x_tick_labels.astype(int)):
             x_tick_labels = x_tick_labels.astype(int) 
     else:
         x_tick_labels = x_tick_positions
 
+    # # Convert to ms if needed
+    #     time_ms = time * 1000
+
+    #     # Define tick step (in ms)
+    #     if tick_step is None:
+    #         if range_ms <= 500:
+    #             tick_step = 100
+    #         elif range_ms <= 1500:
+    #             tick_step = 200
+    #         else:
+    #             tick_step = 500
+
+    #     # Generate ticks aligned to nice values
+    #     tick_values = np.arange(
+    #         np.ceil(time_ms[0] / tick_step) * tick_step,
+    #         time_ms[-1] + tick_step,
+    #         tick_step
+    #     )
+
+    #     # Convert time → index
+    #     x_tick_positions = [
+    #         int(round((t/1000 - x_tick_min) * num_timepoints / (x_tick_max - x_tick_min)))
+    #         for t in tick_values
+    #     ]
+
+    #     x_tick_labels = tick_values.astype(int)
+    
     # Plot for each condition with standardized y-axis
     for idx, condition in enumerate(conditions):
         axes[idx].plot(filt_val[idx, :, :])
@@ -2157,7 +2185,7 @@ def plot_condition_difference(
         axes[idx].set_yticks(np.linspace(global_min, global_max, num_y_ticks).round(2))
         axes[idx].set_ylim(global_min, global_max)  # Set standardized y-limits # Set standardized y-limits
         axes[idx].set_xlim(x_tick_positions[0], x_tick_positions[-1])
-        axes[idx].set_ylabel('Average Probability', fontsize=fontsize_labels)
+        axes[idx].set_ylabel(ylabel, fontsize=fontsize_labels)
 
         
     # Find the element-wise difference
