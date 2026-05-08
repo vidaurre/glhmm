@@ -8,6 +8,13 @@ Some public useful functions - Gaussian Linear Hidden Markov Model
 import numpy as np
 import statistics
 import math
+import pickle
+import re
+import requests
+from pathlib import Path as _Path
+from glhmm import glhmm as _glhmm_mod
+
+
 from scipy.optimize import linear_sum_assignment
 
 def get_FO(Gamma,indices,summation=False):
@@ -365,3 +372,374 @@ def get_gamma_similarity(gamma1, gamma2):
     return S, col_ind, gamma2
 
 
+# ---------------------------------------------------------------------------
+# Stability-training helpers
+# ---------------------------------------------------------------------------
+
+def load_stability_results(save_dir):
+    """
+    Load HMM stability training results from disk.
+
+    Handles two cases automatically:
+    - `summary_results.pkl` present -> loads directly (fast path).
+    - Only individual `hmm_K*_rep*.pkl` files -> rebuilds the summary from them
+      by recomputing Gamma similarity between repetition 0 and every subsequent repetition.
+
+    Parameters:
+    --------------
+    save_dir (str or Path):
+        Directory where ``run_stability_training()`` saved its outputs.
+
+    Returns:
+    ----------
+    results (dict):
+        Dictionary with K values as keys, each containing:
+        - `'FE'`: list of free energy arrays, one per repetition.
+        - `'similarity_scores'`: list of Gamma similarity floats (rep 0 vs rep i).
+    state_range (list of int):
+        Sorted list of K values found in the directory.
+    """
+    import pickle
+    import re
+    from pathlib import Path as _Path
+
+    save_dir = _Path(save_dir)
+    summary_path = save_dir / 'summary_results.pkl'
+
+    if summary_path.exists():
+        with open(summary_path, 'rb') as f:
+            results = pickle.load(f)
+        state_range = sorted(results.keys())
+        print(f'Loaded summary_results.pkl  (K = {list(state_range)})')
+    else:
+        print('summary_results.pkl not found. Rebuilding from individual model files...')
+        pattern = re.compile(r'hmm_K(\d+)_rep(\d+)\.pkl')
+        saved = {}
+        for p in sorted(save_dir.glob('hmm_K*_rep*.pkl')):
+            m = pattern.match(p.name)
+            if m:
+                K, rep = int(m.group(1)), int(m.group(2))
+                saved.setdefault(K, []).append((rep, p))
+
+        if not saved:
+            raise FileNotFoundError(
+                f'No hmm_K*_rep*.pkl files found in {save_dir}. '
+                'Check that save_dir is correct and training has been run.'
+            )
+
+        state_range = sorted(saved.keys())
+        results = {K: {'similarity_scores': [], 'FE': []} for K in state_range}
+
+        for K in state_range:
+            reps_sorted = sorted(saved[K], key=lambda x: x[0])
+            print(f'  K={K}: loading {len(reps_sorted)} repetitions...', end=' ')
+            Gamma_ref = None
+            for rep, fpath in reps_sorted:
+                with open(fpath, 'rb') as f:
+                    d = pickle.load(f)
+                results[K]['FE'].append(d['FE'])
+                if Gamma_ref is None:
+                    Gamma_ref = d['Gamma']
+                else:
+                    sim, _, _ = get_gamma_similarity(Gamma_ref, d['Gamma'])
+                    results[K]['similarity_scores'].append(sim)
+            del Gamma_ref
+            print('done')
+
+        with open(summary_path, 'wb') as f:
+            pickle.dump(results, f)
+        print(f'Saved reconstructed summary to {summary_path}')
+
+    print(f"\n {'K':>4} | {'N reps':>6} | {'N sim scores':>12} | {'Min final FE':>14}")
+    print('-' * 44)
+    for K in state_range:
+        n_reps = len(results[K]['FE'])
+        n_sim  = len(results[K]['similarity_scores'])
+        min_fe_val = min(fe[-1] for fe in results[K]['FE'])
+        print(f'{K:>4} | {n_reps:>6} | {n_sim:>12} | {min_fe_val:>14.2f}')
+
+    return results, state_range
+
+
+def run_stability_training(Y, indices, state_range, n_repeats, save_dir,
+                           log_preproc=None, covtype='full', model_mean='no',
+                           options=None):
+    """
+    Train HMMs across a range of K values to assess solution stability.
+
+    For each K and random repetition: initialises an HMM; trains with full-batch EM
+    until convergence; saves the model to disk; and computes Gamma similarity between
+    repetition 0 (reference) and all subsequent repetitions to measure how
+    reproducible the state solution is across random initialisations.
+
+    Parameters:
+    --------------
+    Y (numpy.ndarray):
+        Preprocessed data array of shape `(n_total_timepoints, n_features)`,
+        with all subjects concatenated along the time axis.
+    indices (numpy.ndarray):
+        Start and end indices for each subject, shape `(n_subjects, 2)`.
+    state_range (iterable of int):
+        K values to test, e.g. ``range(5, 13)``.
+    n_repeats (int):
+        Number of independent random initialisations per K value.
+    save_dir (str or Path):
+        Directory to write per-model pickle files and the ``summary_results.pkl`` summary.
+    log_preproc (preprocessing log or None, optional), default=None:
+        Log returned by ``preproc.preprocess_data()``. Passed as ``preproclogY`` to
+        the HMM so that state parameters can be back-transformed to the original space.
+    covtype (str, optional), default='full':
+        Covariance type passed to ``glhmm()``. Options: ``'full'`` (state-specific FC
+        matrices), ``'diag'`` (diagonal, faster), ``'sharedfull'`` (one shared FC matrix),
+        ``'shareddiag'``.
+    model_mean (str, optional), default='no':
+        Whether to model per-state activation means. Use ``'no'`` for standardised data;
+        ``'state'`` if activation levels carry information.
+    options (dict or None, optional), default=None:
+        Training options passed to ``hmm.train()``. Defaults to
+        ``{'cyc': 500, 'min_cyc': 25, 'tol': 1e-5, 'verbose': False}``.
+
+    Returns:
+    ----------
+    results (dict):
+        Dictionary with K values as keys, each containing:
+        - `'FE'`: list of free energy arrays, one per repetition.
+        - `'similarity_scores'`: list of Gamma similarity floats (rep 0 vs rep i).
+    """
+
+
+    if options is None:
+        options = {'cyc': 500, 'min_cyc': 25, 'tol': 1e-5, 'verbose': False}
+
+    save_dir = _Path(save_dir)
+    save_dir.mkdir(parents=True, exist_ok=True)
+    results = {K: {'similarity_scores': [], 'FE': []} for K in state_range}
+
+    for K in state_range:
+        print(f'Training HMM with {K} states ({n_repeats} repetitions)...')
+        Gamma_ref = None
+
+        for repeat in range(n_repeats):
+            np.random.seed(repeat)
+
+            hmm = _glhmm_mod.glhmm(
+                K=K,
+                covtype=covtype,
+                model_mean=model_mean,
+                model_beta='no',
+                preproclogY=log_preproc,
+            )
+
+            Gamma1, _, FE1 = hmm.train(Y=Y, indices=indices, options=options)
+
+            with open(save_dir / f'hmm_K{K}_rep{repeat + 1}.pkl', 'wb') as f:
+                pickle.dump({'hmm': hmm, 'Gamma': Gamma1, 'FE': FE1}, f)
+
+            results[K]['FE'].append(FE1)
+
+            if repeat == 0:
+                Gamma_ref = Gamma1
+            else:
+                sim, _, _ = get_gamma_similarity(Gamma_ref, Gamma1)
+                results[K]['similarity_scores'].append(sim)
+                del Gamma1
+
+            del hmm
+            print(f'  K={K}  rep={repeat + 1}/{n_repeats}  FE={FE1[-1]:.2f}', flush=True)
+
+        del Gamma_ref
+
+    with open(save_dir / 'summary_results.pkl', 'wb') as f:
+        pickle.dump(results, f)
+
+    print('Training complete.')
+    return results
+
+
+def run_stability_training_stochastic(files, state_range, n_repeats, save_dir,
+                                       log_preproc=None, covtype='full', model_mean='no',
+                                       options=None):
+    """
+    Train HMMs stochastically across a range of K values to assess solution stability.
+
+    For each K and random repetition: initialises an HMM; trains with stochastic
+    mini-batch EM; calls ``hmm.decode()`` to obtain the Gamma time series (stochastic
+    training returns empty Gamma by design); saves the model to disk; and computes
+    Gamma similarity between repetition 0 (reference) and all subsequent repetitions.
+
+    Use this function when your dataset is too large to hold in RAM. Data must be
+    split into one ``.npy`` or ``.npz`` file per subject on disk (see
+    ``io.save_subjects_file()``). For in-memory data, use ``run_stability_training()``.
+
+    Parameters:
+    --------------
+    files (list of str or Path):
+        Paths to per-subject preprocessed data files (one file per subject).
+    state_range (iterable of int):
+        K values to test, e.g. ``range(5, 13)``.
+    n_repeats (int):
+        Number of independent random initialisations per K value.
+    save_dir (str or Path):
+        Directory to write per-model pickle files and the ``summary_results.pkl`` summary.
+    log_preproc (preprocessing log or None, optional), default=None:
+        Log returned by ``preproc.preprocess_data()``. Passed as ``preproclogY`` to
+        the HMM so that state parameters can be back-transformed to the original space.
+    covtype (str, optional), default='full':
+        Covariance type passed to ``glhmm()``. Options: ``'full'`` (state-specific FC
+        matrices), ``'diag'`` (diagonal, faster), ``'sharedfull'`` (one shared FC matrix),
+        ``'shareddiag'``.
+    model_mean (str, optional), default='no':
+        Whether to model per-state activation means. Use ``'no'`` for standardised data;
+        ``'state'`` if activation levels carry information.
+    options (dict or None, optional), default=None:
+        Training options passed to ``hmm.train()``. ``stochastic`` is always set to
+        ``True``. Defaults to ``{'Nbatch': 20, 'initNbatch': 20, 'initcyc': 50,
+        'cyc': 500, 'min_cyc': 100, 'forget_rate': 0.5, 'base_weights': 0.75,
+        'cyc_to_go_under_th': 10, 'deactivate_states': False, 'verbose': False}``.
+
+    Returns:
+    ----------
+    results (dict):
+        Dictionary with K values as keys, each containing:
+        - `'FE'`: list of free energy arrays, one per repetition.
+        - `'similarity_scores'`: list of Gamma similarity floats (rep 0 vs rep i).
+    """
+
+    _default_options = {
+        'stochastic': True,
+        'Nbatch': 20,
+        'initNbatch': 20,
+        'initcyc': 50,
+        'cyc': 500,
+        'min_cyc': 100,
+        'forget_rate': 0.5,
+        'base_weights': 0.75,
+        'cyc_to_go_under_th': 10,
+        'deactivate_states': False,
+        'verbose': False,
+    }
+    if options is None:
+        options = _default_options
+    else:
+        options = dict(options)
+        options.setdefault('stochastic', True)
+
+    save_dir = _Path(save_dir)
+    save_dir.mkdir(parents=True, exist_ok=True)
+    results = {K: {'similarity_scores': [], 'FE': []} for K in state_range}
+
+    for K in state_range:
+        print(f'Training HMM with {K} states ({n_repeats} repetitions)...')
+        Gamma_ref = None
+
+        for repeat in range(n_repeats):
+            np.random.seed(repeat)
+
+            hmm = _glhmm_mod.glhmm(
+                K=K,
+                covtype=covtype,
+                model_mean=model_mean,
+                model_beta='no',
+                preproclogY=log_preproc,
+            )
+
+            _, _, FE1 = hmm.train(files=files, options=options)
+            Gamma1, _, _ = hmm.decode(X=None, Y=None, files=files)
+
+            with open(save_dir / f'hmm_K{K}_rep{repeat + 1}.pkl', 'wb') as f:
+                pickle.dump({'hmm': hmm, 'Gamma': Gamma1, 'FE': FE1}, f)
+
+            results[K]['FE'].append(FE1)
+
+            if repeat == 0:
+                Gamma_ref = Gamma1
+            else:
+                sim, _, _ = get_gamma_similarity(Gamma_ref, Gamma1)
+                results[K]['similarity_scores'].append(sim)
+                del Gamma1
+
+            del hmm
+            print(f'  K={K}  rep={repeat + 1}/{n_repeats}  FE={FE1[-1]:.2f}', flush=True)
+
+        del Gamma_ref
+
+    with open(save_dir / 'summary_results.pkl', 'wb') as f:
+        pickle.dump(results, f)
+
+    print('Stochastic training complete.')
+    return results
+
+
+def osf_download_data(osf_url, data_dir='data', folder=None):
+    """
+    Download files from an OSF project to a local directory.
+
+    Queries the OSF storage API for the given project, optionally navigates
+    into a named sub-folder, and downloads every file that does not yet exist
+    locally. Files already present are silently skipped, so the function is
+    safe to re-run.
+
+    Parameters:
+    --------------
+    osf_url (str):
+        OSF project URL (e.g. ``'https://osf.io/8qcyj/'``) or bare project
+        identifier (e.g. ``'8qcyj'``). The project ID is extracted automatically
+        so any standard OSF URL format works.
+    data_dir (str or Path, optional), default=``'data'``:
+        Local directory to download files into. Created automatically if it does
+        not exist.
+    folder (str or None, optional), default=None:
+        Name of a sub-folder inside the project's OSF Storage to download from.
+        ``None`` downloads all files from the storage root level.
+
+    Returns:
+    ----------
+    None
+
+    Examples:
+    ----------
+    Download all files from the root of a project::
+
+        utils.osf_download_data('https://osf.io/8qcyj/')
+
+    Download files from a specific sub-folder::
+
+        utils.osf_download_data('https://osf.io/8qcyj/', folder='Simulation_data_numpy')
+    """
+    data_dir = _Path(data_dir)
+    data_dir.mkdir(parents=True, exist_ok=True)
+
+    _match = re.search(r'osf\.io/([A-Za-z0-9]+)', osf_url)
+    project_id = _match.group(1) if _match else osf_url
+
+    _root = requests.get(
+        f'https://api.osf.io/v2/nodes/{project_id}/files/osfstorage/'
+    ).json()['data']
+
+    if folder is None:
+        _files = [x for x in _root if x['attributes']['kind'] == 'file']
+    else:
+        _folder_node = next(
+            x for x in _root if x['attributes']['name'] == folder
+        )
+        _files = [
+            x for x in requests.get(
+                _folder_node['relationships']['files']['links']['related']['href']
+            ).json()['data']
+            if x['attributes']['kind'] == 'file'
+        ]
+
+    downloaded = 0
+    for _f in _files:
+        _name = _f['attributes']['name']
+        _dest = data_dir / _name
+        if not _dest.exists():
+            print(f'  Downloading {_name} ...', end=' ', flush=True)
+            _dest.write_bytes(requests.get(_f['links']['download']).content)
+            print('done')
+            downloaded += 1
+
+    if downloaded == 0:
+        print(f'Files already present in {data_dir}/.')
+    else:
+        print(f'Downloaded {downloaded} file(s) to {data_dir}/.')

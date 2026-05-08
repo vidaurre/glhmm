@@ -12,6 +12,7 @@ import pickle
 import os
 import warnings
 import h5py
+from pathlib import Path
 
 from glhmm import glhmm
 from glhmm import auxiliary
@@ -102,9 +103,6 @@ def read_flattened_hmm_mat(file):
 
     covtype = str(hmm_mat["train"]["covtype"])
     zeromean = int(hmm_mat["train"]["zeromean"])
-    model_mean = 'state' if not zeromean else 'no'
-
-    
     if not zeromean: model_mean = 'state'
     else: model_mean = 'no'
     if "state_0_Mu_W" in hmm_mat: 
@@ -117,53 +115,25 @@ def read_flattened_hmm_mat(file):
     else: 
         model_beta = 'no'
     dirichlet_diag = int(hmm_mat["train"]["DirichletDiag"])
+    connectivity = np.array(hmm_mat["train"]["S"])
     Pstructure = np.array(hmm_mat["train"]["Pstructure"], dtype=bool)
     Pistructure = np.squeeze(np.array(hmm_mat["train"]["Pistructure"], dtype=bool))
     shared_covmat = (covtype == 'shareddiag') or (covtype == 'sharedfull') 
     diagonal_covmat = (covtype == 'shareddiag') or (covtype == 'diag') 
-    # Only use S if diagonal; otherwise disable to avoid the warning.
-    connectivity = np.array(hmm_mat["train"]["S"]) if diagonal_covmat else None
 
-
-    # detect schema
-    is_flat = (
-        ("prior_Omega_Gam_rate" in hmm_mat) or
-        ("state_0_prior_Omega_Gam_rate" in hmm_mat) or
-        ("state_0_Mu_W" in hmm_mat)
-    )
-    is_nested = (("prior" in hmm_mat) or ("state" in hmm_mat))
-
-    
-    # prior over Omega
-    if is_flat:
-        if "prior_Omega_Gam_rate" in hmm_mat and "prior_Omega_Gam_shape" in hmm_mat:
-            prior_Omega_Gam_rate = np.array(hmm_mat["prior_Omega_Gam_rate"])
-            prior_Omega_Gam_shape = int(np.array(hmm_mat["prior_Omega_Gam_shape"]).squeeze())
-        else:
-            prior_Omega_Gam_rate = np.array(hmm_mat["state_0_prior_Omega_Gam_rate"])
-            prior_Omega_Gam_shape = int(np.array(hmm_mat["state_0_prior_Omega_Gam_shape"]).squeeze())
-    elif is_nested:
-        if "prior" in hmm_mat and "Omega" in hmm_mat["prior"]:
-            prior_Omega_Gam_rate = np.array(hmm_mat["prior"]["Omega"]["Gam_rate"])
-            prior_Omega_Gam_shape = int(np.array(hmm_mat["prior"]["Omega"]["Gam_shape"]).squeeze())
-        else:
-            prior_Omega_Gam_rate = np.array(hmm_mat["state"][0]["prior"]["Omega"]["Gam_rate"])
-            prior_Omega_Gam_shape = int(np.array(hmm_mat["state"][0]["prior"]["Omega"]["Gam_shape"]).squeeze())
+    if "Omega" in hmm_mat['prior']:
+        prior_Omega_Gam_rate = np.array(hmm_mat["prior_Omega_Gam_rate"])
+        prior_Omega_Gam_shape = int(hmm_mat["prior_Omega_Gam_shape"])
     else:
-        raise KeyError("Unrecognized HMM .mat schema.")
-    
-
+        prior_Omega_Gam_rate = hmm_mat['state'][0]['prior']['Omega']['Gam_rate']
+        prior_Omega_Gam_shape = hmm_mat['state'][0]['prior']['Omega']['Gam_shape']   
     if diagonal_covmat: prior_Omega_Gam_rate = np.squeeze(prior_Omega_Gam_rate)
     q = prior_Omega_Gam_rate.shape[0]
 
-    # p
-    if is_flat:
-        p = hmm_mat["state_0_Mu_W"].shape[0] if "state_0_Mu_W" in hmm_mat else 0
-    else:
-        if "state" in hmm_mat and "W" in hmm_mat["state"][0] and "Mu_W" in hmm_mat["state"][0]["W"]:
-            p = hmm_mat["state"][0]["W"]["Mu_W"].shape[0]
-        else:
-            p = 0
+    if "Mu_W" in hmm_mat['state'][0]:
+        p = hmm_mat['state'][0]["Mu_W"].shape[0]
+        if model_mean == 'state': p -= 1
+    else: p = 0
 
     hmm = glhmm.glhmm(
         K=K,
@@ -181,13 +151,8 @@ def read_flattened_hmm_mat(file):
         hmm.mean = []
         for k in range(K):
             hmm.mean.append({})
-            if is_flat:
-                Sigma_W = np.squeeze(hmm_mat[f"state_{k}_S_W"])
-                Mu_W    = np.squeeze(hmm_mat[f"state_{k}_Mu_W"])
-            else:
-                Sigma_W = np.squeeze(hmm_mat["state"][k]["W"]["S_W"])
-                Mu_W    = np.squeeze(hmm_mat["state"][k]["W"]["Mu_W"])
-
+            Sigma_W = np.squeeze(hmm_mat["state"][k]["W"]["S_W"])
+            Mu_W = np.squeeze(hmm_mat["state"][k]["W"]["Mu_W"])  
             if model_beta == 'state':
                 if q==1: hmm.mean[k]["Mu"] = np.array(Mu_W[0])
                 else: hmm.mean[k]["Mu"] = Mu_W[0,:]
@@ -212,12 +177,8 @@ def read_flattened_hmm_mat(file):
         hmm.beta = []
         for k in range(K):
             hmm.beta.append({})
-            if is_flat:
-                Sigma_W = np.array(hmm_mat[f"state_{k}_S_W"])
-                Mu_W    = np.array(hmm_mat[f"state_{k}_Mu_W"])
-            else:
-                Sigma_W = np.array(hmm_mat["state"][k]["W"]["S_W"])
-                Mu_W    = np.array(hmm_mat["state"][k]["W"]["Mu_W"])
+            Sigma_W = np.squeeze(hmm_mat["state"][k]["W"]["S_W"])
+            Mu_W = np.squeeze(hmm_mat["state"][k]["W"]["Mu_W"])  
             hmm.beta[k]["Mu"] = np.zeros((p,q))
             hmm.beta[k]["Mu"][:,:] = Mu_W[j0:,:]
             if diagonal_covmat:
@@ -238,48 +199,25 @@ def read_flattened_hmm_mat(file):
     if diagonal_covmat and shared_covmat:
         hmm.Sigma.append({})
         hmm.Sigma[0]["rate"] = np.zeros(q)
-        if is_flat:
-            hmm.Sigma[0]["rate"][:] = np.array(hmm_mat["Omega_Gam_rate"])
-            hmm.Sigma[0]["shape"]   = int(np.array(hmm_mat["Omega_Gam_shape"]).squeeze())
-        else:
-            hmm.Sigma[0]["rate"][:] = np.array(hmm_mat["Omega"]["Gam_rate"])
-            hmm.Sigma[0]["shape"]   = int(np.array(hmm_mat["Omega"]["Gam_shape"]).squeeze())
-        
+        hmm.Sigma[0]["rate"][:] = np.array(hmm_mat["Omega"]["Gam_rate"])
+        hmm.Sigma[0]["shape"] = int(hmm_mat["Omega"]["Gam_shape"])
     elif diagonal_covmat and not shared_covmat:
         for k in range(K):
             hmm.Sigma.append({})
             hmm.Sigma[k]["rate"] = np.zeros(q)
-            if is_flat:
-                hmm.Sigma[k]["rate"][:] = np.array(hmm_mat[f"state_{k}_Omega_Gam_rate"])
-                hmm.Sigma[k]["shape"]   = int(np.array(hmm_mat[f"state_{k}_Omega_Gam_shape"]).squeeze())
-            else:
-                hmm.Sigma[k]["rate"][:] = np.array(hmm_mat["state"][k]["Omega"]["Gam_rate"])
-                hmm.Sigma[k]["shape"]   = int(np.array(hmm_mat["state"][k]["Omega"]["Gam_shape"]).squeeze())
-            
             hmm.Sigma[k]["rate"][:] = hmm_mat["state"][k]["Omega"]["Gam_rate"]
             hmm.Sigma[k]["shape"] = int(np.array(hmm_mat["state"][k]["Omega"]["Gam_shape"]))
-    elif (not diagonal_covmat) and shared_covmat:
+    elif not diagonal_covmat and shared_covmat:
         hmm.Sigma.append({})
-        if is_flat:
-            hmm.Sigma[0]["rate"]  = np.array(hmm_mat["Omega_Gam_rate"])
-            hmm.Sigma[0]["irate"] = np.array(hmm_mat["Omega_Gam_irate"])
-            hmm.Sigma[0]["shape"] = int(np.array(hmm_mat["Omega_Gam_shape"]).squeeze())
-        else:
-            hmm.Sigma[0]["rate"]  = np.array(hmm_mat["Omega"]["Gam_rate"])
-            hmm.Sigma[0]["irate"] = np.array(hmm_mat["Omega"]["Gam_irate"])
-            hmm.Sigma[0]["shape"] = int(np.array(hmm_mat["Omega"]["Gam_shape"]).squeeze())
-
+        hmm.Sigma[0]["rate"] = hmm_mat["Omega"]["Gam_rate"]
+        hmm.Sigma[0]["irate"] = hmm_mat["Omega"]["Gam_irate"]
+        hmm.Sigma[0]["shape"] = int(hmm_mat["Omega"]["Gam_shape"])
     else: # not diagonal_covmat and not shared_covmat
         for k in range(K):
             hmm.Sigma.append({})
-            if is_flat:
-                hmm.Sigma[k]["rate"]  = np.array(hmm_mat[f"state_{k}_Omega_Gam_rate"])
-                hmm.Sigma[k]["irate"] = np.array(hmm_mat[f"state_{k}_Omega_Gam_irate"])
-                hmm.Sigma[k]["shape"] = int(np.array(hmm_mat[f"state_{k}_Omega_Gam_shape"]).squeeze())
-            else:
-                hmm.Sigma[k]["rate"]  = np.array(hmm_mat["state"][k]["Omega"]["Gam_rate"])
-                hmm.Sigma[k]["irate"] = np.array(hmm_mat["state"][k]["Omega"]["Gam_irate"])
-                hmm.Sigma[k]["shape"] = int(np.array(hmm_mat["state"][k]["Omega"]["Gam_shape"]).squeeze())
+            hmm.Sigma[k]["rate"] = hmm_mat["state"][k]["Omega"]["Gam_rate"]
+            hmm.Sigma[k]["irate"] = hmm_mat["state"][k]["Omega"]["Gam_irate"]
+            hmm.Sigma[k]["shape"] = int(hmm_mat["state"][k]["Omega"]["Gam_shape"])
 
     #hmm.init_dynamics()
     hmm.P = np.array(hmm_mat["P"])
@@ -438,3 +376,71 @@ def load_statistics(filename, directory=None):
     return data_dict
 
 
+def save_subjects_file(X_clean, output_dir, prefix='subject', overwrite=False):
+    """Save one .npy file per subject from a 3-D array.
+
+    Parameters
+    ----------
+    X_clean : ndarray, shape (n_timepoints, n_subjects, n_features)
+        Brain data with all subjects stacked along axis 1.
+    output_dir : str or Path
+        Directory where per-subject files will be written.
+    prefix : str, optional
+        Filename prefix; files are named ``{prefix}_{i:04d}.npy``.
+    overwrite : bool, optional
+        If False (default), existing files are skipped.
+    """
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    _, n_subjects, _ = X_clean.shape
+    for i in range(n_subjects):
+        file_path = output_dir / f'{prefix}_{i:04d}.npy'
+        if file_path.exists() and not overwrite:
+            print(f'Skipping existing file: {file_path.name}')
+            continue
+        np.save(file_path, X_clean[:, i, :])
+
+
+def save_concatenated_subjects(X_clean, output_dir, prefix='subject', overwrite=False):
+    """Save one .npy file per subject from a list of session arrays.
+
+    Parameters
+    ----------
+    X_clean : list of lists of ndarray
+        Outer list: subjects. Inner list: sessions. Each element has shape
+        (n_timepoints_session, n_features). Sessions are concatenated along axis 0.
+    output_dir : str or Path
+        Directory where per-subject files will be written.
+    prefix : str, optional
+        Filename prefix; files are named ``{prefix}_{i:04d}.npy``.
+    overwrite : bool, optional
+        If False (default), existing files are skipped.
+    """
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    for i, sessions in enumerate(X_clean):
+        file_path = output_dir / f'{prefix}_{i:04d}.npy'
+        if file_path.exists() and not overwrite:
+            print(f'Skipping existing file: {file_path.name}')
+            continue
+        np.save(file_path, np.concatenate(sessions, axis=0))
+
+
+def get_sorted_filepaths(folder, suffix='.npy'):
+    """Return file paths in a folder sorted by the trailing numeric index.
+
+    Parameters
+    ----------
+    folder : str or Path
+        Directory to search.
+    suffix : str, optional
+        File extension to match (default ``'.npy'``).
+
+    Returns
+    -------
+    list of Path
+        Sorted list of matching paths.
+    """
+    folder = Path(folder)
+    files = list(folder.glob(f'*{suffix}'))
+    return sorted(files, key=lambda x: int(x.stem.split('_')[-1]))
