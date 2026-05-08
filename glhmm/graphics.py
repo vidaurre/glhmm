@@ -25,7 +25,7 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 from matplotlib.patches import Patch
 from matplotlib.ticker import FormatStrFormatter, ScalarFormatter,MaxNLocator
 
-import seaborn as sb
+import seaborn as sns
 
 from nilearn import plotting, surface, image
 from nilearn.surface import vol_to_surf
@@ -66,7 +66,7 @@ def show_trans_prob_mat(hmm,only_active_states=False,show_diag=True,show_colorba
             P[k,:] = P[k,:] / np.sum(P[k,:])
 
     _,axes = plt.subplots()
-    g = sb.heatmap(ax=axes,data=P,\
+    g = sns.heatmap(ax=axes,data=P,\
         cmap='bwr',xticklabels=np.arange(K), yticklabels=np.arange(K),
         square=True,cbar=show_colorbar)
     for k in range(K):
@@ -175,13 +175,13 @@ def show_temporal_statistic(Gamma,indices, statistic='FO',type_plot='barplot'):
         raise Exception("statistic has to be 'FO','switching_rate' or 'FO_entropy'") 
     N,K = s.shape
 
-    sb.set(style='whitegrid')
+    sns.set(style='whitegrid')
     if type_plot=='boxplot':
         if N < 10:
             raise Exception("Too few sessions for a boxplot; use barplot") 
-        sb.boxplot(data=s,palette='plasma')
+        sns.boxplot(data=s,palette='plasma')
     elif type_plot=='barplot':
-        sb.barplot(data=np.concatenate((s,s)),palette='plasma', errorbar=None)
+        sns.barplot(data=np.concatenate((s,s)),palette='plasma', errorbar=None)
     elif type_plot=='matrix':
         if N < 2:
             raise Exception("There is only one session; use barplot") 
@@ -297,7 +297,7 @@ def show_beta(hmm,only_active_states=True,recompute_states=False,
     B = np.concatenate((Bstar1,Bstar2,I1,I2,I3),axis=0).T
     df = pd.DataFrame(B,columns=('x','y','Variable','beta x','beta y'))
 
-    g = sb.relplot(x='x', 
+    g = sns.relplot(x='x', 
         y='y', 
         s=25,
         hue='Variable', 
@@ -684,9 +684,9 @@ def plot_p_value_matrix(pval, alpha = 0.05, normalize_vals=True, figsize=(9, 5),
     if normalize_vals:
         norm = LogNorm(vmin=10**pval_min, vmax=1)
 
-        heatmap = sb.heatmap(pval_in, ax=axes, cmap=cmap, annot=annot, fmt=".3f", cbar=False, norm=norm)
+        heatmap = sns.heatmap(pval_in, ax=axes, cmap=cmap, annot=annot, fmt=".3f", cbar=False, norm=norm)
     else:
-        heatmap = sb.heatmap(pval_in, ax=axes, cmap=cmap, annot=annot, fmt=".3f", cbar=False)
+        heatmap = sns.heatmap(pval_in, ax=axes, cmap=cmap, annot=annot, fmt=".3f", cbar=False)
 
     # Add labels and title
     axes.set_xlabel(xlabel, fontsize=fontsize_labels)
@@ -813,7 +813,7 @@ def plot_permutation_distribution(base_statistics_perms, title_text="Permutation
         If a string is provided, it saves the figure to that specified path
     """
     fig =plt.figure()
-    sb.histplot(base_statistics_perms, kde=True)
+    sns.histplot(base_statistics_perms, kde=True)
     plt.axvline(x=base_statistics_perms[0], color='red', linestyle='--', label='Observed Statistic')
     plt.xlabel(xlabel)
     plt.ylabel(ylabel)
@@ -872,7 +872,7 @@ def plot_scatter_with_labels(p_values, alpha=0.05, title_text="", xlabel=None, y
 
     # Create a scatter plot with hue and error bars
     fig, ax = plt.subplots(figsize=(8, 6))
-    sb.scatterplot(x=np.arange(0, len(p_values)) + 1, y=-np.log(p_values), hue=hue, style=hue,
+    sns.scatterplot(x=np.arange(0, len(p_values)) + 1, y=-np.log(p_values), hue=hue, style=hue,
                     markers=markers, s=40, edgecolor='k', linewidth=1, ax=ax)
 
     # Add labels and title to the plot
@@ -904,7 +904,7 @@ def plot_scatter_with_labels(p_values, alpha=0.05, title_text="", xlabel=None, y
     ax.set_ylim(ylim_start, np.max(-np.log(p_values)) * 1.2)
 
     # # Customize plot background and grid style
-    # sb.set_style("white")
+    # sns.set_style("white")
     # ax.grid(color='lightgray', linestyle='--')
 
     # Show the plot
@@ -960,7 +960,7 @@ def plot_vpath(viterbi_path, signal=None, idx_data=None, figsize=(7, 4), fontsiz
         If a string is provided, it saves the figure to that specified path
     """
     num_states = viterbi_path.shape[1]
-    colors = sb.color_palette("Set3", n_colors=num_states)
+    colors = sns.color_palette("Set3", n_colors=num_states)
 
     # Assign distinct colors for each state
     if cmap is not None:
@@ -1528,7 +1528,7 @@ def plot_initial_state_probabilities(init_stateP, cmap='coolwarm',
     fig, ax = plt.subplots(figsize=figsize)
 
     # Use seaborn heatmap but disable default colorbar
-    heatmap = sb.heatmap(init_stateP.reshape(-1, 1), ax=ax, cmap=cmap,
+    heatmap = sns.heatmap(init_stateP.reshape(-1, 1), ax=ax, cmap=cmap,
                           cbar=False, xticklabels=False, yticklabels=False)
 
     # Axis formatting
@@ -1646,7 +1646,7 @@ def plot_state_means_activations(state_means, cmap_type='coolwarm', cmap_reverse
     fig, ax = plt.subplots(figsize=figsize)
 
     # Create heatmap
-    heatmap = sb.heatmap(state_means, ax=ax, cmap=cmap, annot=annot, fmt=".2f",
+    heatmap = sns.heatmap(state_means, ax=ax, cmap=cmap, annot=annot, fmt=".2f",
                           cbar=False, xticklabels=False, yticklabels=False)
 
     # Labels and title
@@ -3792,6 +3792,153 @@ def plot_connectivity_maps(connectivity_map, parcellation_file, filename=None, f
     else:
         plt.show()
 
+def plot_model_selection(results, n_total_timepoints, save_path=None,
+                         similarity_threshold=0.8, figsize=(20, 6),
+                         fontsize_title=16, fontsize_labels=14, fontsize_ticks=12,
+                         return_fig=False):
+    """
+    Plot HMM model selection: stability (Gamma similarity), free energy elbow,
+    and EM convergence curves.
+
+    Displays three panels to support principled selection of the number of hidden states (K):
+
+    1. **Gamma similarity violin** - distribution of pairwise similarity scores across
+       repetitions per K. A high mean (red line) combined with a narrow spread indicates
+       a stable, well-identified solution. The grey dashed line marks the minimum-stability threshold.
+    2. **Free energy elbow** - normalised minimum free energy vs K. Lower values indicate
+       a better model fit; look for the elbow where gains flatten off.
+    3. **Convergence curves** - free energy across EM cycles for the best repetition per K.
+       Curves should plateau smoothly; a still-descending curve means `cyc` needs to increase.
+
+    Parameters:
+    --------------
+    results (dict):
+        Returned by ``utils.run_stability_training()`` or ``utils.load_stability_results()``.
+        Format: ``{K: {'FE': [list of arrays], 'similarity_scores': [list of floats]}}``.
+    n_total_timepoints (int):
+        Total number of timepoints in the training data (``Y.shape[0]``).
+        Used to normalise free energy values across K values.
+    save_path (str, optional), default=None:
+        If provided, saves the figure to that path.
+    similarity_threshold (float, optional), default=0.8:
+        Horizontal dashed threshold line drawn on the stability panel.
+    figsize (tuple, optional), default=(20, 6):
+        Figure size.
+    fontsize_title (int, optional), default=16:
+        Font size for panel titles.
+    fontsize_labels (int, optional), default=14:
+        Font size for axis labels.
+    fontsize_ticks (int, optional), default=12:
+        Font size for tick labels.
+    return_fig (bool, optional), default=False:
+        If ``True``, returns the figure object instead of calling ``plt.show()``.
+
+    Returns:
+    ----------
+    avg_similarity (dict):
+        Mean Gamma similarity score per K value, ``{K: float}``.
+    min_fe (dict):
+        Normalised minimum free energy per K value, ``{K: float}``.
+    fig (matplotlib.figure.Figure):
+        Only returned when ``return_fig=True``.
+    """
+    ks = sorted(results.keys())
+
+    sim_rows = []
+    for K in ks:
+        for score in results[K]['similarity_scores']:
+            sim_rows.append({'K': K, 'Gamma Similarity': score})
+    df_sim = pd.DataFrame(sim_rows)
+
+    avg_similarity = {K: np.mean(results[K]['similarity_scores']) for K in ks}
+    min_fe = {
+        K: np.min([fe[-1] for fe in results[K]['FE']]) / n_total_timepoints
+        for K in ks
+    }
+
+    fig, axes = plt.subplots(1, 3, figsize=figsize)
+    fig.suptitle('HMM Model Selection', fontsize=fontsize_title, y=1.01)
+
+    # Panel 1: Gamma similarity violin
+    ax = axes[0]
+    if not df_sim.empty:
+        sns.violinplot(x='K', y='Gamma Similarity', hue='K', data=df_sim,
+                      palette='coolwarm', inner='point', density_norm='width',
+                      cut=0, legend=False, ax=ax)
+        means = df_sim.groupby('K')['Gamma Similarity'].mean()
+        x_pos = list(range(len(ks)))
+        ax.plot(x_pos, [means[K] for K in ks],
+                color='red', marker='o', markersize=7, linewidth=2,
+                label='Mean', zorder=5)
+    ax.axhline(similarity_threshold, color='grey', linestyle='--', linewidth=1,
+               label=f'Threshold ({similarity_threshold})')
+    ax.set_title('Stability (higher + narrow = good)', fontsize=fontsize_title)
+    ax.set_xlabel('Number of States (K)', fontsize=fontsize_labels)
+    ax.set_ylabel('Gamma Similarity', fontsize=fontsize_labels)
+    ax.tick_params(axis='both', labelsize=fontsize_ticks)
+    ax.legend(fontsize=fontsize_ticks)
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.spines['bottom'].set_visible(False)
+    ax.spines['left'].set_visible(False)
+
+    # Panel 2: Free energy elbow
+    ax = axes[1]
+    fe_vals = [min_fe[K] for K in ks]
+    ax.plot(ks, fe_vals, marker='s', color='darkorange', linewidth=2, markersize=8)
+    if len(ks) >= 3:
+        elbow_idx = int(np.argmax(np.diff(np.diff(fe_vals)))) + 1
+        ax.axvline(ks[elbow_idx], color='grey', linestyle='--', linewidth=1,
+                   label=f'Elbow (K={ks[elbow_idx]})')
+        ax.legend(fontsize=fontsize_ticks)
+    ax.set_title('Model fit (min FE / T)  lower = better; look for elbow',
+                 fontsize=fontsize_title)
+    ax.set_xlabel('Number of States (K)', fontsize=fontsize_labels)
+    ax.set_ylabel('Min Free Energy / n_timepoints', fontsize=fontsize_labels)
+    ax.tick_params(axis='both', labelsize=fontsize_ticks)
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.spines['bottom'].set_visible(False)
+    ax.spines['left'].set_visible(False)
+
+    # Panel 3: FE convergence curves (best rep per K)
+    ax = axes[2]
+    cmap = plt.get_cmap('coolwarm', len(ks))
+    for i, K in enumerate(ks):
+        best_rep = int(np.argmin([fe[-1] for fe in results[K]['FE']]))
+        ax.plot(results[K]['FE'][best_rep], color=cmap(i), linewidth=1.5, label=f'K={K}')
+    ax.set_title('FE convergence (best rep per K)  should plateau smoothly',
+                 fontsize=fontsize_title)
+    ax.set_xlabel('Cycle', fontsize=fontsize_labels)
+    ax.set_ylabel('Free Energy', fontsize=fontsize_labels)
+    ax.tick_params(axis='both', labelsize=fontsize_ticks)
+    ax.legend(fontsize=fontsize_ticks, ncol=2)
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.spines['bottom'].set_visible(False)
+    ax.spines['left'].set_visible(False)
+
+    plt.tight_layout()
+    if save_path is not None:
+        plt.savefig(save_path, bbox_inches='tight')
+    if return_fig:
+        return avg_similarity, min_fe, fig
+    else:
+        plt.show()
+
+    # Summary table
+    print(f" {'K':>4} | {'Mean Sim':>9} | {'Std Sim':>8} | {'Min FE/T':>10} | {'Converged?':>10}")
+    print('-' * 52)
+    for K in ks:
+        sims = results[K]['similarity_scores']
+        best_fe = results[K]['FE'][int(np.argmin([fe[-1] for fe in results[K]['FE']]))]
+        last_change = abs(best_fe[-1] - best_fe[-2]) / (abs(best_fe[-1] - best_fe[0]) + 1e-10)
+        converged = 'yes' if last_change < 1e-3 else 'CHECK'
+        print(f'{K:>4} | {np.mean(sims):>9.4f} | {np.std(sims):>8.4f} | {min_fe[K]:>10.2f} | {converged:>10}')
+
+    return avg_similarity, min_fe
+
+    
 def __resolve_figure_directory(save_figures, filename, default_folder):
     return resolve_figure_directory(save_figures, filename, default_folder)      
 def __generate_filename(base, index, extension):

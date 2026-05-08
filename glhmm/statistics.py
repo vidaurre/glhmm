@@ -1781,18 +1781,13 @@ def initialize_permutation_matrices(method, Nnull_samples, n_p, n_q, D_data, com
                 D_data_nan[nan_indices] = np.take(col_means, nan_indices[1])
                 # Set the regularization parameter
                 regularization = 0.001
-                # Create a regularization matrix (identity matrix scaled by the regularization parameter)
-                regularization_matrix = regularization * np.eye(D_data_nan.shape[1])
-                # Compute the regularized pseudo-inverse of D_data
-                reg_pinv = np.linalg.inv(D_data_nan.T @ D_data_nan + regularization_matrix) @ D_data_nan.T
+                reg_pinv = ridge_pinv(D_data_nan, regularization)
 
             else:
                 # Set the regularization parameter
                 regularization = 0.001
                 # Create a regularization matrix (identity matrix scaled by the regularization parameter)
-                regularization_matrix = regularization * np.eye(D_data.shape[1])  # Regularization term for Ridge regression
-                # Compute the regularized pseudo-inverse of D_data
-                reg_pinv = np.linalg.inv(D_data.T @ D_data + regularization_matrix) @ D_data.T 
+                reg_pinv = ridge_pinv(D_data, regularization)
 
 
     elif method =="cca":
@@ -3404,7 +3399,7 @@ def pval_FWER_correction(result_dic=None, test_statistics=None, Nnull_samples=No
 
     return np.squeeze(pval_FWER) if pval_FWER.ndim > 2 else pval_FWER
 
-def pval_cluster_based_correction(result_dic = None, test_statistics=[], pval=None, alpha=0.05, individual_feature=False):
+def pval_cluster_based_correction(result_dic = None, test_statistics=[], pval=None, alpha=0.05, individual_feature=False, use_raw_statistic = True):
     """
     Perform cluster-based correction on test statistics using the output from permutation testing.
     The function corrects p-values by using the test statistics and p-values obtained from permutation testing.
@@ -3427,20 +3422,72 @@ def pval_cluster_based_correction(result_dic = None, test_statistics=[], pval=No
     individual_feature (bool, optional), default=False: 
         If True, the cluster-based correction is performed separately for each feature in the test_statistics.
         If False, the correction is applied to the entire p-value matrix.
-        
+    use_raw_statistic (bool, optional), default=True: 
+        If True, the cluster-based correction based on the the stored test_statistics.
+        If False, the cluster-based correction based on a test_statistics that is Z-transformed.
     Returns:
     ----------
     p_values (numpy.ndarray): 
         Corrected p-values after cluster-based correction.
     """
+    if not isinstance(alpha, (int, float, np.floating, np.integer)):
+        raise TypeError(f"`alpha` must be a numeric scalar, got {type(alpha).__name__}.")
+    alpha = float(alpha)
+    if not (0 < alpha < 1):
+        raise ValueError(f"`alpha` must be between 0 and 1 (exclusive), got {alpha}.")
+
+    if not isinstance(individual_feature, bool):
+        raise TypeError(
+            f"`individual_feature` must be a bool, got {type(individual_feature).__name__}."
+        )
+
+    if not isinstance(use_raw_statistic, bool):
+        raise TypeError(
+            f"`use_raw_statistic` must be a bool, got {type(use_raw_statistic).__name__}."
+        )
+    
+    # Decide whether the statistic can be used directly or needs z-standardization
+    has_all_columns = False
+
     # Use the dictionary values if provided
+    # Decide whether the statistic can be used directly or needs z-standardization
     if result_dic is not None:
         test_statistics = result_dic.get("null_stat_distribution", test_statistics)
         pval = result_dic.get("pval", pval)
 
-    if test_statistics is [] or pval is None:
-        raise ValueError("Missing required parameters: test_statistics or pval.\n"
-                         "Remember to set 'return_base_statistics=True' to export the test_statistics when running the test")
+        stat_measure = result_dic.get("statistical_measures", None)
+
+        has_all_columns = (
+            isinstance(stat_measure, dict)
+            and "all_columns" in stat_measure.values()
+        )
+
+    # If user requests raw statistic but we are not confident, warn
+    if use_raw_statistic and not has_all_columns:
+        warnings.warn(
+            "Raw statistic cluster correction was requested, but it is unclear whether "
+            "the test statistics are on a consistent scale across timepoints. "
+            "This may lead to invalid cluster inference. "
+            "Consider using z-score standardization instead.",
+            UserWarning
+        )
+
+    #if test_statistics is [] or pval is None:
+    if test_statistics is None:
+        raise ValueError(
+            "Missing required parameter: test_statistics.\n"
+            "Remember to set 'return_base_statistics=True' to export the "
+            "test_statistics when running the test."
+        )
+
+    if pval is None and use_raw_statistic:
+        use_raw_statistic = False
+        warnings.warn(
+            "pval was not provided and use_raw_statistic=True requires pointwise "
+            "p-values for masking. Switching to z-score standardization for "
+            "cluster correction instead.",
+            UserWarning,
+        )              
 
     # One-sided z-threshold corresponding to alpha.
     zval_thresh = norm.ppf(1 - alpha)
@@ -3449,112 +3496,205 @@ def pval_cluster_based_correction(result_dic = None, test_statistics=[], pval=No
     if individual_feature:
         p_size = test_statistics.shape[-2]
         p_values = np.zeros_like(pval, dtype=float)
+        if use_raw_statistic:
+            for p_i in range(p_size):
+                # Include observed and null maps for this feature.
+                null_stats = test_statistics[:, :, p_i]
+                Nnull_samples = test_statistics[:, :, p_i].shape[1]
+                max_cluster_sums = np.zeros(Nnull_samples - 1)
+                
+                # Threshold based directly on the null statistic distribution
+                stat_thresh = np.percentile(null_stats[:, :], 100 - (100 * alpha), axis=1)
 
-        for p_i in range(p_size):
-            # Include observed and null maps for this feature.
-            null_stats = test_statistics[:, :, p_i]
+                # Build null distribution of maximum cluster masses.
+                for perm in range(Nnull_samples - 1):
+                    thresh_Nnull_samples = test_statistics[:, perm + 1, p_i]
 
-            # Estimate null mean and standard deviation at each time point.
-            mean_h0 = np.mean(null_stats, axis=1)
-            std_h0 = np.std(null_stats, axis=1)
-            std_h0 = np.where(std_h0 == 0, np.nan, std_h0)
+                    if np.sum(thresh_Nnull_samples) != 0:
+                        thresh_map = np.array(thresh_Nnull_samples, copy=True)
+                        # Keep only values above the one-sided threshold.
+                        thresh_map[thresh_map < stat_thresh] = 0
+                         # Label clusters and compute cluster mass.
+                        max_cluster_sums[perm] = max_cluster_sum(thresh_map)
 
-            Nnull_samples = test_statistics[:, :, p_i].shape[1]
-            max_cluster_sums = np.zeros(Nnull_samples - 1)
+                # Determine the cluster-mass threshold from the null distribution.
+                cluster_thresh = np.percentile(max_cluster_sums, 100 - (100 * alpha))
 
-            # Build null distribution of maximum cluster masses.
-            for perm in range(Nnull_samples - 1):
-                thresh_Nnull_samples = test_statistics[:, perm + 1, p_i]
+                # Standardize the observed map in the same way.
+                obs_map = test_statistics[:, 0, p_i]
+                obs_map[obs_map < stat_thresh] = 0
+                obs_map = np.squeeze(obs_map)
 
-                if np.sum(thresh_Nnull_samples) != 0:
-                    # Standardize permutation map relative to the null.
-                    thresh_Nnull_samples = (thresh_Nnull_samples - mean_h0) / std_h0
+                # Label observed supra-threshold clusters.
+                cluster_labels = label(obs_map > 0)
+                cluster_ids = np.unique(cluster_labels)
+                cluster_ids = cluster_ids[cluster_ids != 0]
 
-                    # Keep only values above the one-sided threshold.
-                    thresh_Nnull_samples[thresh_Nnull_samples < zval_thresh] = 0
+                # Remove clusters whose mass is below the null threshold.
+                for cluster in range(1, len(np.unique(cluster_labels))):
+                    if np.sum(obs_map[cluster_labels == cluster]) < cluster_thresh:
+                        obs_map[cluster_labels == cluster] = 0
 
-                    # Label clusters and compute cluster mass.
-                    max_cluster_sums =_max_cluster_sum_z(thresh_Nnull_samples)
+                # Keep original p-values only for surviving clusters
+                pvals_corr = np.squeeze(np.array(pval[:, p_i], copy=True))
+                pvals_corr[obs_map == 0] = 1
+                #Store p-values
+                pvals_corr = np.expand_dims(pvals_corr,axis=-1) if obs_map.ndim != p_values.ndim else pvals_corr
+                p_values[:, p_i] = pvals_corr
 
-            # Determine the cluster-mass threshold from the null distribution.
-            cluster_thresh = np.percentile(max_cluster_sums, 100 - (100 * alpha))
+        else:
+            for p_i in range(p_size):
+                # Include observed and null maps for this feature.
+                null_stats = test_statistics[:, :, p_i]
+                Nnull_samples = test_statistics[:, :, p_i].shape[1]
+                max_cluster_sums = np.zeros(Nnull_samples - 1)
 
-            # Standardize the observed map in the same way.
-            obs_map = test_statistics[:, 0, p_i]
-            pval_zmap = (obs_map - mean_h0) / std_h0
-            pval_zmap = np.squeeze(pval_zmap)
-            pval_zmap[pval_zmap < zval_thresh] = 0
+                # Estimate null mean and standard deviation at each time point.
+                mean_h0 = np.mean(null_stats, axis=1)
+                std_h0 = np.std(null_stats, axis=1)
+                std_h0 = np.where(std_h0 == 0, np.nan, std_h0)
 
-            # Label observed supra-threshold clusters.
-            cluster_labels = label(pval_zmap > 0)
+                # Build null distribution of maximum cluster masses.
+                for perm in range(Nnull_samples):
+                    thresh_Nnull_samples = test_statistics[:, perm, p_i]
 
-            # Remove clusters whose mass is below the null threshold.
-            for cluster in range(1, len(np.unique(cluster_labels))):
-                if np.sum(pval_zmap[cluster_labels == cluster]) < cluster_thresh:
-                    pval_zmap[cluster_labels == cluster] = 0
+                    if np.sum(thresh_Nnull_samples) != 0:
+                        # Standardize permutation map relative to the null.
+                        thresh_Nnull_samples = (thresh_Nnull_samples - mean_h0) / std_h0
 
-            # Convert surviving z-values back to p-values.
-            pvals_corr = 1 - norm.cdf(pval_zmap)
-            pvals_corr[pval_zmap == 0] = 1
-            pvals_corr = np.expand_dims(pvals_corr,axis=-1) if pval_zmap.ndim != p_values.ndim else pvals_corr
-            p_values[:, p_i] = pvals_corr
+                        # Keep only values above the one-sided threshold.
+                        thresh_Nnull_samples[thresh_Nnull_samples < zval_thresh] = 0
+
+                        # Label clusters and compute cluster mass.
+                        max_cluster_sums =max_cluster_sum(thresh_Nnull_samples)
+
+                # Determine the cluster-mass threshold from the null distribution.
+                cluster_thresh = np.percentile(max_cluster_sums, 100 - (100 * alpha))
+
+                # Standardize the observed map in the same way.
+                obs_map = test_statistics[:, 0, p_i]
+                pval_zmap = np.squeeze((obs_map - mean_h0) / std_h0)
+                pval_zmap[pval_zmap < zval_thresh] = 0
+
+                # Label observed supra-threshold clusters.
+                cluster_labels = label(pval_zmap > 0)
+
+                # Remove clusters whose mass is below the null threshold.
+                for cluster in range(1, len(np.unique(cluster_labels))):
+                    if np.sum(pval_zmap[cluster_labels == cluster]) < cluster_thresh:
+                        pval_zmap[cluster_labels == cluster] = 0
+
+                # Convert surviving z-values back to p-values.
+                pvals_corr = 1 - norm.cdf(pval_zmap)
+                pvals_corr[pval_zmap == 0] = 1
+
+                pvals_corr = np.expand_dims(pvals_corr,axis=-1) if pval_zmap.ndim != p_values.ndim else pvals_corr
+                p_values[:, p_i] = pvals_corr
 
     # Correct the full test-statistic map jointly.
     else:
         null_stats = test_statistics.copy()
-
-        # Estimate null mean and standard deviation at each time point.
-        mean_h0 = np.mean(null_stats, axis=1)
-        std_h0 = np.std(null_stats, axis=1)
-        std_h0 = np.where(std_h0 == 0, np.nan, std_h0)
-
         Nnull_samples = test_statistics.shape[1]
-        max_cluster_sums = np.zeros(Nnull_samples - 1)
-
-        # 4D case
-        if test_statistics.ndim == 4:
-            # Build null distribution of maximum cluster masses.
-            for perm in range(Nnull_samples - 1):
-
-                thresh_Nnull_samples = (test_statistics[:, perm + 1, :])
-                thresh_Nnull_samples = (thresh_Nnull_samples - mean_h0) / std_h0
-                thresh_Nnull_samples[thresh_Nnull_samples < zval_thresh] = 0
-                max_cluster_sums[perm] =_max_cluster_sum_z(thresh_Nnull_samples)
-
-        # 3D case
-        else:
-            for perm in range(Nnull_samples - 1):
-                thresh_Nnull_samples = test_statistics[:, perm + 1]
-                thresh_Nnull_samples = (thresh_Nnull_samples - mean_h0) / std_h0
-                thresh_Nnull_samples[thresh_Nnull_samples < zval_thresh] = 0
-                max_cluster_sums[perm] =_max_cluster_sum_z(thresh_Nnull_samples)
-
-        # Determine the cluster-mass threshold from the null distribution.
-        cluster_thresh = np.percentile(max_cluster_sums, 100 - (100 * alpha))
-
-        # Standardize the observed map.
-        obs_map = test_statistics[:, 0]
-        pval_zmap = (obs_map - mean_h0) / std_h0
-        pval_zmap[pval_zmap < zval_thresh] = 0
-
-        # Note: this keeps the original behavior from your code.
-        cluster_labels = label(pval_zmap > 0)
-        cluster_ids = np.unique(cluster_labels)
-        cluster_ids = cluster_ids[cluster_ids != 0]
+        max_cluster_sums = np.zeros(Nnull_samples)
         
-        # Remove clusters whose mass is below the null threshold.
-        for cl in cluster_ids:
-            if np.sum(pval_zmap[cluster_labels == cl]) < cluster_thresh:
-                pval_zmap[cluster_labels == cl] = 0
+        if use_raw_statistic:
+            stat_thresh = np.percentile(null_stats, 100 - (100 * alpha), axis=1)
 
-        # Convert surviving z-values back to p-values.
-        p_values = 1 - norm.cdf(pval_zmap)
-        p_values[pval_zmap == 0] = 1
+            for perm in range(Nnull_samples):
+                thresh_map = np.array(test_statistics[:, perm], copy=True)
+                thresh_map[thresh_map < stat_thresh] = 0
+                max_cluster_sums[perm] = max_cluster_sum(thresh_map)
+
+            cluster_thresh = np.percentile(max_cluster_sums, 100 - (100 * alpha))
+
+            obs_map = np.array(test_statistics[:, 0], copy=True)
+            obs_map[obs_map < stat_thresh] = 0
+
+            cluster_labels = label(obs_map > 0)
+            cluster_ids = np.unique(cluster_labels)
+            cluster_ids = cluster_ids[cluster_ids != 0]
+
+            for cl in cluster_ids:
+                if np.sum(obs_map[cluster_labels == cl]) < cluster_thresh:
+                    obs_map[cluster_labels == cl] = 0
+
+            p_values = np.array(pval, copy=True)
+            p_values[obs_map == 0] = 1
+            
+        else:    
+            # Estimate null mean and standard deviation at each time point.
+            mean_h0 = np.mean(null_stats, axis=1)
+            std_h0 = np.std(null_stats, axis=1)
+            zero_std_mask = (std_h0 == 0)
+            std_h0_safe = np.where(zero_std_mask, 1.0, std_h0)
+
+            # 4D case
+            if test_statistics.ndim == 4:
+                # Build null distribution of maximum cluster masses.
+                for perm in range(Nnull_samples):
+                    thresh_Nnull_samples = np.array(test_statistics[:, perm, :], copy=True)
+                    thresh_Nnull_samples = (thresh_Nnull_samples - mean_h0) / std_h0_safe
+                    thresh_Nnull_samples[zero_std_mask] = 0
+                    thresh_Nnull_samples[thresh_Nnull_samples < zval_thresh] = 0
+                    max_cluster_sums[perm - 1] = max_cluster_sum(thresh_Nnull_samples)
+
+
+            # 3D case
+            else:
+                for perm in range(Nnull_samples):
+                    thresh_Nnull_samples = np.array(test_statistics[:, perm], copy=True)
+                    thresh_Nnull_samples = (thresh_Nnull_samples - mean_h0) / std_h0_safe
+                    thresh_Nnull_samples[zero_std_mask] = 0
+                    thresh_Nnull_samples[thresh_Nnull_samples < zval_thresh] = 0
+                    max_cluster_sums[perm - 1] = max_cluster_sum(thresh_Nnull_samples)
+
+            # Determine the cluster-mass threshold from the null distribution.
+            cluster_thresh = np.percentile(max_cluster_sums, 100 - (100 * alpha))
+
+            # Standardize the observed map.
+            obs_map = test_statistics[:, 0]
+            obs_map = np.array(test_statistics[:, 0], copy=True)
+            pval_zmap = (obs_map - mean_h0) / std_h0_safe
+            pval_zmap[zero_std_mask] = 0
+            pval_zmap[pval_zmap < zval_thresh] = 0
+
+            # Note: this keeps the original behavior from your code.
+            cluster_labels = label(pval_zmap > 0)
+            cluster_ids = np.unique(cluster_labels)
+            cluster_ids = cluster_ids[cluster_ids != 0]
+            
+            # Remove clusters whose mass is below the null threshold.
+            for cl in cluster_ids:
+                if np.sum(pval_zmap[cluster_labels == cl]) < cluster_thresh:
+                    pval_zmap[cluster_labels == cl] = 0
+
+            # Convert surviving z-values back to p-values.
+            #p_values = 1 - norm.cdf(pval_zmap)
+            p_values = norm.sf(pval_zmap) # sf is the survival function, and it is numerically much more stable for very small tail probabilities.
+            p_values[pval_zmap == 0] = 1
             
     return p_values
 
-def _max_cluster_sum_z(thresh_Nnull_samples):
-    """Return the maximum cluster sum"""
+def max_cluster_sum(thresh_Nnull_samples):
+    """
+    Return the maximum cluster sum from a thresholded statistic map.
+    The function identifies supra-threshold clusters in the input array,
+    computes the sum of values within each cluster, and returns the largest cluster sum.
+    If no supra-threshold cluster is present, the function returns 0.0.
+
+    Parameters:
+    ------------
+    thresh_Nnull_samples (numpy.ndarray):
+        Thresholded array of test statistics.
+        Elements greater than 0 are treated as belonging to supra-threshold clusters,
+        while elements less than or equal to 0 are treated as background.
+
+    Returns:
+    ----------
+    float:
+        Maximum sum across all supra-threshold clusters in the input array.
+        Returns 0.0 if no cluster is found.
+    """
 
     cluster_label = label(thresh_Nnull_samples> 0)
     cluster_ids = np.unique(cluster_label)
@@ -4052,144 +4192,6 @@ def pad_vpath(vpath, lag_val, indices_tde=None):
             vpath_pad = np.concatenate(vpath_list,axis=0)
     return vpath_pad
 
-# def get_event_epochs(D_data, R_data, indices, event_markers,
-#                      fs, fs_target=None, epoch_window=None):
-#     """
-#     Extract time-locked data epochs based on stimulus events.
-
-#     This function processes 2D input data to extract epochs aligned to specific stimulus events.
-#     The epochs are extracted based on the provided event files and are resampled to the target rate.
-#     The function also returns relevant indices and concatenates filtered R data across sessions.
-
-#     Parameters:
-#     ------------
-#     D_data (numpy.ndarray):
-#         2D array containing gamma values for the session, structured as
-#         ((number of timepoints * number of trials), number of states).
-
-#     R_data (list):
-#         List of filtered R data arrays for each session based on the events.
-
-#     indices (numpy.ndarray):
-#         2D array containing preprocessed indices for the session.
-
-#     event_markers (list):
-#         List of event information for each session.
-
-#     fs (int, optional):
-#         The original sampling frequency in Hz. Defaults to 1000 Hz.
-
-#     fs_target (int, optional):
-#         The target sampling frequency in Hz after resampling. If None, the original
-#         sampling frequency is used.
-
-#     epoch_window (tuple or None, optional):
-#         Time interval relative to stimulus onset in seconds, defined as (start, end).
-#         If None, a default interval of (0, 1) is used, corresponding to 1 second
-#         after stimulus onset.
-#         For example:
-#             (0, 1)      -> from stimulus onset to 1 second after
-#             (-0.2, 1)   -> from 200 ms before onset to 1 second after
-
-#     Returns:
-#     ---------
-#     epoch_data (numpy.ndarray):
-#         3D array of extracted data epochs, structured as
-#         (number of timepoints, number of trials, number of states).
-
-#     epoch_indices (numpy.ndarray):
-#         Array of indices corresponding to the extracted epochs for each session.
-
-#     epoch_R_data (numpy.ndarray):
-#         Concatenated array of R data across all sessions.
-#     """
-#     if fs_target is None:
-#         fs_target = fs
-
-#     # Set default epoch window to 1 second after stimulus onset
-#     if epoch_window is None:
-#         epoch_window = (0, 1)
-
-#     start_sec, end_sec = epoch_window
-
-#     if end_sec <= start_sec:
-#         raise ValueError("epoch_window must be defined as (start, end) with end > start.")
-
-#     # Calculate the downsampling factor
-#     downsampling_factor = fs / fs_target
-
-#     # Convert epoch window from seconds to time points at the target sampling rate
-#     start_tp = int(round(start_sec * fs_target))
-#     end_tp = int(round(end_sec * fs_target))
-#     epoch_window_tp = end_tp - start_tp
-
-#     # Initialize lists to store gamma epochs, filtered R data, and index data
-#     data_epochs_list = []
-#     filtered_R_data_list = []
-#     valid_epoch_counts = []
-
-#     # Iterate over each event file corresponding to a session
-#     for idx, events in enumerate(event_markers):
-#         # Extract data values for the specific session using preprocessed indices
-#         data_session = D_data[indices[idx, 0]:indices[idx, 1], :]
-
-#         # Downsample the event time indices
-#         downsampled_events = np.round(events[:, 0] / downsampling_factor).astype(int)
-
-#         # Calculate differences between consecutive events
-#         event_differences = np.diff(downsampled_events, axis=0)
-
-#         # Identify valid events that are sufficiently spaced apart
-#         valid_event_indices = (event_differences >= epoch_window_tp)
-
-#         # Ensure the first event is included if it meets the spacing condition
-#         if len(downsampled_events) > 1:
-#             if event_differences[0] >= epoch_window_tp:
-#                 valid_event_indices = np.concatenate(([True], valid_event_indices))
-#             else:
-#                 valid_event_indices = np.concatenate(([False], valid_event_indices))
-#         else:
-#             valid_event_indices = np.array([True])
-
-#         # Filter events that fit fully within the data boundaries
-#         epoch_start = downsampled_events + start_tp
-#         epoch_end = downsampled_events + end_tp
-#         valid_event_indices &= (epoch_start >= 0) & (epoch_end <= len(data_session))
-
-#         # Select filtered event indices based on the conditions
-#         filtered_event_indices = downsampled_events[valid_event_indices]
-
-#         # Counter for the number of valid trials
-#         trial_count = 0
-
-#         # Iterate over each filtered event
-#         for event_index in filtered_event_indices:
-#             start_index = int(event_index + start_tp)
-#             end_index = int(event_index + end_tp)
-
-#             # Append the data for this epoch to the data_epochs_list
-#             data_epochs_list.append(data_session[start_index:end_index, :])
-
-#             trial_count += 1
-
-#         # Append the filtered R data to the filtered_R_data_list
-#         filtered_R_data_list.append(R_data[idx][valid_event_indices])
-
-#         # Store the count of valid epochs for this session in valid_epoch_counts
-#         valid_epoch_counts.append(trial_count)
-
-#     # Convert the data_epochs_list to a NumPy array and transpose it for correct dimensions
-#     epoch_data = np.transpose(np.array(data_epochs_list), (1, 0, 2))
-
-#     # Concatenate all filtered R data along the first axis
-#     epoch_R_data = np.concatenate(filtered_R_data_list, axis=0)
-
-#     # Calculate the indices for the epoch data using a custom function
-#     epoch_indices = get_indices_from_list(valid_epoch_counts, count_timestamps=False)
-
-#     # Return the processed data
-#     return epoch_data, epoch_indices, epoch_R_data
-
 def get_event_epochs(D_data, R_data, indices, event_markers,
                      fs, fs_target=None, epoch_window=None):
     """
@@ -4418,6 +4420,17 @@ def categorize_columns_by_statistical_method(R_data, method, Nnull_samples, dete
         if category_columns['f_reg_cols'] =='all_columns' and permute_beta:
             category_columns['f_reg_cols'] = [] # that is the default for across session test, so no need for that
     return category_columns
+
+
+def ridge_pinv(D_data, regularization):
+    """
+    Compute ridge-regularized pseudo-inverse:
+        (D_data^T D_data + lambda I)^(-1) D_data^T
+    """
+    p = D_data.shape[1]
+    reg_matrix = regularization * np.eye(p)
+    return np.linalg.inv(D_data.T @ D_data + reg_matrix) @ D_data.T
+
 
 def calculate_regression_statistics(Din, Rin, reg_pinv, nan_values=False, no_t_stats= False):
     """
