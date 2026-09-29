@@ -88,15 +88,8 @@ getting_started
 key_concepts
 notebooks/Preprocessing
 notebooks/HMM_state_selection_standard
-troubleshooting
-```
-
-```{toctree}
-:caption: Advanced Training
-:maxdepth: 1
-:hidden:
-
 training_options
+troubleshooting
 ```
 
 ```{toctree}
