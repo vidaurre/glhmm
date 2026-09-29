@@ -17,5 +17,6 @@ notebooks/tutorial
 notebooks/Preprocessing
 modules
 glossary
+test_page
 
 ```
