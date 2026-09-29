@@ -88,6 +88,15 @@ getting_started
 key_concepts
 notebooks/Preprocessing
 notebooks/HMM_state_selection_standard
+troubleshooting
+```
+
+```{toctree}
+:caption: Advanced Training
+:maxdepth: 1
+:hidden:
+
+training_options
 ```
 
 ```{toctree}
@@ -122,15 +131,6 @@ notebooks/Testing_across_trials_within_session
 notebooks/Testing_across_visits
 notebooks/HCP_Testing_across_subjects
 notebooks/HCP_multi_level_block_permutation
-```
-
-```{toctree}
-:caption: Reference
-:maxdepth: 1
-:hidden:
-
-training_options
-troubleshooting
 ```
 
 ```{toctree}
