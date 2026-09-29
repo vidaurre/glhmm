@@ -20,8 +20,8 @@ sys.path.insert(0, os.path.abspath('..'))
 # -- Project information -----------------------------------------------------
 
 project = 'GLHMM'
-copyright = '2025, Sonsoles Alonso'
-author = 'Sonsoles Alonso'
+copyright = '2023–2026, GLHMM Contributors'
+author = 'GLHMM Contributors'
 
 # version
 setup_path = os.path.abspath(os.path.join('..', 'setup.py'))
@@ -47,6 +47,7 @@ extensions = [
     'sphinx.ext.autosummary',
     'sphinx.ext.viewcode',
     'sphinx.ext.napoleon',
+    'sphinx_design',
 ]
 
 # Add any paths that contain templates here, relative to this directory.
@@ -73,6 +74,8 @@ html_theme = 'furo'
 
 # Set the required version of Sphinx
 needs_sphinx = '5.0'
+
+myst_enable_extensions = ["colon_fence"]
 
 
 # Add nbsphinx_kernel_name option
