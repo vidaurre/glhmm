@@ -60,14 +60,18 @@ options = {'stochastic': True, 'Nbatch': 10}
 Gamma, Xi, fe = hmm.train(files=preprocessed_files, options=options)
 ```
 
-After training, γ is not automatically computed for the full dataset. Call `hmm.decode(files=preprocessed_files)` afterwards to get the complete state time courses.
+After training, γ is not automatically computed for the full dataset. Call `hmm.decode` afterwards to get the complete state time courses:
+
+```python
+Gamma, Xi, _ = hmm.decode(None, None, files=preprocessed_files)
+```
 
 ### Key options
 
 | Option | Default | What it does |
 |---|---|---|
 | `stochastic` | `False` | Set to `True` to enable stochastic training |
-| `Nbatch` | `min(N/2, 10)` | Number of files per mini-batch |
+| `Nbatch` | 10 | Number of files per mini-batch. A good starting point is around 10% of your total files; larger batches give more stable updates but use more memory. |
 | `initNbatch` | Same as `Nbatch` | Files used during initialisation |
 | `cyc` | `100` | Maximum number of training cycles |
 | `initcyc` | `25` | Training cycles during initialisation |
