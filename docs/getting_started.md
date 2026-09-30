@@ -146,7 +146,7 @@ Once the model has finished training, typical next steps are:
 | [Tutorial](notebooks/tutorial.ipynb) | Overview of GLHMM and the different model types |
 | [Gaussian HMM](notebooks/GaussianHMM_example.ipynb) | Standard HMM on a single set of time series |
 | [GLHMM example](notebooks/GLHMM_example.ipynb) | HMM with two sets of time series (brain + behaviour) |
-| [TDE-HMM vs MAR-HMM](notebooks/HMM-TDE_vs_HMM-MAR_example.ipynb) | Two approaches to finding brain states in MEG/EEG data based on oscillatory content |
+| [TDE-HMM vs MAR-HMM](notebooks/HMM-TDE_vs_HMM-MAR_example.ipynb) | TDE-HMM (lagged covariance, scales to whole-brain MEG) vs MAR-HMM (explicit autoregressive model, better for lower-dimensional recordings where AR dynamics are the scientific focus) |
 | [Preprocessing](notebooks/Preprocessing.ipynb) | How to prepare your data before training |
 
 ### Choosing the number of states

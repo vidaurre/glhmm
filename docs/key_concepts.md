@@ -46,7 +46,7 @@ For most neuroimaging work, use `covtype='full'`.
 | `'no'` | States differ only in covariance. Use this for demeaned or standardised data. |
 | `'state'` | Each state also has its own mean. Use this when raw activation levels matter. |
 
-For preprocessed fMRI data (which is typically demeaned), use `model_mean='no'`.
+For preprocessed neuroimaging data (which is typically demeaned), use `model_mean='no'`.
 
 ---
 
@@ -76,8 +76,8 @@ GLHMM supports several different types of models. The right choice depends on yo
 | Model type | Use this when... |
 |---|---|
 | Gaussian HMM | Your data is fMRI, or you want states that reflect which brain regions activate together |
-| TDE-HMM | Your data is MEG or EEG and you want states that reflect different patterns of brain oscillations (for example, alpha, beta or gamma activity). Works well for whole-brain recordings. |
-| MAR-HMM | Your data is MEG or EEG from a small number of channels (for example, one brain region of interest) and you need states that are sensitive to specific oscillatory frequencies or amplitudes. More complex to set up than TDE-HMM. |
+| TDE-HMM | Your data is MEG or EEG and you want states defined by transient spectral and spatial patterns. Each state is a different lagged covariance pattern. Scales well to whole-brain recordings with many channels or parcels. |
+| MAR-HMM | Your data is MEG or EEG and the autoregressive dynamics themselves are of scientific interest — that is, you want to know how activity at previous timepoints predicts current activity. Each state is an explicit autoregressive model with roughly D²P parameters (effective dimensions² × AR order). With ~10–20 dimensions the model is usually manageable; above ~30–50 dimensions it becomes expensive and prone to overfitting unless the data are first reduced with PCA. |
 | GLHMM | You have brain data and a second variable alongside it (such as behavioural scores, reaction times or task conditions), and you want brain states that are linked to that second variable. |
 
 See the [tutorial notebook](notebooks/tutorial.ipynb) for a hands-on overview of each type.
@@ -106,5 +106,6 @@ To get the average time spent in each state:
 
 ```python
 from glhmm import utils
-lifetimes = utils.get_life_times(Gamma, indices)
+vpath = np.argmax(Gamma, axis=1)  # hard state labels
+mean_lt, median_lt, max_lt = utils.get_life_times(vpath, indices)
 ```
