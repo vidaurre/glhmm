@@ -169,6 +169,6 @@ Once the model has finished training, typical next steps are:
 | [Testing across subjects](notebooks/Testing_across_subjects.ipynb) | Permutation testing between subjects |
 | [Testing across sessions](notebooks/Testing_across_sessions_within_subject.ipynb) | Within-subject testing across sessions |
 | [Testing across trials](notebooks/Testing_across_trials_within_session.ipynb) | Testing across trials within a session |
-| [Testing across visits](notebooks/Testing_across_visits.ipynb) | Longitudinal testing across visits |
+| [Testing across visits](notebooks/Testing_across_visits.ipynb) | Testing brain state measures against simultaneous physiological signals (e.g. heart rate, pupil size, skin conductance) |
 | [HCP: testing across subjects](notebooks/HCP_Testing_across_subjects.ipynb) | Testing example with HCP dataset |
 | [HCP: multi-level permutation](notebooks/HCP_multi_level_block_permutation.ipynb) | Block permutation for structured HCP data |

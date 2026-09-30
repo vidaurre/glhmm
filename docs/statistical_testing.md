@@ -1,10 +1,10 @@
 # Statistical testing
 
-Once you have trained a model and extracted state measures (such as fractional occupancy, state lifetimes, or transition probabilities), you will often want to ask: is this effect real, or could it have arisen by chance?
+Once you have trained a model and extracted state measures (such as fractional occupancy, state lifetimes, or transition probabilities), a natural next step is to assess whether observed differences are statistically significant.
 
-GLHMM uses permutation testing to answer this question. The idea is straightforward: if there is no real relationship between brain states and the variable you are testing (for example age, or a cognitive score), then randomly shuffling the subject labels should produce a result just as strong as the one you observed. By repeating this shuffle many times, you build a null distribution and measure where your real result falls within it.
+The toolbox supports both parametric and non-parametric tests. The non-parametric approach builds a null distribution by resampling the data: depending on the design, this means either permutation testing (randomly shuffling labels across observations) or Monte Carlo resampling (used for longitudinal designs such as across-visits testing). Setting `Nnull_samples=0` switches to a standard parametric test instead.
 
-Permutation testing makes few assumptions about the data distribution and works well with the small-to-medium sample sizes common in neuroimaging.
+Non-parametric resampling makes few assumptions about the data distribution and works well with the small-to-medium sample sizes common in neuroimaging.
 
 ---
 
@@ -17,7 +17,7 @@ The right test depends on how your data are structured:
 | One measurement per subject, testing across subjects | [Testing across subjects](notebooks/Testing_across_subjects.ipynb) |
 | Multiple sessions per subject, testing within subject | [Testing across sessions](notebooks/Testing_across_sessions_within_subject.ipynb) |
 | Multiple trials within a session | [Testing across trials](notebooks/Testing_across_trials_within_session.ipynb) |
-| Repeated measurements across visits (longitudinal) | [Testing across visits](notebooks/Testing_across_visits.ipynb) |
+| Multiple measurements on the same subject during scanning (e.g., comparing brain state measures with a simultaneous physiological signal such as heart rate, pupil size, or skin conductance) | [Testing across visits](notebooks/Testing_across_visits.ipynb) |
 | HCP data with family structure | [HCP: testing across subjects](notebooks/HCP_Testing_across_subjects.ipynb) |
 | HCP data requiring block permutation | [HCP: multi-level permutation](notebooks/HCP_multi_level_block_permutation.ipynb) |
 
