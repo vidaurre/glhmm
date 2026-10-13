@@ -454,23 +454,29 @@ def get_groups(group_structure):
     return cs
 
 def deconfound(Y, confX, betaY=None, my=None):
-    """Deconfound
+    """Remove confounds from Y by linear regression with an intercept.
+
+    If betaY is None, the regression is fitted on (Y, confX) and the returned my is its
+    intercept. If betaY and my are given (e.g. from the training fold), they are applied as is.
+    The residual is always Y - my - confX @ betaY, so reconfound() is its exact inverse.
     """
+    if confX.ndim==1:
+        confX = np.reshape(confX, (-1,1))
     if betaY is None:
-        betaY = np.zeros(shape=Y.shape)
-        my = np.mean(Y)
-        Y = Y - my
-        if confX.ndim==1:
-            confX = np.reshape(confX, (-1,1))
-        confXT = confX.T
+        # centre the confounds as well as Y; without this the fit is forced through the origin
+        mean_Y = np.mean(Y)
+        mean_conf = np.mean(confX, axis=0)
+        confXc = confX - mean_conf
+        confXcT = confXc.T
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
-            betaY_tmp = np.linalg.lstsq((np.matmul(confXT, confX)) + 0.00001 * np.identity(confX.shape[1]), np.matmul(confXT, Y))
+            betaY_tmp = np.linalg.lstsq((np.matmul(confXcT, confXc)) + 0.00001 * np.identity(confX.shape[1]), np.matmul(confXcT, Y - mean_Y))
         betaY = betaY_tmp[0]
-    
-    res = Y - np.matmul(confX,betaY)
+        my = mean_Y - np.matmul(mean_conf, betaY)
+
+    res = Y - my - np.matmul(confX,betaY)
     Y = res
-    
+
     return betaY, my, Y
 
 def reconfound(Y, conf, betaY, my):
@@ -710,14 +716,14 @@ def predict_phenotype(hmm, Y, behav, indices, predictor='Fisherkernel', estimato
                 behav_pred_scaled_tmp = model_tuned.predict(Xin_test_scaled)
                 behav_pred_scaled[test] = behav_pred_scaled_tmp.flatten()
                 if not deconfounding:
-                    behav_pred_tmp = scaler_y.inverse_transform(behav_pred_scaled_tmp)
+                    behav_pred_tmp = scaler_y.inverse_transform(behav_pred_scaled_tmp.reshape(-1,1))
                     behav_pred[test] = behav_pred_tmp.flatten()
                 elif deconfounding:
                     # in deconfounded space
                     behav_pred[test] = behav_pred_scaled[test]
                     behav_predD[test] = behav_pred[test]
                     behavD[test] = behav[test]
-                    behav_meanD[test] = behav_mean[test]
+                    behav_meanD[test] = 0.0  # deconfounded training scores have mean 0; reconfound adds the confound part
                     _,_,behavD[test] = deconfound(behavD[test], confounds[test,:], CbetaY, CinterceptY)
                     behav_predD[test] = reconfound(behav_predD[test], confounds[test,:], CbetaY, CinterceptY)
                     behav_meanD[test] = reconfound(behav_meanD[test], confounds[test,:], CbetaY, CinterceptY)
@@ -725,10 +731,10 @@ def predict_phenotype(hmm, Y, behav, indices, predictor='Fisherkernel', estimato
                 if return_scores:
                     behav_test = behav[test]
                     if not deconfounding:
-                        behav_test_scaled = scaler_y.transform(behav_test)
+                        behav_test_scaled = scaler_y.transform(behav_test.reshape(-1,1))
                         scores.append(model_tuned.score(Xin_test_scaled, behav_test_scaled))
                     elif deconfounding:
-                        scores.append(model_tuned.score(Xin_test_scaled, behav_test))
+                        scores.append(ms.r2_score(behav_test, behav_predD[test]))  # original space: reconfounded predictions vs raw scores
                         scores_deconf.append(model_tuned.score(Xin_test_scaled, behavD[test]))
                 if return_models:
                     models.append(model_tuned)
@@ -758,14 +764,14 @@ def predict_phenotype(hmm, Y, behav, indices, predictor='Fisherkernel', estimato
                 behav_pred_scaled_tmp = model_tuned.predict(Xin_test_scaled)
                 behav_pred_scaled[test] = behav_pred_scaled_tmp.flatten()
                 if not deconfounding:
-                    behav_pred_tmp = scaler_y.inverse_transform(behav_pred_scaled_tmp)
+                    behav_pred_tmp = scaler_y.inverse_transform(behav_pred_scaled_tmp.reshape(-1,1))
                     behav_pred[test] = behav_pred_tmp.flatten()
                 elif deconfounding:
                     # in deconfounded space
                     behav_pred[test] = behav_pred_scaled[test]
                     behav_predD[test] = behav_pred[test]
                     behavD[test] = behav[test]
-                    behav_meanD[test] = behav_mean[test]
+                    behav_meanD[test] = 0.0  # deconfounded training scores have mean 0; reconfound adds the confound part
                     _,_,behavD[test] = deconfound(behavD[test], confounds[test,:], CbetaY, CinterceptY)
                     behav_predD[test] = reconfound(behav_predD[test], confounds[test,:], CbetaY, CinterceptY)
                     behav_meanD[test] = reconfound(behav_meanD[test], confounds[test,:], CbetaY, CinterceptY)
@@ -773,10 +779,10 @@ def predict_phenotype(hmm, Y, behav, indices, predictor='Fisherkernel', estimato
                 if return_scores:
                     behav_test = behav[test]
                     if not deconfounding:
-                        behav_test_scaled = scaler_y.transform(behav_test)
+                        behav_test_scaled = scaler_y.transform(behav_test.reshape(-1,1))
                         scores.append(model_tuned.score(Xin_test_scaled, behav_test_scaled))
                     elif deconfounding:
-                        scores.append(model_tuned.score(Xin_test_scaled, behav_test))
+                        scores.append(ms.r2_score(behav_test, behav_predD[test]))  # original space: reconfounded predictions vs raw scores
                         scores_deconf.append(model_tuned.score(Xin_test_scaled, behavD[test]))
                 if return_models:
                     models.append(model_tuned)
@@ -816,14 +822,14 @@ def predict_phenotype(hmm, Y, behav, indices, predictor='Fisherkernel', estimato
                 behav_pred_scaled_tmp = model_tuned.predict(Xin_test_scaled)
                 behav_pred_scaled[test] = behav_pred_scaled_tmp.flatten()
                 if not deconfounding:
-                    behav_pred_tmp = scaler_y.inverse_transform(behav_pred_scaled_tmp)
+                    behav_pred_tmp = scaler_y.inverse_transform(behav_pred_scaled_tmp.reshape(-1,1))
                     behav_pred[test] = behav_pred_tmp.flatten()
                 elif deconfounding:
                     # in deconfounded space
                     behav_pred[test] = behav_pred_scaled[test]
                     behav_predD[test] = behav_pred[test]
                     behavD[test] = behav[test]
-                    behav_meanD[test] = behav_mean[test]
+                    behav_meanD[test] = 0.0  # deconfounded training scores have mean 0; reconfound adds the confound part
                     _,_,behavD[test] = deconfound(behavD[test], confounds[test,:], CbetaY, CinterceptY)
                     behav_predD[test] = reconfound(behav_predD[test], confounds[test,:], CbetaY, CinterceptY)
                     behav_meanD[test] = reconfound(behav_meanD[test], confounds[test,:], CbetaY, CinterceptY)
@@ -831,10 +837,10 @@ def predict_phenotype(hmm, Y, behav, indices, predictor='Fisherkernel', estimato
                 if return_scores:
                     behav_test = behav[test]
                     if not deconfounding:
-                        behav_test_scaled = scaler_y.transform(behav_test)
+                        behav_test_scaled = scaler_y.transform(behav_test.reshape(-1,1))
                         scores.append(model_tuned.score(Xin_test_scaled, behav_test_scaled))
                     elif deconfounding:
-                        scores.append(model_tuned.score(Xin_test_scaled, behav_test))
+                        scores.append(ms.r2_score(behav_test, behav_predD[test]))  # original space: reconfounded predictions vs raw scores
                         scores_deconf.append(model_tuned.score(Xin_test_scaled, behavD[test]))
                 if return_models:
                     models.append(model_tuned)
@@ -864,14 +870,14 @@ def predict_phenotype(hmm, Y, behav, indices, predictor='Fisherkernel', estimato
                 behav_pred_scaled_tmp = model_tuned.predict(Xin_test_scaled)
                 behav_pred_scaled[test] = behav_pred_scaled_tmp.flatten()
                 if not deconfounding:
-                    behav_pred_tmp = scaler_y.inverse_transform(behav_pred_scaled_tmp)
+                    behav_pred_tmp = scaler_y.inverse_transform(behav_pred_scaled_tmp.reshape(-1,1))
                     behav_pred[test] = behav_pred_tmp.flatten()
                 elif deconfounding:
                     # in deconfounded space
                     behav_pred[test] = behav_pred_scaled[test]
                     behav_predD[test] = behav_pred[test]
                     behavD[test] = behav[test]
-                    behav_meanD[test] = behav_mean[test]
+                    behav_meanD[test] = 0.0  # deconfounded training scores have mean 0; reconfound adds the confound part
                     _,_,behavD[test] = deconfound(behavD[test], confounds[test,:], CbetaY, CinterceptY)
                     behav_predD[test] = reconfound(behav_predD[test], confounds[test,:], CbetaY, CinterceptY)
                     behav_meanD[test] = reconfound(behav_meanD[test], confounds[test,:], CbetaY, CinterceptY)
@@ -879,10 +885,10 @@ def predict_phenotype(hmm, Y, behav, indices, predictor='Fisherkernel', estimato
                 if return_scores:
                     behav_test = behav[test]
                     if not deconfounding:
-                        behav_test_scaled = scaler_y.transform(behav_test)
+                        behav_test_scaled = scaler_y.transform(behav_test.reshape(-1,1))
                         scores.append(model_tuned.score(Xin_test_scaled, behav_test_scaled))
                     elif deconfounding:
-                        scores.append(model_tuned.score(Xin_test_scaled, behav_test))
+                        scores.append(ms.r2_score(behav_test, behav_predD[test]))  # original space: reconfounded predictions vs raw scores
                         scores_deconf.append(model_tuned.score(Xin_test_scaled, behavD[test]))
                 if return_models:
                     models.append(model_tuned)
@@ -890,9 +896,13 @@ def predict_phenotype(hmm, Y, behav, indices, predictor='Fisherkernel', estimato
                     hyperparams.append(model_tuned.best_estimator_.alpha)
     
     # get correlation coefficient between model-predicted and actual values
-    corr = np.corrcoef(behav_pred, behav)[0,1]
     if deconfounding:
-        corr_deconf = np.corrcoef(behav_predD, behavD)[0,1]
+        # both in deconfounded space: predictions vs test scores with the training-fold confound fit removed
+        corr = np.corrcoef(behav_pred, behavD)[0,1]
+        # both in original space: predictions with confounds added back vs raw scores
+        corr_reconf = np.corrcoef(behav_predD, behav)[0,1]
+    else:
+        corr = np.corrcoef(behav_pred, behav)[0,1]
 
     # aggregate results and optional returns
     results = {}
@@ -900,7 +910,8 @@ def predict_phenotype(hmm, Y, behav, indices, predictor='Fisherkernel', estimato
     results['corr'] = corr
     if deconfounding:
         results['behav_predD'] = behav_predD
-        results['corr_deconf'] = corr_deconf
+        results['corr_deconf'] = corr  # kept for backward compatibility; now identical to 'corr'
+        results['corr_reconf'] = corr_reconf
     if return_scores:
         results['scores'] = scores
         if deconfounding:
@@ -1637,7 +1648,7 @@ def test_pred(hmm, Y, indices, model_tuned, scaler_x, scaler_y=None, behav=None,
         Xin_test_scaled = scaler_x.transform(Xin_test)
         behav_pred_scaled = model_tuned.predict(Xin_test_scaled)
         if not deconfounding:
-            behav_pred_tmp = scaler_y.inverse_transform(behav_pred_scaled)
+            behav_pred_tmp = scaler_y.inverse_transform(behav_pred_scaled.reshape(-1,1))
             behav_pred = behav_pred_tmp.flatten()
         elif deconfounding:
             # in deconfounded space
@@ -1657,14 +1668,14 @@ def test_pred(hmm, Y, indices, model_tuned, scaler_x, scaler_y=None, behav=None,
                 behav_test_scaled = behav_test_scaled_tmp.flatten()
                 score = model_tuned.score(Xin_test_scaled, behav_test_scaled)
             if deconfounding:
-                score = model_tuned.score(Xin_test_scaled, behav_test)
+                score = ms.r2_score(behav_test, behav_predD)  # original space: reconfounded predictions vs raw scores
                 score_deconf = model_tuned.score(Xin_test_scaled, behavD)
 
     elif estimator=="Ridge":
         Xin_scaled = scaler_x.transform(Xin)
         behav_pred_scaled = model_tuned.predict(Xin_scaled)
         if not deconfounding:
-            behav_pred_tmp = scaler_y.inverse_transform(behav_pred_scaled)
+            behav_pred_tmp = scaler_y.inverse_transform(behav_pred_scaled.reshape(-1,1))
             behav_pred = behav_pred_tmp.flatten()
         elif deconfounding:
             # in deconfounded space
@@ -1682,19 +1693,21 @@ def test_pred(hmm, Y, indices, model_tuned, scaler_x, scaler_y=None, behav=None,
                 behav_scaled = behav_scaled_tmp.flatten()
                 score = model_tuned.score(Xin_scaled, behav_scaled)
             if deconfounding:
-                score = model_tuned.score(Xin_scaled, behav)
-                score_deconf = model_tuned.score(Xin_scaled, behavD)        
+                score = ms.r2_score(behav, behav_predD)  # original space: reconfounded predictions vs raw scores
+                score_deconf = model_tuned.score(Xin_scaled, behavD)
 
     if return_corr:
         if train_indices is not None:
-            corr = np.corrcoef(behav_pred, behav[test_indices])[0,1]
+            behav_true = behav[test_indices]
         else:
-            corr = np.corrcoef(behav_pred, behav)[0,1]
+            behav_true = behav
         if deconfounding:
-            if train_indices is not None:
-                corr_deconf = np.corrcoef(behav_predD, behavD)[0,1]
-            else:
-                corr_deconf = np.corrcoef(behav_predD, behavD)[0,1]           
+            # both in deconfounded space: predictions vs test scores with the training confound fit removed
+            corr = np.corrcoef(behav_pred, behavD)[0,1]
+            # both in original space: predictions with confounds added back vs raw scores
+            corr_reconf = np.corrcoef(behav_predD, behav_true)[0,1]
+        else:
+            corr = np.corrcoef(behav_pred, behav_true)[0,1]
 
     # aggregate results and optional returns
     results = {}
@@ -1704,7 +1717,8 @@ def test_pred(hmm, Y, indices, model_tuned, scaler_x, scaler_y=None, behav=None,
     if deconfounding:
         results['behav_predD'] = behav_predD
         if return_corr:
-            results['corr_deconf'] = corr_deconf
+            results['corr_deconf'] = corr  # kept for backward compatibility; now identical to 'corr'
+            results['corr_reconf'] = corr_reconf
     if return_scores:
         results['scores'] = score
         if deconfounding:
