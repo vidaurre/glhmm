@@ -367,8 +367,9 @@ class glhmm():
         if self.beta is not None and not diagonal_covmat:
             ind = np.arange(p) * q
             CSigma_beta = np.tile(C,(p,p)) * self.beta[k_beta]['Sigma']
-        for t0 in range(0,T,auxiliary.ROW_BLOCK_SIZE):
-            t1 = min(t0 + auxiliary.ROW_BLOCK_SIZE, T)
+        nb = auxiliary.rows_per_block(q * p if (self.beta is not None and not diagonal_covmat) else q)
+        for t0 in range(0,T,nb):
+            t1 = min(t0 + nb, T)
             Tb = t1 - t0
             Xb = X[t0:t1] if X is not None else None
 
@@ -734,8 +735,9 @@ class glhmm():
                 # range of each channel, in blocks of time points instead of on a full copy of the data
                 # (max and min involve no rounding, so this is identical to computing them on the copy)
                 m = np.expand_dims(np.mean(Y,axis=0),axis=0) if self.hyperparameters["model_mean"] != 'no' else None
-                for t0 in range(0,T,auxiliary.ROW_BLOCK_SIZE):
-                    Yb = Y[t0:t0+auxiliary.ROW_BLOCK_SIZE]
+                nb = auxiliary.rows_per_block(q)
+                for t0 in range(0,T,nb):
+                    Yb = Y[t0:t0+nb]
                     if m is not None: Yb = Yb - m
                     if t0 == 0:
                         mx, mn = np.max(Yb,axis=0), np.min(Yb,axis=0)
@@ -945,8 +947,9 @@ class glhmm():
                 # Gamma-weighted sum of squares of the residuals, accumulated over blocks of time points
                 # (avoids a full-size copy of the data per state)
                 S = np.zeros(q) if diagonal_covmat else np.zeros((q,q))
-                for t0 in range(0,T,auxiliary.ROW_BLOCK_SIZE):
-                    t1 = min(t0 + auxiliary.ROW_BLOCK_SIZE, T)
+                nb = auxiliary.rows_per_block(q)
+                for t0 in range(0,T,nb):
+                    t1 = min(t0 + nb, T)
                     g = np.expand_dims(Gamma[t0:t1,k], axis=1)
                     d = np.copy(Y[t0:t1])
                     if self.hyperparameters["model_mean"] != 'no': 

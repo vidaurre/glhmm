@@ -22,13 +22,17 @@ except:
 
 
 
+# Memory (MB) of one temporary array in the computations done in blocks of time points: the emission step, the
+# covariance update and the covariance prior in glhmm.py, and Gamma_entropy here. Without blocks these steps create
+# arrays as large as the data (or as Xi) for every state. Results do not depend on the block size (up to
+# floating-point rounding); it only sets memory use and speed. Blocks of a few MB fit in the CPU cache and were
+# fastest in tests (2-16 MB, about 30% faster than no blocks; see tests/validate_batch_memory.ipynb); 8 MB is in the
+# middle of that range.
+BLOCK_MEMORY_MB = 8
 
-# Number of time points processed at once by computations that would otherwise create arrays as large as the data
-# (or as Xi) for every state: the emission step and covariance update in glhmm.py, and Gamma_entropy here.
-# It only trades memory for speed; results do not depend on it (up to floating-point rounding). With 100,000 time
-# points a block of 100 channels takes 80 MB, and the Python loop over blocks costs little even for 10^7-10^8
-# time points.
-ROW_BLOCK_SIZE = 100000
+def rows_per_block(n_columns):
+    """Number of time points per block, so that one float64 array with n_columns columns takes BLOCK_MEMORY_MB."""
+    return max(1, int(BLOCK_MEMORY_MB * 2**20 // (8 * max(int(n_columns), 1))))
 
 def slice_matrix(M,indices):
     """Slices rows of input matrix M based on indices array along axis 0.
@@ -609,8 +613,9 @@ def Gamma_entropy(Gamma,Xi,indices):
         raise ValueError("Xi must have one row per transition (n_samples - n_sessions = " +
             str(Gamma.shape[0] - indices.shape[0]) + "), got " + str(Xi.shape[0]) +
             ". The Xi returned by train() is summed over time; use decode() to get Xi for every time point.")
-    for a in range(0,Xi.shape[0],ROW_BLOCK_SIZE):
-        Xi_b = Xi[a:a+ROW_BLOCK_SIZE]                    # view: the clipping modifies Xi in place, as before
+    nb = rows_per_block(Xi.shape[1] * Xi.shape[2])
+    for a in range(0,Xi.shape[0],nb):
+        Xi_b = Xi[a:a+nb]                    # view: the clipping modifies Xi in place, as before
         Xi_b[Xi_b < minreal] = minreal
         Xi_norm = Xi_b / np.sum(Xi_b,axis=2,keepdims=True)
         Entr -= np.sum(Xi_b * np.log(Xi_norm))
