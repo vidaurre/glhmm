@@ -362,43 +362,53 @@ class glhmm():
             ldetWishB = - 0.5 * s * logdet
             C = self.Sigma[k]['shape'] * self.Sigma[k]['irate']
 
-        # distance
-        dist = np.zeros((T,))
-        d = np.copy(Y)
-        if self.mean is not None: d -= np.expand_dims(self.mean[k_mean]['Mu'],axis=0)
-        if self.beta is not None: d -= (X @ self.beta[k_beta]['Mu'])
-        if diagonal_covmat: Cd = d * C
-        else: Cd = d @ C
-        for j in range(q): dist -= 0.5 * d[:,j] * Cd[:,j]
+        # distance and covariance traces, computed in blocks of time points so that no full-size copy of the
+        # data is made (same element-wise operations as computing them for all time points at once)
+        if self.beta is not None and not diagonal_covmat:
+            ind = np.arange(p) * q
+            CSigma_beta = np.tile(C,(p,p)) * self.beta[k_beta]['Sigma']
+        for t0 in range(0,T,auxiliary.ROW_BLOCK_SIZE):
+            t1 = min(t0 + auxiliary.ROW_BLOCK_SIZE, T)
+            Tb = t1 - t0
+            Xb = X[t0:t1] if X is not None else None
 
-        # cov trace for beta
-        norm_wish_trace_W = np.zeros((T,))
-        if self.beta is not None:
-            if diagonal_covmat:
-                jj = np.arange(p)
-                for j in range(q):
-                    if self.hyperparameters["connectivity"] is not None:
-                        jj = np.where(self.hyperparameters["connectivity"][:,j]==1)[0]
-                    Cb = self.beta[k_beta]['Sigma'][jj,jj[:,np.newaxis],j]
-                    norm_wish_trace_W -= 0.5 * C[j] * np.sum(((X[:,jj] @ Cb)) * X[:,jj], axis=1)
-            else:
-                ind = np.arange(p) * q
-                tmp = np.repeat(X,q,axis=1) @ (np.tile(C,(p,p)) * self.beta[k_beta]['Sigma'])
-                for j1 in range(q):
-                    ind1 = ind + j1
-                    norm_wish_trace_W = norm_wish_trace_W + (-0.5 * np.sum(tmp[:,ind1] * X, axis=1))
+            # distance
+            dist = np.zeros((Tb,))
+            d = np.copy(Y[t0:t1])
+            if self.mean is not None: d -= np.expand_dims(self.mean[k_mean]['Mu'],axis=0)
+            if self.beta is not None: d -= (Xb @ self.beta[k_beta]['Mu'])
+            if diagonal_covmat: Cd = d * C
+            else: Cd = d @ C
+            for j in range(q): dist -= 0.5 * d[:,j] * Cd[:,j]
+            del d, Cd
 
+            # cov trace for beta
+            norm_wish_trace_W = np.zeros((Tb,))
+            if self.beta is not None:
+                if diagonal_covmat:
+                    jj = np.arange(p)
+                    for j in range(q):
+                        if self.hyperparameters["connectivity"] is not None:
+                            jj = np.where(self.hyperparameters["connectivity"][:,j]==1)[0]
+                        Cb = self.beta[k_beta]['Sigma'][jj,jj[:,np.newaxis],j]
+                        norm_wish_trace_W -= 0.5 * C[j] * np.sum(((Xb[:,jj] @ Cb)) * Xb[:,jj], axis=1)
+                else:
+                    tmp = np.repeat(Xb,q,axis=1) @ CSigma_beta
+                    for j1 in range(q):
+                        ind1 = ind + j1
+                        norm_wish_trace_W = norm_wish_trace_W + (-0.5 * np.sum(tmp[:,ind1] * Xb, axis=1))
+                    del tmp
 
-        # cov trace for mean
-        norm_wish_trace_mean = np.zeros(T)
-        if self.mean is not None:
-            if diagonal_covmat:
-                for j in range(q):
-                    norm_wish_trace_mean -= 0.5 * C[j] * self.mean[k_mean]['Sigma'][j]
-            else:
-                norm_wish_trace_mean = - 0.5 * np.trace(self.mean[k_mean]['Sigma'] @ C)
+            # cov trace for mean
+            norm_wish_trace_mean = np.zeros(Tb)
+            if self.mean is not None:
+                if diagonal_covmat:
+                    for j in range(q):
+                        norm_wish_trace_mean -= 0.5 * C[j] * self.mean[k_mean]['Sigma'][j]
+                else:
+                    norm_wish_trace_mean = - 0.5 * np.trace(self.mean[k_mean]['Sigma'] @ C)
 
-        L[:,k] = constant + dist + norm_wish_trace_W + norm_wish_trace_mean + ldetWishB + PsiWish_alphasum
+            L[t0:t1,k] = constant + dist + norm_wish_trace_W + norm_wish_trace_mean + ldetWishB + PsiWish_alphasum
 
 
     @staticmethod
@@ -420,6 +430,7 @@ class glhmm():
         if not "serial" in options: options["serial"] = False
         if not "gpu_acceleration" in options: options["gpu_acceleration"] = 0
         if not "gpuChunks" in options: options["gpuChunks"] = 1
+        if not "sessions_per_chunk" in options: options["sessions_per_chunk"] = 50
 
         ### Check gpuChunks validity.
         if options["serial"] and options["gpuChunks"] > 1:
@@ -746,7 +757,7 @@ class glhmm():
         else:
             if Dir2d_alpha is None:
                 if Xi is None:
-                    Xi = auxiliary.approximate_Xi(Gamma,indices)
+                    Xi = auxiliary.approximate_Xi_sum(Gamma,indices)
                 Dir2d_alpha = np.sum(Xi,axis=0)
             if init:
                 self.Dir2d_alpha = Dir2d_alpha + self.priors["Dir2d_alpha"]
@@ -903,54 +914,58 @@ class glhmm():
 
             for k in range(K):
 
-                d = np.copy(Y) 
-
                 sm = np.zeros(q) if diagonal_covmat else np.zeros((q,q))
                 if self.hyperparameters["model_mean"] != 'no': 
-                    kk = 0 if shared_mean else k
-                    d -= np.expand_dims(self.mean[kk]["Mu"], axis=0)
-                    sm = self.mean[kk]["Sigma"] * np.sum(Gamma[:,k])
+                    kk_mean = 0 if shared_mean else k
+                    sm = self.mean[kk_mean]["Sigma"] * np.sum(Gamma[:,k])
 
                 sb = np.zeros(q) if diagonal_covmat else np.zeros((q,q))
                 if self.hyperparameters["model_beta"] != 'no': 
-                    kk = 0 if shared_beta else k
-                    d -= (X @ self.beta[kk]["Mu"])
-                    if diagonal_covmat:
-                        sb = np.zeros((T,q))
-                        jj = np.arange(p)
-                        for j in range(q):
-                            if self.hyperparameters["connectivity"] is not None:
-                                jj = np.where(self.hyperparameters["connectivity"][:,j]==1)[0]
-                            sb[:,j] += np.sum((X[:,jj] @ \
-                                self.beta[kk]["Sigma"][jj,jj[:,np.newaxis],j]) *  X[:,jj],axis=1)
-                        sb = np.sum(sb * np.expand_dims(Gamma[:,k], axis=1), axis=0)
-
-                    else:
+                    kk_beta = 0 if shared_beta else k
+                    if not diagonal_covmat:
                         for j1 in range(q):
                             ind1 = np.arange(p) * q + j1
                             for j2 in range(j1,q):
                                 ind2 = np.arange(p) * q + j2
-                                sb[j1,j2] = np.sum(self.beta[kk]["Sigma"][ind1,ind2[:,np.newaxis]] * XGX[:,:,k])
+                                sb[j1,j2] = np.sum(self.beta[kk_beta]["Sigma"][ind1,ind2[:,np.newaxis]] * XGX[:,:,k])
                                 sb[j2,j1] = sb[j1,j2]
+
+                # Gamma-weighted sum of squares of the residuals, accumulated over blocks of time points
+                # (avoids a full-size copy of the data per state)
+                S = np.zeros(q) if diagonal_covmat else np.zeros((q,q))
+                for t0 in range(0,T,auxiliary.ROW_BLOCK_SIZE):
+                    t1 = min(t0 + auxiliary.ROW_BLOCK_SIZE, T)
+                    g = np.expand_dims(Gamma[t0:t1,k], axis=1)
+                    d = np.copy(Y[t0:t1])
+                    if self.hyperparameters["model_mean"] != 'no': 
+                        d -= np.expand_dims(self.mean[kk_mean]["Mu"], axis=0)
+                    if self.hyperparameters["model_beta"] != 'no': 
+                        d -= (X[t0:t1] @ self.beta[kk_beta]["Mu"])
+                    if diagonal_covmat:
+                        S += np.sum((d ** 2) * g, axis=0)
+                        if self.hyperparameters["model_beta"] != 'no': 
+                            sb_t = np.zeros((t1-t0,q))
+                            jj = np.arange(p)
+                            for j in range(q):
+                                if self.hyperparameters["connectivity"] is not None:
+                                    jj = np.where(self.hyperparameters["connectivity"][:,j]==1)[0]
+                                sb_t[:,j] += np.sum((X[t0:t1,jj] @ \
+                                    self.beta[kk_beta]["Sigma"][jj,jj[:,np.newaxis],j]) *  X[t0:t1,jj],axis=1)
+                            sb += np.sum(sb_t * g, axis=0)
+                    else:
+                        S += (d * g).T @ d
+                    del d, g
 
                 if shared_covmat: # self.Sigma[0]["rate"] 
                     if diagonal_covmat:
-                        rate += 0.5 * Nfactor * \
-                            ( (np.sum((d ** 2) * np.expand_dims(Gamma[:,k], axis=1),axis=0)) \
-                            + sm + sb
-                            )
+                        rate += 0.5 * Nfactor * (S + sm + sb)
                     else:
-                        rate += Nfactor * \
-                            ( ((d * np.expand_dims(Gamma[:,k], axis=1)).T @ d) 
-                            + sm + sb)
+                        rate += Nfactor * (S + sm + sb)
                         
                 else:
                     if diagonal_covmat:
                         rate = self.priors["Sigma"]["rate"] \
-                                + 0.5 * Nfactor * \
-                                ( np.sum((d ** 2) * np.expand_dims(Gamma[:,k], axis=1),axis=0) \
-                                + sm + sb
-                                ) 
+                                + 0.5 * Nfactor * (S + sm + sb)
                         shape = self.priors["Sigma"]["shape"] + \
                                 0.5 * Nfactor * np.sum(Gamma[:,k])
                         self.Sigma[k]["rate"] = rho * rate + (1-rho) * np.copy(self.Sigma[k]["rate"])
@@ -958,10 +973,7 @@ class glhmm():
                         self.Sigma[k]["irate"] = 1 / self.Sigma[k]["rate"]
                         
                     else:
-                        rate =  self.priors["Sigma"]["rate"] + Nfactor * \
-                            ( ((d * np.expand_dims(Gamma[:,k], axis=1)).T @ d) \
-                            + sm + sb
-                            )
+                        rate =  self.priors["Sigma"]["rate"] + Nfactor * (S + sm + sb)
                         shape = self.priors["Sigma"]["shape"] + \
                             Nfactor * np.sum(Gamma[:,k])
                         self.Sigma[k]["rate"] = rho * rate + (1-rho) * np.copy(self.Sigma[k]["rate"])
@@ -1139,6 +1151,7 @@ class glhmm():
             loglik_entropy[j,2] = np.sum(self.get_fe(None,Y,Gamma,Xi,None,indices_individual[0],todo))
 
         # do the actual training
+        t_cycle = time.time() # verbose output: clock time at the end of each cycle and its duration
         for it in range(options["cyc"]):
 
             rho = (it + 2)**(-options["forget_rate"])
@@ -1215,13 +1228,20 @@ class glhmm():
                     if np.abs(chgFrEn) < options["tol"]: cyc_to_go -= 1
                     else: cyc_to_go =  options["cyc_to_go_under_th"]
                 if options["verbose"]: 
+                    t_now = time.time()
                     print("Cycle " + str(it+1) + ", free energy = " + str(fe_it) + \
-                        ", relative change = " + str(chgFrEn) + ", rho = " + str(rho))
+                        ", relative change = " + str(chgFrEn) + ", rho = " + str(rho) + \
+                        " at [" + time.strftime("%H:%M:%S") + "] (" + str(round(t_now - t_cycle,1)) + "s)")
+                    t_cycle = t_now
                 if cyc_to_go == 0: 
                     if options["verbose"]: print("Reached early convergence")
                     break
             else:
-                if options["verbose"]: print("Cycle " + str(it+1) + " free energy = " + str(fe_it))
+                if options["verbose"]:
+                    t_now = time.time()
+                    print("Cycle " + str(it+1) + " free energy = " + str(fe_it) + \
+                        " at [" + time.strftime("%H:%M:%S") + "] (" + str(round(t_now - t_cycle,1)) + "s)")
+                    t_cycle = t_now
             
 
         K_active = np.sum(self.active_states)
@@ -1268,6 +1288,59 @@ class glhmm():
             self.__loglikelihood_k(X,Y,L,k,cache)
 
         return L
+
+
+    def __decode_for_training(self,X,Y,indices,options):
+        """E-step used by train(): the same computations as decode(), but returning Xi summed over time.
+
+        Inside train(), Xi is only used by __update_dynamics, through np.sum(Xi,axis=0). Storing the full
+        (n_samples - n_sessions, K, K) array (and the padded copy made by the forward-backward pass) is what limits
+        batch training on large datasets. Here the forward-backward pass is run on groups of sessions
+        (options["sessions_per_chunk"], or fewer if options["gpuChunks"] asks for more chunks), and the Xi of each
+        group is summed over time before the next group is processed.
+
+        Returns:
+        --------
+        Gamma : array of shape (n_samples, n_states)
+        Xi : array of shape (1, n_states, n_states), Xi summed over time points
+        scale : array of shape (n_samples,)
+        """
+        serial = options["serial"]
+        gpu_acceleration = options["gpu_acceleration"]
+        if len(indices.shape) == 1:
+            indices = np.expand_dims(indices,axis=0)
+        indices_individual = indices - np.expand_dims(indices[:,0],axis=1)
+        N = indices.shape[0]
+        L = np.exp(self.loglikelihood(X,Y))
+        minreal = sys.float_info.min
+        maxreal = sys.float_info.max
+        L[L < minreal] = minreal
+        L[L > maxreal] = maxreal
+        T,K = L.shape
+        maxt = np.max(indices_individual[:,1])
+        chunk_size = int(min(options["sessions_per_chunk"], np.ceil(N / max(options["gpuChunks"],1))))
+        chunk_size = max(chunk_size,1)
+
+        Gamma = np.zeros((T,K))
+        scale = np.zeros(T)
+        Xi_sum = np.zeros((K,K))
+        for c0 in range(0,N,chunk_size):
+            sub = np.arange(c0,min(c0 + chunk_size,N))
+            ind_chunk = indices[sub,:] - indices[sub[0],0]
+            if serial:
+                L_ = L[indices[sub[0],0]:indices[sub[-1],1],:]
+            else: # time points x sessions x states, as in decode()
+                L_ = np.zeros((maxt,len(sub),K))
+                for jj,j in enumerate(sub):
+                    L_[indices_individual[j,0]:indices_individual[j,1],jj,:] = L[indices[j,0]:indices[j,1],:]
+            Gamma_,Xi_,scale_ = self.__forward_backward(L_,ind_chunk,indices_individual[sub,:],serial,gpu_acceleration)
+            for jj,j in enumerate(sub):
+                Gamma[indices[j,0]:indices[j,1],:] = Gamma_[ind_chunk[jj,0]:ind_chunk[jj,1],:]
+                scale[indices[j,0]:indices[j,1]] = scale_[ind_chunk[jj,0]:ind_chunk[jj,1]]
+            Xi_sum += np.sum(Xi_,axis=0)
+            del L_, Gamma_, Xi_, scale_
+
+        return Gamma, np.expand_dims(Xi_sum,axis=0), scale
 
 
     def decode(self,X,Y,indices=None,files=None,viterbi=False,set=None,serial=False,gpu_acceleration=0,gpuChunks=1):
@@ -2389,7 +2462,10 @@ class glhmm():
             The scaling factors used to compute the free energy of the
             dataset. If None, scaling is automatically computed.
         options : dict, optional
-            A dictionary with options to control the training process.
+            A dictionary with options to control the training process. In standard (non-stochastic) training,
+            the E-step keeps Xi only summed over time, which is all the update of the transition probabilities
+            needs, and processes the sessions in groups of options["sessions_per_chunk"] (default 50). This gives
+            the same model as storing Xi for every time point, with much less memory.
 
         Returns:
         --------
@@ -2398,8 +2474,10 @@ class glhmm():
             To avoid unnecessary use of memory, Gamma is only returned if learning is non-stochastic;
             otherwise it is returned as an empty numpy array. 
             To get Gamma after stochastic learning, use the decode method. 
-        Xi : array-like of shape (n_samples - n_sessions, n_states, n_states)
-            The joint probabilities of past and future states conditioned on data.
+        Xi : array-like of shape (1, n_states, n_states)
+            The joint probabilities of past and future states conditioned on data, summed over time points.
+            To get Xi for every time point (shape (n_samples - n_sessions, n_states, n_states)), use the decode
+            method after training.
             To avoid unnecessary use of memory, Xi is only returned if learning is non-stochastic;
             otherwise it is returned as an empty numpy array. 
             To get Xi after stochastic learning, use the decode method. 
@@ -2461,12 +2539,14 @@ class glhmm():
         fe = np.empty(0)
         cyc_to_go = options["cyc_to_go_under_th"]
 
+        t_cycle = time.time() # verbose output: clock time at the end of each cycle and its duration
         for it in range(options["cyc"]):
 
             if options["updateGamma"]:
 
                 # E-step
-                Gamma,Xi,scale = self.decode(X,Y,indices,serial=options["serial"],gpu_acceleration=options["gpu_acceleration"],gpuChunks=options["gpuChunks"])
+                # Xi is kept summed over time (all that __update_dynamics uses); sessions processed in groups
+                Gamma,Xi,scale = self.__decode_for_training(X,Y,indices,options)
                 status = self.__check_Gamma(Gamma)
                 if status:
                     warnings.warn('Gamma has almost zero variance: stuck in a weird solution')
@@ -2501,14 +2581,20 @@ class glhmm():
                 else:
                     cyc_to_go = options["cyc_to_go_under_th"]
                 if options["verbose"]: 
+                    t_now = time.time()
                     print("Cycle " + str(it+1) + ", free energy = " + str(fe_it) + \
-                        ", relative change = " + str(chgFrEn))
+                        ", relative change = " + str(chgFrEn) + \
+                        " at [" + time.strftime("%H:%M:%S") + "] (" + str(round(t_now - t_cycle,1)) + "s)")
+                    t_cycle = t_now
                 if cyc_to_go == 0: 
                     if options["verbose"]: print("Reached early convergence")
                     break
             else:
                 if options["verbose"]:
-                    print("Cycle " + str(it+1) + " free energy = " + str(fe_it))
+                    t_now = time.time()
+                    print("Cycle " + str(it+1) + " free energy = " + str(fe_it) + \
+                        " at [" + time.strftime("%H:%M:%S") + "] (" + str(round(t_now - t_cycle,1)) + "s)")
+                    t_cycle = t_now
 
             # M-step
             if options["updateDyn"]:

@@ -341,7 +341,9 @@ def preprocess_data(data = None,indices = None,
     dampen_extreme_peaks : int, bool, or None, default=None
         Dampens extreme peaks in the data. If True, uses default strength of 5. If int, specifies strength.
     standardise : bool, default=True
-        Whether to standardise (zero-mean, unit-variance) each session.
+        Whether to standardise (zero-mean, unit-variance) each session. Standardisation is applied after
+        filtering, detrending, power/phase extraction and downsampling, and before TDE/AR and PCA/ICA, so that
+        each session has zero mean and unit variance at the final sampling rate.
     filter : tuple of two floats or None, default=None
         Bandpass (low, high), lowpass (0, high), or highpass (low, None) filter.
     detrend : bool, default=False
@@ -470,10 +472,6 @@ def preprocess_data(data = None,indices = None,
                 strength = dampen_extreme_peaks if isinstance(dampen_extreme_peaks, int) else 5
                 X = dampen_peaks(X, strength)
 
-            if standardise:
-                X -= np.mean(X, axis=0)
-                X /= np.std(X, axis=0)
-
             if filter is not None:
                 filterorder = 6
                 if filter[0] == 0:
@@ -511,6 +509,10 @@ def preprocess_data(data = None,indices = None,
                 gcd = math.gcd(int(downsample), int(fs))
                 X = signal.resample_poly(X, int(downsample // gcd), int(fs // gcd), axis=0)
                 indices = indices_new
+
+            if standardise: # after the cleaning steps, so the output has zero mean and unit variance
+                X -= np.mean(X, axis=0)
+                X /= np.std(X, axis=0)
 
             if autoregressive_order is not None:
                 X, Y, indices_new, _ = build_data_autoregressive(
@@ -651,12 +653,6 @@ def preprocess_data(data = None,indices = None,
             strength = 5
         data = dampen_peaks(data,strength)           
             
-    if standardise:
-        for j in range(N):
-            t = np.arange(indices[j,0],indices[j,1]) 
-            data[t,:] -= np.mean(data[t,:],axis=0)
-            data[t,:] /= np.std(data[t,:],axis=0)   
-
     if filter != None:
         filterorder = 6
         if filter[0] == 0: # low-pass
@@ -693,6 +689,27 @@ def preprocess_data(data = None,indices = None,
             data[t,p:] = np.unwrap(np.angle(analytical_signal))
         p = data.shape[1]
 
+    # downsample before embedding and PCA, then standardise, so that every session has zero mean and unit
+    # variance at the final sampling rate
+    if downsample != None:
+        factor = downsample / fs
+        Tnew = np.ceil(factor * (indices[:,1]-indices[:,0])).astype(int)
+        indices_new = auxiliary.make_indices_from_T(Tnew)
+        data_new = np.zeros((np.sum(Tnew),p))
+        gcd = math.gcd(downsample,fs)
+        for j in range(N):
+            t = np.arange(indices[j,0],indices[j,1])
+            tnew = np.arange(indices_new[j,0],indices_new[j,1])
+            data_new[tnew,:] = signal.resample_poly(data[t,:], downsample/gcd, fs/gcd)
+        data = data_new
+        indices = indices_new
+
+    if standardise:
+        for j in range(N):
+            t = np.arange(indices[j,0],indices[j,1])
+            data[t,:] -= np.mean(data[t,:],axis=0)
+            data[t,:] /= np.std(data[t,:],axis=0)
+
     if autoregressive_order is not None:
         X, Y, indices, _ = build_data_autoregressive(
             data=data,
@@ -724,22 +741,7 @@ def preprocess_data(data = None,indices = None,
             data[t,:] -= np.mean(data[t,:],axis=0)
             data[t,:] /= np.std(data[t,:],axis=0)          
         
-    if downsample != None:
-        factor = downsample / fs
-        Tnew = np.ceil(factor * (indices[:,1]-indices[:,0])).astype(int)
-        indices_new = auxiliary.make_indices_from_T(Tnew)
-        data_new = np.zeros((np.sum(Tnew),p))
-        gcd = math.gcd(downsample,fs)
-        for j in range(N):
-            t = np.arange(indices[j,0],indices[j,1]) 
-            tnew = np.arange(indices_new[j,0],indices_new[j,1]) 
-            data_new[tnew,:] = signal.resample_poly(data[t,:], downsample/gcd, fs/gcd)
-            # Tjnew = tnew.shape[0]
-            # data_new[tnew,:] = signal.resample(data[t,:], Tjnew)     
-        data = data_new
-    else: indices_new = indices
-
-    return data,indices_new,log
+    return data,indices,log
 
 
 def build_data_autoregressive(data,indices,autoregressive_order=1,

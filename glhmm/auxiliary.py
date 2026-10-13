@@ -22,6 +22,14 @@ except:
 
 
 
+
+# Number of time points processed at once by computations that would otherwise create arrays as large as the data
+# (or as Xi) for every state: the emission step and covariance update in glhmm.py, and Gamma_entropy here.
+# It only trades memory for speed; results do not depend on it (up to floating-point rounding). With 100,000 time
+# points a block of 100 channels takes 80 MB, and the Python loop over blocks costs little even for 10^7-10^8
+# time points.
+ROW_BLOCK_SIZE = 100000
+
 def slice_matrix(M,indices):
     """Slices rows of input matrix M based on indices array along axis 0.
 
@@ -136,7 +144,35 @@ def approximate_Xi(Gamma,indices):
         xi = Gamma[ind_1_1,:].T @ Gamma[ind_1_2,:]
         xi = xi / np.sum(xi)
         Xi[ind_2,:,:] = xi
-    return Xi    
+    return Xi
+
+
+def approximate_Xi_sum(Gamma,indices):
+    """Sum over time of approximate_Xi(Gamma,indices), without building the (n_samples - n_sessions, K, K) array.
+
+    approximate_Xi repeats one normalised K x K matrix per session for each of its T_j - 1 transitions, so the
+    sum over time is the sum over sessions of (T_j - 1) times that matrix.
+
+    Parameters:
+    -----------
+    Gamma : array-like of shape (n_samples, n_states)
+        The state probability time series.
+    indices : array-like of shape (n_sessions, 2)
+        The start and end indices of each trial/session in the input data.
+
+    Returns:
+    --------
+    Xi_sum : array-like of shape (1, n_states, n_states)
+        Sum over time points of the approximated joint probabilities of consecutive states.
+
+    """
+    K = Gamma.shape[1]
+    Xi_sum = np.zeros((K,K))
+    for j in range(indices.shape[0]):
+        a, b = indices[j,0], indices[j,1]
+        xi = Gamma[a:b-1,:].T @ Gamma[a+1:b,:]
+        Xi_sum += (b - a - 1) * (xi / np.sum(xi))
+    return np.expand_dims(Xi_sum,axis=0)
 
 
 @njit
@@ -567,12 +603,12 @@ def Gamma_entropy(Gamma,Xi,indices):
     Gamma_0 = Gamma[indices[:,0]]
     Gamma_0[Gamma_0 < minreal] = minreal
     Entr = -np.sum(Gamma_0 * np.log(Gamma_0))
-    # transitions
-    Xi[Xi < minreal] = minreal
-    Xi_norm = np.zeros(Xi.shape)
-    for k in range(Gamma.shape[1]):
-        Xi_norm[:,k,:] = Xi[:,k,:] / np.expand_dims(np.sum(Xi[:,k,:],axis=1),axis=1)
-    Entr -= np.sum(Xi * np.log(Xi_norm))
+    # transitions, in blocks of time points (avoids several full-size copies of Xi)
+    for a in range(0,Xi.shape[0],ROW_BLOCK_SIZE):
+        Xi_b = Xi[a:a+ROW_BLOCK_SIZE]                    # view: the clipping modifies Xi in place, as before
+        Xi_b[Xi_b < minreal] = minreal
+        Xi_norm = Xi_b / np.sum(Xi_b,axis=2,keepdims=True)
+        Entr -= np.sum(Xi_b * np.log(Xi_norm))
     return Entr
 
 def get_T(idx_data):
