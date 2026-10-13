@@ -374,13 +374,13 @@ class glhmm():
             Xb = X[t0:t1] if X is not None else None
 
             # distance
-            dist = np.zeros((Tb,))
             d = np.copy(Y[t0:t1])
             if self.mean is not None: d -= np.expand_dims(self.mean[k_mean]['Mu'],axis=0)
             if self.beta is not None: d -= (Xb @ self.beta[k_beta]['Mu'])
             if diagonal_covmat: Cd = d * C
             else: Cd = d @ C
-            for j in range(q): dist -= 0.5 * d[:,j] * Cd[:,j]
+            # squared Mahalanobis distance of each time point: sum over channels of d * (C d)
+            dist = -0.5 * np.sum(d * Cd, axis=1)
             del d, Cd
 
             # cov trace for beta
