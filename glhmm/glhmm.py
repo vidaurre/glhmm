@@ -721,15 +721,27 @@ class glhmm():
 
         else:
             T,q = Y.shape
-            if self.hyperparameters["model_mean"] != 'no': 
-                Yr = Y - np.expand_dims(np.mean(Y,axis=0),axis=0)
-            else: 
-                Yr = np.copy(Y)
             if self.hyperparameters["model_beta"] != 'no':
+                if self.hyperparameters["model_mean"] != 'no':
+                    Yr = Y - np.expand_dims(np.mean(Y,axis=0),axis=0)
+                else:
+                    Yr = np.copy(Y)
                 p = X.shape[1]
                 beta = np.linalg.inv(X.T @ X + 0.1 * np.eye(p)) @ (X.T @ Yr)
                 Yr -= X @ beta
-            r = np.max(Yr,axis=0) - np.min(Yr,axis=0)
+                r = np.max(Yr,axis=0) - np.min(Yr,axis=0)
+            else:
+                # range of each channel, in blocks of time points instead of on a full copy of the data
+                # (max and min involve no rounding, so this is identical to computing them on the copy)
+                m = np.expand_dims(np.mean(Y,axis=0),axis=0) if self.hyperparameters["model_mean"] != 'no' else None
+                for t0 in range(0,T,auxiliary.ROW_BLOCK_SIZE):
+                    Yb = Y[t0:t0+auxiliary.ROW_BLOCK_SIZE]
+                    if m is not None: Yb = Yb - m
+                    if t0 == 0:
+                        mx, mn = np.max(Yb,axis=0), np.min(Yb,axis=0)
+                    else:
+                        mx, mn = np.maximum(mx,np.max(Yb,axis=0)), np.minimum(mn,np.min(Yb,axis=0))
+                r = mx - mn
 
         if diagonal_covmat:
             shape = 0.5 * (q+0.1-1)

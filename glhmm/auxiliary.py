@@ -170,6 +170,7 @@ def approximate_Xi_sum(Gamma,indices):
     Xi_sum = np.zeros((K,K))
     for j in range(indices.shape[0]):
         a, b = indices[j,0], indices[j,1]
+        if b - a < 2: continue # no transitions in this session (approximate_Xi adds nothing for it either)
         xi = Gamma[a:b-1,:].T @ Gamma[a+1:b,:]
         Xi_sum += (b - a - 1) * (xi / np.sum(xi))
     return np.expand_dims(Xi_sum,axis=0)
@@ -604,6 +605,10 @@ def Gamma_entropy(Gamma,Xi,indices):
     Gamma_0[Gamma_0 < minreal] = minreal
     Entr = -np.sum(Gamma_0 * np.log(Gamma_0))
     # transitions, in blocks of time points (avoids several full-size copies of Xi)
+    if Xi.shape[0] != Gamma.shape[0] - indices.shape[0]:
+        raise ValueError("Xi must have one row per transition (n_samples - n_sessions = " +
+            str(Gamma.shape[0] - indices.shape[0]) + "), got " + str(Xi.shape[0]) +
+            ". The Xi returned by train() is summed over time; use decode() to get Xi for every time point.")
     for a in range(0,Xi.shape[0],ROW_BLOCK_SIZE):
         Xi_b = Xi[a:a+ROW_BLOCK_SIZE]                    # view: the clipping modifies Xi in place, as before
         Xi_b[Xi_b < minreal] = minreal
