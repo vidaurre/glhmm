@@ -374,9 +374,11 @@ class glhmm():
             Xb = X[t0:t1] if X is not None else None
 
             # distance
-            d = np.copy(Y[t0:t1])
-            if self.mean is not None: d -= np.expand_dims(self.mean[k_mean]['Mu'],axis=0)
-            if self.beta is not None: d -= (Xb @ self.beta[k_beta]['Mu'])
+            d = Y[t0:t1]
+            if self.mean is not None or self.beta is not None:
+                d = np.copy(d) # copy only when the residual is changed below
+                if self.mean is not None: d -= np.expand_dims(self.mean[k_mean]['Mu'],axis=0)
+                if self.beta is not None: d -= (Xb @ self.beta[k_beta]['Mu'])
             if diagonal_covmat: Cd = d * C
             else: Cd = d @ C
             # squared Mahalanobis distance of each time point: sum over channels of d * (C d)
@@ -951,11 +953,13 @@ class glhmm():
                 for t0 in range(0,T,nb):
                     t1 = min(t0 + nb, T)
                     g = np.expand_dims(Gamma[t0:t1,k], axis=1)
-                    d = np.copy(Y[t0:t1])
-                    if self.hyperparameters["model_mean"] != 'no': 
-                        d -= np.expand_dims(self.mean[kk_mean]["Mu"], axis=0)
-                    if self.hyperparameters["model_beta"] != 'no': 
-                        d -= (X[t0:t1] @ self.beta[kk_beta]["Mu"])
+                    d = Y[t0:t1]
+                    if self.hyperparameters["model_mean"] != 'no' or self.hyperparameters["model_beta"] != 'no':
+                        d = np.copy(d) # copy only when the residual is changed below
+                        if self.hyperparameters["model_mean"] != 'no':
+                            d -= np.expand_dims(self.mean[kk_mean]["Mu"], axis=0)
+                        if self.hyperparameters["model_beta"] != 'no':
+                            d -= (X[t0:t1] @ self.beta[kk_beta]["Mu"])
                     if diagonal_covmat:
                         S += np.sum((d ** 2) * g, axis=0)
                         if self.hyperparameters["model_beta"] != 'no': 
