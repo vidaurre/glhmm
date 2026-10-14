@@ -253,14 +253,14 @@ def test_across_subjects(
     # handle NaN values in the dataset
     D_data, R_data, confounds, permutation_matrix_update =handle_nan_values(D_data, R_data, confounds, permutation_matrix, method)
             
-    for t in tqdm(range(n_T)) if n_T > 1 & verbose ==True else range(n_T):
+    for t in tqdm(range(n_T)) if n_T > 1 and verbose else range(n_T):
         # If confounds exist, perform confound regression on the dependent variables
         D_t, R_t = deconfound_values(D_data[t, :],R_data, confounds)
 
         # Create test_statistics based on method
         test_statistics, reg_pinv = initialize_permutation_matrices(method, Nnull_samples, n_p, n_q, D_t, combine_tests, category_columns=category_columns, n_cca_components=n_cca_components)
 
-        for perm in tqdm(range(Nnull_samples)) if n_T == 1 & verbose==True else range(Nnull_samples):
+        for perm in tqdm(range(Nnull_samples)) if n_T == 1 and verbose else range(Nnull_samples):
             # Perform permutation on R_t
             Rin = R_t[permutation_matrix_update[:, perm]]
             # Calculate the permutation distribution
@@ -517,7 +517,7 @@ def test_across_trials(D_data, R_data, indices_blocks, method="multivariate", Nn
     permutation_matrix = permutation_matrix_across_trials_within_session(Nnull_samples,R_data, idx_array)
     D_data, R_data, confounds, permutation_matrix_update =handle_nan_values(D_data, R_data, confounds, permutation_matrix, method)
 
-    for t in tqdm(range(n_T)) if n_T > 1 & verbose ==True else range(n_T):
+    for t in tqdm(range(n_T)) if n_T > 1 and verbose else range(n_T):
         # If confounds exist, perform confound regression on the dependent variables
         D_t, R_t = deconfound_values(D_data[t, :],R_data, confounds)
         # Create test_statistics and the regularized pseudo-inverse of D_data
@@ -563,7 +563,7 @@ def test_across_trials(D_data, R_data, indices_blocks, method="multivariate", Nn
     elif category_columns=={} and method=='univariate':
         category_columns['t_stat_independent_cols']='all_columns'
 
-    if np.sum(np.isnan(pval))>0 & verbose:
+    if np.sum(np.isnan(pval))>0 and verbose:
         print("Warning: Permutation testing resulted in p-values equal to NaN.\n")
         print("This may indicate an issue with the input data. Please review your data.")
         
@@ -785,7 +785,7 @@ def test_across_sessions_within_subject(D_data, R_data, indices_blocks, method="
             test_indices_list_update[col] = test_indices_list[col].copy()
             train_indices_list_update[col] = train_indices_list[col].copy()
 
-    for t in tqdm(range(n_T)) if n_T > 1 & verbose==True else range(n_T):
+    for t in tqdm(range(n_T)) if n_T > 1 and verbose else range(n_T):
         # If confounds exist, perform confound regression on the dependent variables
         D_t, R_t = deconfound_values(D_data[t, :],R_data, confounds)
 
@@ -834,7 +834,7 @@ def test_across_sessions_within_subject(D_data, R_data, indices_blocks, method="
 
     if np.isscalar(pval) is True:
         print("Exporting the base statistics only")
-    elif np.sum(np.isnan(pval))>0 & verbose:
+    elif np.sum(np.isnan(pval))>0 and verbose:
         print("Warning: Permutation testing resulted in p-values equal to NaN.\n")
         print("This may indicate an issue with the input data. Please review your data.")
               
@@ -1024,7 +1024,7 @@ def test_across_state_visits(D_data, R_data , method="multivariate", Nnull_sampl
     outcome_names = [f"Response  {i+1}" for i in range(pval.shape[-1])] if outcome_names==[] or len(outcome_names)!=pval.shape[-1] else outcome_names
 
     # Print tqdm over n_T if there are more than one timepoint
-    for t in tqdm(range(n_T)) if n_T > 1 & verbose==True else range(n_T):
+    for t in tqdm(range(n_T)) if n_T > 1 and verbose else range(n_T):
         # Correct for confounds and center data_t
         data_t, _ = deconfound_values(R_data,None, confounds)
 
@@ -1040,7 +1040,7 @@ def test_across_state_visits(D_data, R_data , method="multivariate", Nnull_sampl
             # Create test_statistics and pval_perms based on method
             test_statistics, reg_pinv = initialize_permutation_matrices(method, Nnull_samples, n_p, n_q, vpath_data[0,:,:], category_columns=category_columns)
             # Perform permutation testing
-            for perm in tqdm(range(Nnull_samples)) if n_T == 1 & verbose==True else range(n_T):
+            for perm in tqdm(range(Nnull_samples)) if n_T == 1 and verbose else range(Nnull_samples):
                 # Redo vpath_surrogate calculation if the number of states are not the same (out of 1000 permutations it happens maybe 1-2 times with this demo dataset)
                 
                 if vpath_surrogates is None:
@@ -1137,7 +1137,7 @@ def test_across_state_visits(D_data, R_data , method="multivariate", Nnull_sampl
         category_columns['t_stat_independent_cols']='all_columns'
 
 
-    if np.sum(np.isnan(pval))>0 & verbose:
+    if np.sum(np.isnan(pval))>0 and verbose:
         print("Warning: Permutation testing resulted in p-values equal to NaN.")
         print("This may indicate an issue with the input data. Please review your data.")
         
