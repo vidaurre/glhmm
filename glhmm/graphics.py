@@ -30,7 +30,6 @@ import seaborn as sns
 from nilearn import plotting, surface, image
 from nilearn.surface import vol_to_surf
 from nilearn.image import resample_to_img
-from nilearn._utils.niimg_conversions import check_niimg_3d
 
 from . import utils
 from . statistics import resolve_figure_directory, generate_filename, override_dict_defaults
