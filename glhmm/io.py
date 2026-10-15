@@ -118,22 +118,31 @@ def read_flattened_hmm_mat(file):
     connectivity = np.array(hmm_mat["train"]["S"])
     Pstructure = np.array(hmm_mat["train"]["Pstructure"], dtype=bool)
     Pistructure = np.squeeze(np.array(hmm_mat["train"]["Pistructure"], dtype=bool))
-    shared_covmat = (covtype == 'shareddiag') or (covtype == 'sharedfull') 
-    diagonal_covmat = (covtype == 'shareddiag') or (covtype == 'diag') 
+    shared_covmat = (covtype == 'shareddiag') or (covtype == 'sharedfull')
+    diagonal_covmat = (covtype == 'shareddiag') or (covtype == 'diag')
+    # fully-flattened per-state format: keys like 'state_0_Omega_Gam_rate', no top-level 'prior'/'state'
+    _state_flat = "prior" not in hmm_mat and "state" not in hmm_mat
 
-    if "Omega" in hmm_mat['prior']:
+    if _state_flat:
+        prior_Omega_Gam_rate = np.array(hmm_mat["state_0_prior_Omega_Gam_rate"])
+        prior_Omega_Gam_shape = int(hmm_mat["state_0_prior_Omega_Gam_shape"])
+    elif "Omega" in hmm_mat['prior']:
         prior_Omega_Gam_rate = np.array(hmm_mat["prior_Omega_Gam_rate"])
         prior_Omega_Gam_shape = int(hmm_mat["prior_Omega_Gam_shape"])
     else:
         prior_Omega_Gam_rate = hmm_mat['state'][0]['prior']['Omega']['Gam_rate']
-        prior_Omega_Gam_shape = hmm_mat['state'][0]['prior']['Omega']['Gam_shape']   
+        prior_Omega_Gam_shape = hmm_mat['state'][0]['prior']['Omega']['Gam_shape']
     if diagonal_covmat: prior_Omega_Gam_rate = np.squeeze(prior_Omega_Gam_rate)
     q = prior_Omega_Gam_rate.shape[0]
 
-    if "Mu_W" in hmm_mat['state'][0]:
+    if not _state_flat and "Mu_W" in hmm_mat['state'][0]:
         p = hmm_mat['state'][0]["Mu_W"].shape[0]
         if model_mean == 'state': p -= 1
-    else: p = 0
+    elif _state_flat and "state_0_Mu_W" in hmm_mat:
+        p = np.array(hmm_mat["state_0_Mu_W"]).shape[0]
+        if model_mean == 'state': p -= 1
+    else:
+        p = 0
 
     hmm = glhmm.glhmm(
         K=K,
@@ -205,8 +214,12 @@ def read_flattened_hmm_mat(file):
         for k in range(K):
             hmm.Sigma.append({})
             hmm.Sigma[k]["rate"] = np.zeros(q)
-            hmm.Sigma[k]["rate"][:] = hmm_mat["state"][k]["Omega"]["Gam_rate"]
-            hmm.Sigma[k]["shape"] = int(np.array(hmm_mat["state"][k]["Omega"]["Gam_shape"]))
+            if _state_flat:
+                hmm.Sigma[k]["rate"][:] = np.array(hmm_mat[f"state_{k}_Omega_Gam_rate"])
+                hmm.Sigma[k]["shape"] = int(np.array(hmm_mat[f"state_{k}_Omega_Gam_shape"]))
+            else:
+                hmm.Sigma[k]["rate"][:] = hmm_mat["state"][k]["Omega"]["Gam_rate"]
+                hmm.Sigma[k]["shape"] = int(np.array(hmm_mat["state"][k]["Omega"]["Gam_shape"]))
     elif not diagonal_covmat and shared_covmat:
         hmm.Sigma.append({})
         hmm.Sigma[0]["rate"] = hmm_mat["Omega"]["Gam_rate"]
@@ -215,9 +228,14 @@ def read_flattened_hmm_mat(file):
     else: # not diagonal_covmat and not shared_covmat
         for k in range(K):
             hmm.Sigma.append({})
-            hmm.Sigma[k]["rate"] = hmm_mat["state"][k]["Omega"]["Gam_rate"]
-            hmm.Sigma[k]["irate"] = hmm_mat["state"][k]["Omega"]["Gam_irate"]
-            hmm.Sigma[k]["shape"] = int(hmm_mat["state"][k]["Omega"]["Gam_shape"])
+            if _state_flat:
+                hmm.Sigma[k]["rate"] = np.array(hmm_mat[f"state_{k}_Omega_Gam_rate"])
+                hmm.Sigma[k]["irate"] = np.array(hmm_mat[f"state_{k}_Omega_Gam_irate"])
+                hmm.Sigma[k]["shape"] = int(hmm_mat[f"state_{k}_Omega_Gam_shape"])
+            else:
+                hmm.Sigma[k]["rate"] = hmm_mat["state"][k]["Omega"]["Gam_rate"]
+                hmm.Sigma[k]["irate"] = hmm_mat["state"][k]["Omega"]["Gam_irate"]
+                hmm.Sigma[k]["shape"] = int(hmm_mat["state"][k]["Omega"]["Gam_shape"])
 
     #hmm.init_dynamics()
     hmm.P = np.array(hmm_mat["P"])
