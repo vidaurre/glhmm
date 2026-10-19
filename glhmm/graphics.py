@@ -3744,7 +3744,7 @@ def plot_connectivity_maps(connectivity_map, parcellation_file, filename=None, f
     for i in trange(conn_map.shape[0], desc="Saving images"):
 
         # Only show colorbar if matrix isn't all zeros
-        kwargs["colorbar"] = np.any(conn_map[i][~np.eye(conn_map[i].shape[-1], dtype=bool)] != 0)
+        kwargs["colorbar"] = bool(np.any(conn_map[i][~np.eye(conn_map[i].shape[-1], dtype=bool)] != 0))
         
         base = figure_filenames if isinstance(figure_filenames, str) else base_filename
         PATH_FIG = os.path.join(PATH_OUTPUT, __generate_filename(base, i, fig_format)) if save_figures else None
