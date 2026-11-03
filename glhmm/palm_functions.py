@@ -1138,16 +1138,16 @@ def palm_quickperms(EB, M=None, nP=1000, CMC=False, EE=True):
     Pset (list):
         A list containing the generated permutations.
     """
-    # Filter out the specific RuntimeWarning
-    warnings.filterwarnings("ignore", message="overflow encountered in exp")
-    # Reindex the input matrix for palm methods with 'fixleaves'
-    EB2 = palm_reindex(EB, 'fixleaves')
-    
-    # Generate a palm tree structure from the reindexed matrix
-    Ptree = palm_tree(EB2)
-    
-    # Generate a set of shufflings (permutations) based on the palm tree structure
-    Pset = palm_shuftree(Ptree, nP, CMC, EE)
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", message="overflow encountered in exp")
+        # Reindex the input matrix for palm methods with 'fixleaves'
+        EB2 = palm_reindex(EB, 'fixleaves')
+
+        # Generate a palm tree structure from the reindexed matrix
+        Ptree = palm_tree(EB2)
+
+        # Generate a set of shufflings (permutations) based on the palm tree structure
+        Pset = palm_shuftree(Ptree, nP, CMC, EE)
     # Need to change the number so the index startes from 0
     # Pset = Pset-1
     return Pset

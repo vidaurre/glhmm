@@ -520,8 +520,6 @@ def run_stability_training(Y, indices, state_range, n_repeats, save_dir,
         gammas = []
 
         for repeat in range(n_repeats):
-            np.random.seed(repeat)
-
             hmm = _glhmm_mod.glhmm(
                 K=K,
                 covtype=covtype,
@@ -530,7 +528,7 @@ def run_stability_training(Y, indices, state_range, n_repeats, save_dir,
                 preproclogY=log_preproc,
             )
 
-            Gamma1, _, FE1 = hmm.train(Y=Y, indices=indices, options=options)
+            Gamma1, _, FE1 = hmm.train(Y=Y, indices=indices, options=options, seed=repeat)
 
             with open(save_dir / f'hmm_K{K}_rep{repeat + 1}.pkl', 'wb') as f:
                 pickle.dump({'hmm': hmm, 'Gamma': Gamma1, 'FE': FE1}, f)
@@ -633,8 +631,6 @@ def run_stability_training_stochastic(files, state_range, n_repeats, save_dir,
         gammas = []
 
         for repeat in range(n_repeats):
-            np.random.seed(repeat)
-
             hmm = _glhmm_mod.glhmm(
                 K=K,
                 covtype=covtype,
@@ -643,7 +639,7 @@ def run_stability_training_stochastic(files, state_range, n_repeats, save_dir,
                 preproclogY=log_preproc,
             )
 
-            _, _, FE1 = hmm.train(files=files, options=options)
+            _, _, FE1 = hmm.train(files=files, options=options, seed=repeat)
             Gamma1, _, _ = hmm.decode(X=None, Y=None, files=files)
 
             with open(save_dir / f'hmm_K{K}_rep{repeat + 1}.pkl', 'wb') as f:
