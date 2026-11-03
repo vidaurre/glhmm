@@ -163,15 +163,20 @@ def show_temporal_statistic(Gamma,indices, statistic='FO',type_plot='barplot'):
 
     Raises:
     -------
-    Exception
+    ValueError
         - Statistic is not one of 'FO', 'switching_rate' or 'FO_entropy'.
         - type_plot is 'boxplot' and there are less than 10 sessions.
         - type_plot is 'matrix' and there is only one session.
     """
     
-    s = eval("utils.get_" + statistic)(Gamma,indices)
-    if statistic not in ["FO","switching_rate","FO_entropy"]:
-        raise Exception("statistic has to be 'FO','switching_rate' or 'FO_entropy'") 
+    statistics = {
+        "FO": utils.get_FO,
+        "switching_rate": utils.get_switching_rate,
+        "FO_entropy": utils.get_FO_entropy,
+    }
+    if statistic not in statistics:
+        raise ValueError("statistic has to be 'FO','switching_rate' or 'FO_entropy'")
+    s = statistics[statistic](Gamma, indices)
     N,K = s.shape
 
     sns.set(style='whitegrid')
