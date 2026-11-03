@@ -5,6 +5,8 @@ Permutation testing from Gaussian Linear Hidden Markov Model
 
 import numpy as np
 import pandas as pd
+import functools
+import inspect
 import random
 import math
 import warnings
@@ -24,11 +26,29 @@ import requests
 import os
 import re
 
+def _seed_global_rng(func):
+    """Seed numpy's legacy global RNG for one call and restore the caller's state."""
+    signature = inspect.signature(func)
+
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        seed = signature.bind_partial(*args, **kwargs).arguments.get("seed")
+        state = np.random.get_state()
+        if seed is not None:
+            np.random.seed(seed)
+        try:
+            return func(*args, **kwargs)
+        finally:
+            np.random.set_state(state)
+
+    return wrapper
+
+@_seed_global_rng
 def test_across_subjects(
     D_data, R_data, method="multivariate", Nnull_samples=10_000, confounds=None,  
     indices_blocks=None,  permute_within_blocks=False, permute_between_blocks=False, dict_family=None,   
     FWER_correction=False, combine_tests=False, detect_categorical=False, category_limit=10, n_cca_components=1,  
-    predictor_names=[], outcome_names=[], return_base_statistics=True, verbose=True):
+    predictor_names=[], outcome_names=[], return_base_statistics=True, verbose=True, seed=None):
     """
     Perform permutation testing across subjects.
 
@@ -335,9 +355,10 @@ def test_across_subjects(
 
 
 
-def test_across_trials(D_data, R_data, indices_blocks, method="multivariate", Nnull_samples=10_000, confounds=None, 
+@_seed_global_rng
+def test_across_trials(D_data, R_data, indices_blocks, method="multivariate", Nnull_samples=10_000, confounds=None,
                        FWER_correction=False, combine_tests=False, detect_categorical=False, category_limit=10, n_cca_components=1,
-                       predictor_names=[], outcome_names=[], return_base_statistics=True, verbose=True):
+                       predictor_names=[], outcome_names=[], return_base_statistics=True, verbose=True, seed=None):
     """
     Perform permutation testing across different trials within a session.
 
@@ -584,9 +605,10 @@ def test_across_trials(D_data, R_data, indices_blocks, method="multivariate", Nn
         result['pval_t_multivariate'] = f_t_stats['perm_p_values_t']
     return result
 
-def test_across_sessions_within_subject(D_data, R_data, indices_blocks, method="multivariate", Nnull_samples=10_000, confounds=None, 
+@_seed_global_rng
+def test_across_sessions_within_subject(D_data, R_data, indices_blocks, method="multivariate", Nnull_samples=10_000, confounds=None,
                                         FWER_correction=False, combine_tests=False, detect_categorical=False, category_limit=10, n_cca_components=1,
-                                        predictor_names=[], outcome_names=[], return_base_statistics=True, verbose = True):
+                                        predictor_names=[], outcome_names=[], return_base_statistics=True, verbose = True, seed=None):
     """
     Perform permutation testing across sessions while maintaining trial order.
 
@@ -856,10 +878,11 @@ def test_across_sessions_within_subject(D_data, R_data, indices_blocks, method="
     return result
 
  
-def test_across_state_visits(D_data, R_data , method="multivariate", Nnull_samples=10_000, confounds=None, 
+@_seed_global_rng
+def test_across_state_visits(D_data, R_data , method="multivariate", Nnull_samples=10_000, confounds=None,
                             comparison_statistic ="mean", state_comparison="larger",
                              FWER_correction=False, detect_categorical = False, category_limit=10,
-                             vpath_surrogates=None, predictor_names=[], outcome_names=[], return_base_statistics=True, verbose=True):
+                             vpath_surrogates=None, predictor_names=[], outcome_names=[], return_base_statistics=True, verbose=True, seed=None):
     """
     Perform permutation testing across state visits.
 
@@ -5054,8 +5077,7 @@ def train_test_indices(Rin, Din, indices_blocks, method, category_limit= 10):
     test_indices_list (list)
     """
     
-    seed =0
-    np.random.seed(seed)  # Set seed for reproducibility
+    seed = 0  # deterministic train/test split
     # detect nan values
     nan_values = np.sum(np.isnan(Rin))>0
     # Expand dimension of Rin if it is 1D
@@ -5236,7 +5258,6 @@ def train_test_indices(Rin, Din, indices_blocks, method, category_limit= 10):
 
     for col in range(Rin.shape[-1]):
         indices_list.append(~(~np.isnan(Rin[:,col])))
-    np.random.seed(None)
     return train_indices_list, test_indices_list, indices_list
 
 def train_test_update_indices(train_indices_list, test_indices_list, nan_indices):

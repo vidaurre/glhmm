@@ -495,14 +495,16 @@ class glhmm():
         return status
 
         
-    def __init_Gamma(self,X,Y,indices,options):
+    def __init_Gamma(self,X,Y,indices,options,rng=None):
 
+        if rng is None:
+            rng = np.random.default_rng()
         verbose = options["verbose"]
         options["verbose"] = False
         if options["initrep"] == 0:
             self.__init_prior_P_Pi() # init P,Pi priors
             self.__update_dynamics() # make P,Pi based on priors
-            Gamma = self.sample_Gamma(indices)
+            Gamma = self.sample_Gamma(indices, rng=rng)
             options["verbose"] = verbose
             return Gamma
 
@@ -513,7 +515,10 @@ class glhmm():
             options_r["cyc"] = options_r["initcyc"]
             options_r["stochastic"] = False
             options_r["initrep"] = 0
-            Gamma_r,_,fe_r = hmm_r.train(X,Y,indices,options=options_r)
+            Gamma_r,_,fe_r = hmm_r.train(
+                X, Y, indices, options=options_r,
+                seed=int(rng.integers(0, 2**31 - 1)),
+            )
 
             fe[r] = fe_r[-1]
             if (r == 0) or (fe[r] < np.min(fe[0:r])):
@@ -1106,20 +1111,24 @@ class glhmm():
         self.__init_obsdist(X,Y,Gamma)
 
 
-    def __init_stochastic(self,files,options):
+    def __init_stochastic(self,files,options,rng=None):
 
+        if rng is None:
+            rng = np.random.default_rng()
         N = len(files)
-        I = np.random.choice(np.arange(N), size=options["initNbatch"], replace=False)
+        I = rng.choice(np.arange(N), size=options["initNbatch"], replace=False)
         X,Y,indices,_ = io.load_files(files,I)
-        Gamma = self.__init_Gamma(X,Y,indices,options)
+        Gamma = self.__init_Gamma(X,Y,indices,options,rng)
         self.__init_priors(files=files)
         self.__init_dynamics(Gamma,indices=indices)
         self.__init_obsdist_stochastic(files,I,Gamma)
         self.__update_priors()
 
 
-    def __train_stochastic(self,files,Gamma,options):
-        
+    def __train_stochastic(self,files,Gamma,options,rng=None):
+
+        if rng is None:
+            rng = np.random.default_rng()
         options = self.__check_options_stochastic(options,files)
         
         N = len(files)
@@ -1129,10 +1138,10 @@ class glhmm():
 
         # init model with a subset of subjects
         if not self.trained:
-            if Gamma is None: 
-                self.__init_stochastic(files,options)
+            if Gamma is None:
+                self.__init_stochastic(files,options,rng)
             else:
-                I = np.random.choice(np.arange(N), size=options["initNbatch"], replace=False)
+                I = rng.choice(np.arange(N), size=options["initNbatch"], replace=False)
                 X,Y,indices,_ = io.load_files(files,I)
                 _,_,indices_all,_ = io.load_files(files,do_only_indices=True)
                 Gamma_subset = auxiliary.slice_matrix(Gamma,indices)
@@ -1174,7 +1183,7 @@ class glhmm():
         for it in range(options["cyc"]):
 
             rho = (it + 2)**(-options["forget_rate"])
-            I = np.random.choice(np.arange(N), size=options["Nbatch"], replace=False, p=sampling_prob)
+            I = rng.choice(np.arange(N), size=options["Nbatch"], replace=False, p=sampling_prob)
             n_used[I] += 1
             n_used = n_used - np.min(n_used) + 1
             ever_used[I] = True
@@ -1504,7 +1513,7 @@ class glhmm():
                 return Gamma,Xi,scale
 
 
-    def sample_Gamma(self,size):
+    def sample_Gamma(self,size,seed=None,rng=None):
         """Generates Gamma, for timeseries of lengths specified in variable size.
 
         Parameters:
@@ -1513,6 +1522,8 @@ class glhmm():
             Array of shape (n_sessions,) or (n_sessions, 2). If `size` is 1-dimensional,
             each element represents the length of a session. If `size` is 2-dimensional,
             each row of `size` represents the start and end indices of a session in a timeseries.
+        seed : int or None, optional
+            Seed for the random number generator. Pass an integer for reproducible output.
 
         Returns:
         --------
@@ -1536,7 +1547,8 @@ class glhmm():
 
         Gamma = np.zeros((np.sum(T),K))
         N = indices.shape[0]
-        rng = np.random.default_rng()
+        if rng is None:
+            rng = np.random.default_rng(seed)
 
         for j in range(N):
             tt = np.arange(indices[j,0],indices[j,1])
@@ -1550,7 +1562,7 @@ class glhmm():
         return Gamma
 
 
-    def sample(self,size,X=None,Gamma=None):
+    def sample(self,size,X=None,Gamma=None,seed=None):
         """Generates Gamma and Y for timeseries of lengths specified in variable size.
 
         Parameters:
@@ -1562,6 +1574,8 @@ class glhmm():
             The timeseries of set of variables 1. 
         Gamma : array of shape (n_samples, n_states), default=None
             The state probability timeseries.
+        seed : int or None, optional
+            Seed for the random number generator. Pass an integer for reproducible output.
 
         Returns:
         --------
@@ -1599,15 +1613,15 @@ class glhmm():
         else:
             q = self.Sigma[0]["rate"].shape[0]
         
-        if Gamma is None:
-            Gamma = self.sample_Gamma(size)
+        rng = np.random.default_rng(seed)
 
-        rng = np.random.default_rng()
+        if Gamma is None:
+            Gamma = self.sample_Gamma(size, rng=rng)
 
         if (self.hyperparameters["model_beta"] != 'no') and (X is None):
             beta = self.get_beta(0)
             p = beta.shape[0]
-            X = np.random.normal(size=(np.sum(T),p))
+            X = rng.normal(size=(np.sum(T),p))
 
         # Y, mean
         Y = np.zeros((np.sum(T),q))
@@ -2431,7 +2445,7 @@ class glhmm():
             return hmm_dual
 
 
-    def initialize(self,p,q):
+    def initialize(self,p,q,seed=None):
         """
         Initialize the parameters of the HMM with initial random values.
         IMPORTANT: This should not be run before training. 
@@ -2441,20 +2455,23 @@ class glhmm():
         Parameters:
         -----------
         p : number of channels in X (not used if only Y is modelled)
-        q : number of channels in Y      
+        q : number of channels in Y
+        seed : int or None, optional
+            Seed for the random initial values and training.
         """
 
         T = 1000
-        if self.hyperparameters["model_beta"] != 'no': X = np.random.random((T,p))
+        rng = np.random.default_rng(seed)
+        if self.hyperparameters["model_beta"] != 'no': X = rng.random((T,p))
         else: X = None
-        Y = np.random.random((T,q))
+        Y = rng.random((T,q))
         options = {}
         options["cyc"] = 1
         options["initrep"] = 0
-        self.train(X=X,Y=Y,options=options)
+        self.train(X=X,Y=Y,options=options,seed=seed)
 
 
-    def train(self,X=None,Y=None,indices=None,files=None,Gamma=None,Xi=None,scale=None,options=None):
+    def train(self,X=None,Y=None,indices=None,files=None,Gamma=None,Xi=None,scale=None,options=None,seed=None):
         """
         Train the GLHMM on input data X and Y, which most general formulation is
         Y = mu_k + X beta_k + noise
@@ -2485,6 +2502,8 @@ class glhmm():
             the E-step keeps Xi only summed over time, which is all the update of the transition probabilities
             needs, and processes the sessions in groups of options["sessions_per_chunk"] (default 50). This gives
             the same model as storing Xi for every time point, with much less memory.
+        seed : int or None, optional
+            Seed for random initialisation and stochastic batch selection. Pass an integer for reproducible training.
 
         Returns:
         --------
@@ -2512,7 +2531,8 @@ class glhmm():
         """
 
         stochastic = (options is not None) and ("stochastic" in options) and (options["stochastic"])
-        
+        rng = np.random.default_rng(seed)
+
         if (files is not None) and (Y is not None) and (not stochastic):
             warnings.warn("Argument 'files' cannot be used if the data (Y) is also provided")
 
@@ -2527,7 +2547,7 @@ class glhmm():
                 raise Exception("For stochastic learning, argument 'files' must be provided")
             if (X is not None) or (Y is not None):
                 warnings.warn("X and Y are not used in stochastic learning")
-            fe = self.__train_stochastic(files,Gamma,options)
+            fe = self.__train_stochastic(files,Gamma,options,rng)
             return np.empty(0),np.empty(0),fe
 
         options = self.__check_options(options)
@@ -2545,9 +2565,9 @@ class glhmm():
         if options["verbose"]: start = time.time()
 
         if not self.trained:
-            if Gamma is None: 
-                Gamma = self.__init_Gamma(X,Y,indices,options)
-            elif Gamma.shape != (Y.shape[0],K): 
+            if Gamma is None:
+                Gamma = self.__init_Gamma(X,Y,indices,options,rng)
+            elif Gamma.shape != (Y.shape[0],K):
                 raise Exception('Supplied initial Gamma has not the correct dimensions')
             self.__init_priors(X,Y)
             self.__init_dynamics(Gamma,indices=indices)
