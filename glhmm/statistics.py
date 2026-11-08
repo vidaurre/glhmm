@@ -6735,7 +6735,7 @@ def download_file_with_progress_bar(url: str, dest_path: Path):
         Path to save the downloaded file.
 
     """
-    response = requests.get(url, stream=True)
+    response = requests.get(url, stream=True, timeout=30)
     response.raise_for_status()  # Raise an error for bad responses
     total_size = int(response.headers.get('content-length', 0))  # Get the file size from headers
     block_size = 1024  # 1 Kilobyte per block
