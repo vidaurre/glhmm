@@ -17,7 +17,32 @@ from glhmm import glhmm as _glhmm_mod
 
 from scipy.optimize import linear_sum_assignment
 
-def get_FO(Gamma,indices,summation=False):
+def segment_groups(indices, session_of_segment):
+    """Groups the rows of indices by session, for sessions that consist of several segments
+    (e.g. when data were removed between them).
+
+    Parameters:
+    -----------
+    indices : array-like of shape (n_segments, 2)
+        The start and end indices of each segment.
+    session_of_segment : array-like of shape (n_segments,) or None
+        The session of each segment. If None, every row of indices is its own session.
+
+    Returns:
+    --------
+    groups : list of arrays
+        For each session, the rows of indices that belong to it.
+
+    """
+    if session_of_segment is None:
+        return [np.array([j]) for j in range(indices.shape[0])]
+    session_of_segment = np.asarray(session_of_segment)
+    if session_of_segment.shape[0] != indices.shape[0]:
+        raise ValueError("session_of_segment must have one entry per row of indices")
+    return [np.where(session_of_segment == s)[0] for s in np.unique(session_of_segment)]
+
+
+def get_FO(Gamma,indices,summation=False,session_of_segment=None):
     """Calculates the fractional occupancy of each state.
     
     Parameters:
@@ -28,6 +53,10 @@ def get_FO(Gamma,indices,summation=False):
         The start and end indices of each trial/session in the input data.
     summation : bool, optional, default=False
         If True, the sum of each row is not normalized, otherwise it is.
+    session_of_segment : array-like of shape (n_segments,), optional, default=None
+        When each session consists of several segments (rows of indices), the session of each
+        segment; the occupancy is then computed over all samples of each session (one row per
+        session, in the order of the sorted session labels).
 
     Returns:
     --------
@@ -36,12 +65,12 @@ def get_FO(Gamma,indices,summation=False):
 
     """
 
-    N = indices.shape[0]
+    groups = segment_groups(indices, session_of_segment)
     K = Gamma.shape[1]
-    FO = np.zeros((N,K))
-    for j in range(N):
-        ind = np.arange(indices[j,0],indices[j,1])
-        FO[j,:] = np.sum(Gamma[ind,:],axis=0)
+    FO = np.zeros((len(groups),K))
+    for j, rows in enumerate(groups):
+        for r in rows:
+            FO[j,:] += np.sum(Gamma[indices[r,0]:indices[r,1],:],axis=0)
         if not summation:
             FO[j,:] /= np.sum(FO[j,:])
     return FO
@@ -116,7 +145,7 @@ def get_state_evoked_response(Gamma,indices):
     return ser
 
 
-def get_switching_rate(Gamma,indices):
+def get_switching_rate(Gamma,indices,session_of_segment=None):
     """Calculates the switching rate.
 
     The first argument can also be a viterbi path (vpath).
@@ -127,6 +156,10 @@ def get_switching_rate(Gamma,indices):
         The Gamma represents the state probability timeseries and the vpath represents the most likely state sequence.
     indices : array-like of shape (n_sessions, 2)
         The start and end indices of each trial/session in the input data.
+    session_of_segment : array-like of shape (n_segments,), optional, default=None
+        When each session consists of several segments (rows of indices), the session of each
+        segment; the changes within all segments of a session are then pooled (no change is
+        counted across the gap between two segments).
 
     Returns:
     ------------
@@ -134,12 +167,16 @@ def get_switching_rate(Gamma,indices):
         The switching rate matrix.
 
     """
-    N = indices.shape[0]
+    groups = segment_groups(indices, session_of_segment)
     K = Gamma.shape[1]
-    SR = np.zeros((N,K))
-    for j in range(N):
-        ind = np.arange(indices[j,0],indices[j,1])
-        SR[j,:] = np.mean(np.abs(Gamma[ind[1:],:]-Gamma[ind[0:-1],:]),axis=0)
+    SR = np.zeros((len(groups),K))
+    for j, rows in enumerate(groups):
+        total, steps = np.zeros(K), 0
+        for r in rows:
+            g = Gamma[indices[r,0]:indices[r,1],:]
+            total += np.sum(np.abs(g[1:,:]-g[:-1,:]),axis=0)
+            steps += g.shape[0] - 1
+        SR[j,:] = total / steps
     return SR
 
 
@@ -148,8 +185,8 @@ def get_visits(vpath,k,threshold=0):
 
     Parameters:
     ---------------
-    vpath : array-like of shape (n_samples,)
-        The viterbi path represents the most likely state sequence.
+    vpath : array-like of shape (n_samples, n_states)
+        The viterbi path (one-hot) represents the most likely state sequence.
     k : int
         The state for which to compute the visits.
     threshold : int, optional, default=0
@@ -160,7 +197,8 @@ def get_visits(vpath,k,threshold=0):
     lengths : list of floats
         A list of visit durations for state k, where each duration is greater than the threshold.
     onsets : list of ints
-        A list of onset time points for each visit.
+        A list of onset time points for each visit, in the same order as lengths
+        (visits below the threshold are left out of both).
 
     Notes:
     ------
@@ -178,20 +216,23 @@ def get_visits(vpath,k,threshold=0):
         if len(t)==0: 
             break
         t = t[0]
-        onsets.append(t)
         tend = np.where(vpath_k[t:]==0)[0]
         if len(tend)==0: 
             length_visit = len(vpath_k)-t
-            if length_visit > threshold: lengths.append(float(length_visit))
+            if length_visit > threshold:
+                lengths.append(float(length_visit))
+                onsets.append(t)
             break
         tend = tend[0]
         length_visit = tend
-        if length_visit > threshold: lengths.append(float(length_visit))
+        if length_visit > threshold:
+            lengths.append(float(length_visit))
+            onsets.append(t)
         t += tend
     return lengths,onsets
 
 
-def get_life_times(vpath,indices,threshold=0):
+def get_life_times(vpath,indices,threshold=0,session_of_segment=None):
     """Calculates the average, median and maximum life times for each state.
 
     Parameters:
@@ -202,11 +243,17 @@ def get_life_times(vpath,indices,threshold=0):
         The start and end indices of each trial/session in the input data.
     threshold : int, optional, default=0
         A threshold value used to exclude visits with a duration below this value.
+    session_of_segment : array-like of shape (n_segments,), optional, default=None
+        When each session consists of several segments (rows of indices), the session of each
+        segment; the visits of all segments of a session are then pooled (no visit spans the gap
+        between two segments).
 
     Returns:
     --------
     meanLF : array-like of shape (n_sessions, n_states)
         The average visit duration for each state in each trial/session.
+        NaN for a state with no visits (above the threshold) in that session, since its
+        life time is not defined; use np.nanmean to average over sessions or states.
     medianLF : array-like of shape (n_sessions, n_states)
         The median visit duration for each state in each trial/session.
     maxLF : array-like of shape (n_sessions, n_states)
@@ -219,15 +266,18 @@ def get_life_times(vpath,indices,threshold=0):
     This function uses the `get_visits` function to compute the visits and exclude those below the threshold.
 
     """
-    N = indices.shape[0]
+    groups = segment_groups(indices, session_of_segment)
+    N = len(groups)
     K = vpath.shape[1]    
-    meanLF = np.zeros((N,K)) 
-    medianLF = np.zeros((N,K)) 
-    maxLF = np.zeros((N,K)) 
-    for j in range(N):
-        ind = np.arange(indices[j,0],indices[j,1]).astype(int)
+    meanLF = np.full((N,K),np.nan)
+    medianLF = np.full((N,K),np.nan)
+    maxLF = np.full((N,K),np.nan)
+    for j, rows in enumerate(groups):
         for k in range(K):
-            visits,_ = get_visits(vpath[ind,:],k,threshold=threshold)
+            visits = []
+            for r in rows:
+                ind = np.arange(indices[r,0],indices[r,1]).astype(int)
+                visits += get_visits(vpath[ind,:],k,threshold=threshold)[0]
             if len(visits) > 0:
                 meanLF[j,k] = statistics.mean(visits)
                 medianLF[j,k] = statistics.median(visits)
@@ -375,6 +425,37 @@ def get_gamma_similarity(gamma1, gamma2):
 # ---------------------------------------------------------------------------
 # Stability-training helpers
 # ---------------------------------------------------------------------------
+
+def fe_still_decreasing(fe, W=10):
+    """
+    Check whether the free energy was still going down at the end of training.
+
+    The stochastic free energy goes up and down from cycle to cycle, so instead of single cycles
+    this compares the mean of the last W cycles with the mean of the W cycles before. It counts
+    as still decreasing if that drop is both more than 0.1% of the total drop so far, and bigger
+    than the cycle-to-cycle noise (standard deviation of the changes over those 2*W cycles).
+    This is the same check that glhmm uses to warn at the end of stochastic training.
+
+    Parameters:
+    --------------
+    fe (array-like):
+        Free energy per training cycle, i.e. the third output of ``hmm.train()``.
+    W (int, optional), default=10:
+        Number of cycles in each window.
+
+    Returns:
+    ----------
+    still_decreasing (bool):
+        True if the free energy was still going down. False if it was not, or if there are
+        fewer than 2*W cycles.
+    """
+    fe = np.asarray(fe, dtype=float)
+    if len(fe) < 2*W:
+        return False
+    fe_prev, fe_last = np.mean(fe[-2*W:-W]), np.mean(fe[-W:])
+    drop = fe_prev - fe_last
+    return bool((drop / abs(fe_last - fe[0]) > 1e-3) and (drop > np.std(np.diff(fe[-2*W:]))))
+
 
 def load_stability_results(save_dir):
     """

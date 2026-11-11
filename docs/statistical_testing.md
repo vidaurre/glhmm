@@ -23,6 +23,14 @@ The right test depends on how your data are structured:
 
 ---
 
+## Running permutations in parallel
+
+All tests take an `n_jobs` argument (default `1`). With `n_jobs > 1`, the permutations are spread over that many CPU cores using joblib: across subjects, the permutations of each timepoint are split into blocks; across trials and across sessions, each timepoint runs on its own core; across visits, each permutation (or, for `method="osa"`, each pair of states) does. The statistics are calculated in the same way as with `n_jobs=1`, and for tests across subjects and across trials the results are identical for the same random seed.
+
+For testing across visits, the surrogate Viterbi paths are generated inside the parallel jobs, so setting `np.random.seed` does not make a parallel run reproducible. To get the same results as with `n_jobs=1`, generate the surrogates first with `statistics.surrogate_state_time_matrix` and pass them to `test_across_state_visits` as `vpath_surrogates`.
+
+---
+
 ## Further reading
 
 The statistical testing framework is described in full in:

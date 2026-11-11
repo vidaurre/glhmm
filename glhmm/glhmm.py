@@ -418,11 +418,12 @@ class glhmm():
     def __check_options(options):
 
         if options is None: options = {}
-        if not "cyc" in options: options["cyc"] = 100
+        if not "cyc" in options: options["cyc"] = 500
         if not "cyc_to_go_under_th" in options: options["cyc_to_go_under_th"] = 10
         if not "initcyc" in options: options["initcyc"] = 10
         if not "initrep" in options: options["initrep"] = 5 
         if not "tol" in options: options["tol"] = 1e-4
+        if not "warn_not_converged" in options: options["warn_not_converged"] = True
         if not "threshold_active" in options: options["threshold_active"] = 20
         if not "deactivate_states" in options: options["deactivate_states"] = True
         if not "stochastic" in options: options["stochastic"] = False
@@ -470,7 +471,7 @@ class glhmm():
         if options is None: options = {}
         if not "Nbatch" in options: options["Nbatch"] = int(min(len(files)/2,10))
         if not "initNbatch" in options: options["initNbatch"] = options["Nbatch"]
-        if not "cyc" in options: options["cyc"] = 100
+        if not "cyc" in options: options["cyc"] = 250
         if not "initcyc" in options: options["initcyc"] = 25
         if not "forget_rate" in options: options["forget_rate"] = 0.75
         if not "base_weights" in options: options["base_weights"] = 0.25
@@ -513,6 +514,7 @@ class glhmm():
             options_r["cyc"] = options_r["initcyc"]
             options_r["stochastic"] = False
             options_r["initrep"] = 0
+            options_r["warn_not_converged"] = False # short initialisation runs are not meant to converge
             Gamma_r,_,fe_r = hmm_r.train(X,Y,indices,options=options_r)
 
             fe[r] = fe_r[-1]
@@ -1125,7 +1127,13 @@ class glhmm():
         N = len(files)
         K = self.hyperparameters["K"]
 
-        if options["verbose"]: start = time.time()
+        if options["verbose"]:
+            start = time.time()
+            # each cycle draws Nbatch files, so cyc*Nbatch draws in total, spread over N files
+            print("Stochastic training: " + str(N) + " files, Nbatch = " + str(options["Nbatch"]) + \
+                ", cyc = " + str(options["cyc"]))
+            print("-> each file is used about " + str(round(options["cyc"] * options["Nbatch"] / N, 1)) + \
+                " times on average (" + str(options["cyc"]) + " x " + str(options["Nbatch"]) + " / " + str(N) + ")")
 
         # init model with a subset of subjects
         if not self.trained:
@@ -1202,20 +1210,8 @@ class glhmm():
                         if active_state and (not self.active_states[k]):
                             print("State " + str(k) + " is deactivated")
 
-            # M-step            
-            if options["updateDyn"]:
-                for j in range(options["Nbatch"]):
-                    Dir_alpha_each[:,I[j]] = Gamma[indices[j,0]]
-                    tt_j = range(indices_Xi[j,0],indices_Xi[j,1])
-                    Dir2d_alpha_each[:,:,I[j]] = np.sum(Xi[tt_j,:,:],axis=0)
-                Dir_alpha = Nfactor * np.sum(Dir_alpha_each[:,ever_used],axis=1)
-                Dir2d_alpha = Nfactor * np.sum(Dir2d_alpha_each[:,:,ever_used],axis=2)
-                self.__update_dynamics(Dir_alpha=Dir_alpha,Dir2d_alpha=Dir2d_alpha,rho=rho)
-
-            if options["updateObs"]:
-                self.__update_obsdist(X,Y,Gamma,Nfactor,rho)
-
-            # collect subject specific free energy terms
+            # collect subject specific free energy terms. This is done before the M-step: if the batch is
+            # scored after the model was updated with it, the free energy looks better than it is
             for j in range(options["Nbatch"]):
                 tt_j = range(indices[j,0],indices[j,1])
                 tt_j_xi = range(indices_Xi[j,0],indices_Xi[j,1])
@@ -1239,6 +1235,19 @@ class glhmm():
             todo = (False,False,False,True,True)
             kl = np.sum(self.get_fe(None,None,None,None,None,None,todo))
             fe_it = np.sum(kl) + np.sum(loglik_entropy)
+            # M-step            
+            if options["updateDyn"]:
+                for j in range(options["Nbatch"]):
+                    Dir_alpha_each[:,I[j]] = Gamma[indices[j,0]]
+                    tt_j = range(indices_Xi[j,0],indices_Xi[j,1])
+                    Dir2d_alpha_each[:,:,I[j]] = np.sum(Xi[tt_j,:,:],axis=0)
+                Dir_alpha = Nfactor * np.sum(Dir_alpha_each[:,ever_used],axis=1)
+                Dir2d_alpha = Nfactor * np.sum(Dir2d_alpha_each[:,:,ever_used],axis=2)
+                self.__update_dynamics(Dir_alpha=Dir_alpha,Dir2d_alpha=Dir2d_alpha,rho=rho)
+
+            if options["updateObs"]:
+                self.__update_obsdist(X,Y,Gamma,Nfactor,rho)
+
             fe = np.append(fe, fe_it) 
 
             if len(fe) > 1:
@@ -1261,7 +1270,24 @@ class glhmm():
                     print("Cycle " + str(it+1) + " free energy = " + str(fe_it) + \
                         " at [" + time.strftime("%H:%M:%S") + "] (" + str(round(t_now - t_cycle,1)) + "s)")
                     t_cycle = t_now
-            
+
+        # Warn if the free energy was still going down at the end of training (see utils.fe_still_decreasing,
+        # with W = cyc_to_go_under_th)
+        if options["warn_not_converged"] and cyc_to_go > 0:
+            W = options["cyc_to_go_under_th"]
+            usage = "Each file was used about " + str(round(options["cyc"] * options["Nbatch"] / N, 1)) + \
+                " times on average (cyc x Nbatch / N = " + str(options["cyc"]) + " x " + \
+                str(options["Nbatch"]) + " / " + str(N) + ")."
+            if len(fe) < 2*W:
+                warnings.warn("Training ran only " + str(len(fe)) + " cycles, too few to check whether it " + \
+                    "converged (at least " + str(2*W) + " are needed). " + usage + \
+                    " Increase cyc, and plot the free energy (third output of train(), e.g. with " + \
+                    "graphics.plot_free_energy) to check.")
+            elif utils.fe_still_decreasing(fe, W):
+                warnings.warn("The free energy was still decreasing at the end of training (cyc = " + \
+                    str(options["cyc"]) + "), so the model has probably not converged. " + usage + \
+                    " Increase cyc, or Nbatch if memory allows, and plot the free energy (third output " + \
+                    "of train(), e.g. with graphics.plot_free_energy) to check.")
 
         K_active = np.sum(self.active_states)
         if options["verbose"]:
@@ -1379,12 +1405,25 @@ class glhmm():
             Whether or not the Viterbi algorithm should be used.
         set : int, optional, default=None
             Index of the sessions set to decode.
+        serial : bool, optional, default=False
+            Only changes how the computation is done, not the result. Each session (row of indices)
+            is decoded separately with the same model in both cases. If True, the sessions are
+            computed one after another. If False, they are stacked into one array and computed at the
+            same time, which is faster but uses more memory (shorter sessions are padded to the
+            length of the longest one).
+        gpu_acceleration : int, optional, default=0
+            0 for no GPU, 1 for a GPU-accelerated forward-backward pass, 2 for full GPU computation
+            (faster, but uses more GPU memory). Requires CuPy, and is not used when serial=True.
+        gpuChunks : int, optional, default=1
+            Number of chunks the sessions are split into when serial=False, to use less memory.
+            Mainly useful with GPU acceleration. Not used when viterbi=True.
 
         Returns:
         --------
         If viterbi=True:
-            vpath : array of shape (n_samples,)
-                The most likely state sequence.
+            vpath : array of shape (n_samples, n_states)
+                The most likely state sequence, with a 1 for the most likely state at each time point
+                and 0 elsewhere.
         If viterbi=False:
             Gamma : array of shape (n_samples, n_states)
                 The state probability timeseries.
@@ -1455,7 +1494,7 @@ class glhmm():
                 L_[tti,j,:] = L[tt,:]
         
         if viterbi: 
-            vpath = self.__forward_backward_vp(L_,indices_sliced,indices_individual)
+            vpath = self.__forward_backward_vp(L_,indices_sliced,indices_individual,serial)
             return vpath
         else:
             if gpuChunks > 1:
@@ -1504,7 +1543,7 @@ class glhmm():
                 return Gamma,Xi,scale
 
 
-    def sample_Gamma(self,size):
+    def sample_Gamma(self,size,seed=None):
         """Generates Gamma, for timeseries of lengths specified in variable size.
 
         Parameters:
@@ -1513,6 +1552,8 @@ class glhmm():
             Array of shape (n_sessions,) or (n_sessions, 2). If `size` is 1-dimensional,
             each element represents the length of a session. If `size` is 2-dimensional,
             each row of `size` represents the start and end indices of a session in a timeseries.
+        seed : int, optional, default=None
+            Seed of the random generator, so that the sampled sequence can be reproduced.
 
         Returns:
         --------
@@ -1536,7 +1577,7 @@ class glhmm():
 
         Gamma = np.zeros((np.sum(T),K))
         N = indices.shape[0]
-        rng = np.random.default_rng()
+        rng = np.random.default_rng(seed)
 
         for j in range(N):
             tt = np.arange(indices[j,0],indices[j,1])
@@ -2621,7 +2662,12 @@ class glhmm():
 
             if options["updateObs"]:
                 self.__update_obsdist(X,Y,Gamma)
-                
+
+        # cyc_to_go only reaches 0 when the training converged and stopped early
+        if options["warn_not_converged"] and cyc_to_go > 0:
+            warnings.warn("Training reached the maximum number of cycles (cyc = " + str(options["cyc"]) + \
+                ") without converging. Increase cyc, and plot the free energy (third output of train()) to check.")
+
         K_active = np.sum(self.active_states)
         if options["verbose"]:
             end = time.time()

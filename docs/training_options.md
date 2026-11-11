@@ -71,9 +71,9 @@ Gamma, Xi, _ = hmm.decode(None, None, files=preprocessed_files)
 | Option | Default | What it does |
 |---|---|---|
 | `stochastic` | `False` | Set to `True` to enable stochastic training |
-| `Nbatch` | 10 | Number of files per mini-batch. A good starting point is around 10% of your total files; larger batches give more stable updates but use more memory. |
+| `Nbatch` | 10 | Number of files per mini-batch. Use at least 10 if you can; larger batches give more stable updates but use more memory. What matters is the number of files in a batch, not what fraction of the dataset it is. |
 | `initNbatch` | Same as `Nbatch` | Files used during initialisation |
-| `cyc` | `100` | Maximum number of training cycles |
+| `cyc` | `250` | Maximum number of training cycles. Each file is used about `cyc` × `Nbatch` / (number of files) times on average; with `verbose=True` this is printed before training starts. If the free energy is still going down at the end, glhmm gives a warning; then increase `cyc` (or `Nbatch` if memory allows). |
 | `initcyc` | `25` | Training cycles during initialisation |
 | `forget_rate` | `0.75` | How much earlier batches influence the model. Lower values make the model adapt more quickly to recent data; higher values give earlier batches more lasting influence. |
 | `base_weights` | `0.25` | Minimum weight given to any batch |
@@ -153,9 +153,9 @@ Note: GPU acceleration does not work together with `serial=True`. If you enable 
 
 | Option | Default | What it does |
 |---|---|---|
-| `cyc` | `100` | Maximum number of training cycles |
+| `cyc` | `500` | Maximum number of training cycles. Training stops earlier once the free energy has converged; if it reaches `cyc` first, glhmm gives a warning. |
 | `tol` | `1e-4` | Stop training when free energy changes by less than this |
 | `verbose` | `True` | Print progress during training |
 | `initrep` | `5` | Number of random initialisations to try. The best one is kept. |
-| `deactivate_states` | `True` | Automatically remove states that go empty during training |
+| `deactivate_states` | `True` | Automatically remove states that go empty during training. When comparing different K (see the state selection notebooks), set it to `False`, so every run keeps all K states. |
 | `serial` | `False` | Process sessions one at a time (uses less memory, but slower) |
