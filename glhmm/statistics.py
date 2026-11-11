@@ -8,7 +8,9 @@ import pandas as pd
 import random
 import math
 import warnings
+import copy
 from tqdm import tqdm
+from joblib import Parallel, delayed
 from glhmm.palm_functions import *
 from statsmodels.stats import multitest as smt
 from sklearn.cross_decomposition import CCA
@@ -24,11 +26,364 @@ import requests
 import os
 import re
 
+
+def compute_perm_chunk(perm_start, perm_matrix_chunk, D_t, R_t, method,
+                        reg_pinv, ts_row_shape, category_columns, combine_tests,
+                        n_cca_components, F_row_shape, t_row_shape, R2_is_tracked):
+    """
+    Calculate the test statistics for a block of consecutive permutations at one timepoint.
+    Used by `test_across_subjects` when `n_jobs > 1`, where each worker processes one block.
+
+    Parameters:
+    --------------
+    perm_start (int):
+        Index of the first permutation in the block. Permutation 0 is the unpermuted data.
+    perm_matrix_chunk (numpy.ndarray):
+        Columns of the permutation matrix for this block, shape (n, n_perm_block).
+    D_t (numpy.ndarray):
+        Predictor data at this timepoint, after confound regression.
+    R_t (numpy.ndarray):
+        Outcome data at this timepoint, after confound regression.
+    method (str):
+        The statistical method, as in `test_across_subjects`.
+    reg_pinv (numpy.ndarray):
+        The regularized pseudo-inverse of `D_t`.
+    ts_row_shape (tuple):
+        Shape of one row of the test statistics array.
+    category_columns (dict):
+        Columns of `R_t` that are categorical, as returned by `categorize_columns_by_statistical_method`.
+    combine_tests (bool or str):
+        Non-Parametric Combination setting, as in `test_across_subjects`.
+    n_cca_components (int):
+        Number of CCA components.
+    F_row_shape, t_row_shape (tuple):
+        Shapes of one row of the F- and t-statistics arrays.
+    R2_is_tracked (bool):
+        If `True`, the R² of the unpermuted data is returned.
+
+    Returns:
+    ----------
+    perm_start (int):
+        Index of the first permutation in the block, to put the results back in place.
+    test_statistics_block (numpy.ndarray):
+        Test statistics of every permutation in the block.
+    base_statistics (numpy.ndarray or None):
+        Statistics of the unpermuted data (only for the block that contains permutation 0).
+    pval (numpy.ndarray or None):
+        Parametric p-values of the unpermuted data (only for the block that contains permutation 0).
+    R2 (numpy.ndarray or None):
+        R² of the unpermuted data (only for the block that contains permutation 0).
+    F_stats_block, t_stats_block (numpy.ndarray):
+        F- and t-statistics of every permutation in the block.
+    """
+    # Copy, so the parallel jobs don't share one dictionary
+    cat_cols = copy.deepcopy(category_columns)
+    chunk_size = perm_matrix_chunk.shape[1]
+    local_ts = np.zeros((chunk_size,) + ts_row_shape)
+    base_stats = pval_row = R2_row = None
+    F_chunk = np.zeros((chunk_size,) + F_row_shape)
+    t_chunk = np.zeros((chunk_size,) + t_row_shape)
+    for local_perm in range(chunk_size):
+        # Perform permutation on R_t
+        Rin = R_t[perm_matrix_chunk[:, local_perm]]
+        stats_results = test_statistics_calculations(
+            D_t, Rin, local_perm, local_ts, reg_pinv,
+            method, cat_cols, combine_tests, n_cca_components=n_cca_components)
+        if perm_start + local_perm == 0:
+            base_stats = stats_results["base_statistics"]
+            pval_row = stats_results["pval_matrix"]
+            if R2_is_tracked:
+                R2_row = stats_results["R2_stats"]
+        if stats_results["F_stats"] is not None:
+            F_chunk[local_perm] = stats_results["F_stats"]
+        if stats_results["t_stats"] is not None:
+            t_chunk[local_perm] = stats_results["t_stats"]
+    return perm_start, local_ts, base_stats, pval_row, R2_row, F_chunk, t_chunk
+
+
+def compute_timepoint(t, D_data, R_data, confounds, permutation_matrix_update,
+                       method, Nnull_samples, n_p, n_q, combine_tests, category_columns,
+                       n_cca_components, F_shape, t_shape, R2_is_tracked):
+    """
+    Calculate the test statistics of all permutations at one timepoint.
+    Used by `test_across_trials` when `n_jobs > 1`, where each worker processes one timepoint.
+
+    Parameters:
+    --------------
+    t (int):
+        Index of the timepoint.
+    D_data (numpy.ndarray):
+        Predictor data, shape (T, n, p).
+    R_data (numpy.ndarray):
+        Outcome data, shape (n, q).
+    confounds (numpy.ndarray or None):
+        Confounds to regress out of the data.
+    permutation_matrix_update (numpy.ndarray):
+        Permutation matrix, shape (n, Nnull_samples), after removing NaN values. Column 0 is the unpermuted order.
+    method (str):
+        The statistical method, as in `test_across_trials`.
+    Nnull_samples (int):
+        Number of permutations.
+    n_p, n_q (int):
+        Number of predictors and outcomes.
+    combine_tests (bool or str):
+        Non-Parametric Combination setting, as in `test_across_trials`.
+    category_columns (dict):
+        Columns of `R_data` that are categorical.
+    n_cca_components (int):
+        Number of CCA components.
+    F_shape, t_shape (tuple):
+        Shapes of the F- and t-statistics arrays of one timepoint.
+    R2_is_tracked (bool):
+        If `True`, the R² of the unpermuted data is returned.
+
+    Returns:
+    ----------
+    t (int):
+        Index of the timepoint, to put the results back in place.
+    base_statistics, pval, R2 (numpy.ndarray or None):
+        Statistics, parametric p-values and R² of the unpermuted data.
+    F_stats, t_stats (numpy.ndarray):
+        F- and t-statistics of every permutation.
+    test_statistics (numpy.ndarray):
+        Test statistics of every permutation (the null distribution).
+    stats_results (dict):
+        Output of `test_statistics_calculations` for the last permutation.
+    """
+    # Copy, so the parallel jobs don't share one dictionary
+    cat_cols = copy.deepcopy(category_columns)
+    # If confounds exist, perform confound regression on the dependent variables
+    D_t, R_t = deconfound_values(D_data[t, :], R_data, confounds)
+    # Create test_statistics and the regularized pseudo-inverse of D_data
+    test_statistics, reg_pinv = initialize_permutation_matrices(
+        method, Nnull_samples, n_p, n_q, D_t, combine_tests,
+        category_columns=cat_cols, n_cca_components=n_cca_components)
+    base_stats_t = pval_t = R2_t = None
+    F_stats_t = np.zeros(F_shape)
+    t_stats_t = np.zeros(t_shape)
+    for perm in range(Nnull_samples):
+        # Perform permutation on R_t
+        Rin = R_t[permutation_matrix_update[:, perm]]
+        stats_results = test_statistics_calculations(
+            D_t, Rin, perm, test_statistics, reg_pinv, method, cat_cols,
+            combine_tests, Nnull_samples=Nnull_samples, n_cca_components=n_cca_components)
+        if perm == 0:
+            base_stats_t = stats_results["base_statistics"]
+            pval_t = stats_results["pval_matrix"]
+            if R2_is_tracked:
+                R2_t = stats_results["R2_stats"]
+        if stats_results["F_stats"] is not None:
+            F_stats_t[perm] = stats_results["F_stats"]
+        if stats_results["t_stats"] is not None:
+            t_stats_t[perm] = stats_results["t_stats"]
+    return t, base_stats_t, pval_t, R2_t, F_stats_t, t_stats_t, test_statistics, stats_results
+
+
+def compute_session_timepoint(t, D_data, R_data, confounds, method, Nnull_samples, n_p, n_q,
+                               combine_tests, permute_beta, category_columns, n_cca_components,
+                               test_indices_list_update, train_indices_list_update,
+                               F_shape, t_shape, R2_is_tracked):
+    """
+    Calculate the test statistics of all permutations at one timepoint.
+    Used by `test_across_sessions_within_subject` when `n_jobs > 1`, where each worker processes one timepoint.
+
+    Parameters:
+    --------------
+    t (int):
+        Index of the timepoint.
+    D_data (numpy.ndarray):
+        Predictor data, shape (T, n, p).
+    R_data (numpy.ndarray):
+        Outcome data, shape (n, q).
+    confounds (numpy.ndarray or None):
+        Confounds to regress out of the data.
+    method (str):
+        The statistical method, as in `test_across_sessions_within_subject`.
+    Nnull_samples (int):
+        Number of permutations.
+    n_p, n_q (int):
+        Number of predictors and outcomes.
+    combine_tests (bool or str):
+        Non-Parametric Combination setting.
+    permute_beta (bool):
+        If `True`, the beta coefficients are permuted across sessions.
+    category_columns (dict):
+        Columns of `R_data` that are categorical.
+    n_cca_components (int):
+        Number of CCA components.
+    test_indices_list_update, train_indices_list_update (list):
+        Test and train indices of each session, after removing NaN values.
+    F_shape, t_shape (tuple):
+        Shapes of the F- and t-statistics arrays of one timepoint.
+    R2_is_tracked (bool):
+        If `True`, the R² of the unpermuted data is returned.
+
+    Returns:
+    ----------
+    t (int):
+        Index of the timepoint, to put the results back in place.
+    base_statistics, pval, R2 (numpy.ndarray or None):
+        Statistics, parametric p-values and R² of the unpermuted data.
+    F_stats, t_stats (numpy.ndarray):
+        F- and t-statistics of every permutation.
+    test_statistics (numpy.ndarray):
+        Test statistics of every permutation (the null distribution).
+    """
+    # Copy, so the parallel jobs don't share one dictionary
+    cat_cols = copy.deepcopy(category_columns)
+    # If confounds exist, perform confound regression on the dependent variables
+    D_t, R_t = deconfound_values(D_data[t, :], R_data, confounds)
+    # Create test_statistics and the regularized pseudo-inverse of D_data
+    test_statistics, reg_pinv = initialize_permutation_matrices(
+        method, Nnull_samples, n_p, n_q, D_t, combine_tests, permute_beta, cat_cols,
+        n_cca_components=n_cca_components)
+    # Calculate the beta coefficient of each session
+    beta, _, _ = calculate_beta_session(D_t, R_t, test_indices_list_update, train_indices_list_update)
+    base_stats_t = pval_t = R2_t = None
+    F_stats_t = np.zeros(F_shape)
+    t_stats_t = np.zeros(t_shape)
+    for perm in range(Nnull_samples):
+        stats_results = test_statistics_calculations(
+            D_t, R_t, perm, test_statistics, reg_pinv, method, cat_cols, combine_tests, None,
+            permute_beta, beta, test_indices_list_update,
+            Nnull_samples=Nnull_samples, n_cca_components=n_cca_components)
+        if perm == 0:
+            base_stats_t = stats_results["base_statistics"]
+            pval_t = stats_results["pval_matrix"]
+            if R2_is_tracked:
+                R2_t = stats_results["R2_stats"]
+        if stats_results["F_stats"] is not None:
+            F_stats_t[perm] = stats_results["F_stats"]
+        if stats_results["t_stats"] is not None:
+            t_stats_t[perm] = stats_results["t_stats"]
+    return t, base_stats_t, pval_t, R2_t, F_stats_t, t_stats_t, test_statistics
+
+
+def compute_state_visit_perm(perm, vpath_array, vpath_surrogates, data_t, n_states,
+                              method, reg_pinv, category_columns, ts_row_shape,
+                              comparison_statistic, state_comparison):
+    """
+    Calculate the test statistics for one surrogate Viterbi path.
+    Used by `test_across_state_visits` (methods "multivariate", "univariate" and "osr") when `n_jobs > 1`,
+    where each worker processes one permutation.
+
+    Parameters:
+    --------------
+    perm (int):
+        Index of the permutation. Permutation 0 uses the original Viterbi path.
+    vpath_array (numpy.ndarray):
+        The Viterbi path.
+    vpath_surrogates (numpy.ndarray or None):
+        Precomputed surrogate Viterbi paths, shape (n, Nnull_samples). If `None`, the surrogate is generated here.
+    data_t (numpy.ndarray):
+        Outcome data, after confound regression.
+    n_states (int):
+        Number of states.
+    method (str):
+        The statistical method, as in `test_across_state_visits`.
+    reg_pinv (numpy.ndarray):
+        The regularized pseudo-inverse of the state time courses.
+    category_columns (dict):
+        Columns of `data_t` that are categorical.
+    ts_row_shape (tuple):
+        Shape of one row of the test statistics array.
+    comparison_statistic (str):
+        Statistic used for the "osr" method ('mean' or 'median').
+    state_comparison (str):
+        Comparison used for the "osr" method ('larger' or 'smaller').
+
+    Returns:
+    ----------
+    perm (int):
+        Index of the permutation, to put the results back in place.
+    test_statistics (numpy.ndarray):
+        Test statistics of this permutation.
+    stats_results (dict or None):
+        Output of `test_statistics_calculations` (`None` for the "osr" method).
+    """
+    # Copy, so the parallel jobs don't share one dictionary
+    cat_cols = copy.deepcopy(category_columns)
+    if vpath_surrogates is None:
+        # Redo vpath_surrogate calculation if the number of states are not the same
+        while True:
+            vpath_surrogate = surrogate_state_time(perm, vpath_array, n_states)
+            if len(np.unique(vpath_surrogate)) == n_states:
+                break
+    else:
+        vpath_surrogate = vpath_surrogates[:, perm].astype(int)
+    local_ts = np.zeros((1,) + ts_row_shape)
+    if method == "osr":
+        row = np.array([calculate_baseline_difference(vpath_surrogate, data_t, state,
+                        comparison_statistic.lower(), state_comparison)
+                        for state in range(1, n_states + 1)])
+        return perm, row, None
+    elif method == "multivariate":
+        # Make vpath to a binary matrix
+        vpath_binary = np.zeros((len(vpath_surrogate), len(np.unique(vpath_surrogate))))
+        vpath_binary[np.arange(len(vpath_surrogate)), vpath_surrogate - 1] = 1
+        stats_results = test_statistics_calculations(vpath_binary, data_t, 0, local_ts, reg_pinv, method, cat_cols)
+        return perm, local_ts[0], stats_results
+    else:
+        # Univariate test: apply one-hot encoding
+        vpath_onehot = viterbi_path_to_stc(vpath_surrogate, n_states)
+        stats_results = test_statistics_calculations(vpath_onehot, data_t, 0, local_ts, reg_pinv, method, cat_cols)
+        return perm, local_ts[0], stats_results
+
+
+def compute_osa_pair(idx, state_1, state_2, vpath_array, vpath_surrogates, data_t,
+                      n_states, n_q, Nnull_samples, comparison_statistic):
+    """
+    Calculate the test statistics of all permutations for one pair of states.
+    Used by `test_across_state_visits` (method "osa") when `n_jobs > 1`, where each worker processes one pair.
+
+    Parameters:
+    --------------
+    idx (int):
+        Index of the state pair in the list of pairwise comparisons.
+    state_1, state_2 (int):
+        The two states that are compared.
+    vpath_array (numpy.ndarray):
+        The Viterbi path.
+    vpath_surrogates (numpy.ndarray or None):
+        Precomputed surrogate Viterbi paths, shape (n, Nnull_samples). If `None`, the surrogates are generated here.
+    data_t (numpy.ndarray):
+        Outcome data, after confound regression.
+    n_states (int):
+        Number of states.
+    n_q (int):
+        Number of outcomes.
+    Nnull_samples (int):
+        Number of permutations.
+    comparison_statistic (str):
+        Statistic used to compare the two states ('mean' or 'median').
+
+    Returns:
+    ----------
+    idx, state_1, state_2 (int):
+        The state pair, to put the results back in place.
+    test_statistics (numpy.ndarray):
+        Test statistics of every permutation for this pair, shape (Nnull_samples, n_q).
+    """
+    pair_stats = np.zeros((Nnull_samples, n_q))
+    for perm in range(Nnull_samples):
+        # Redo vpath_surrogate calculation if the number of states are not the same
+        if vpath_surrogates is None:
+            while True:
+                vpath_surrogate = surrogate_state_time(perm, vpath_array, n_states)
+                if len(np.unique(vpath_surrogate)) == n_states:
+                    break
+        else:
+            vpath_surrogate = vpath_surrogates[:, perm].astype(int)
+        pair_stats[perm] = calculate_statepair_difference(vpath_surrogate, data_t, state_1,
+                                                          state_2, comparison_statistic)
+    return idx, state_1, state_2, pair_stats
+
+
 def test_across_subjects(
-    D_data, R_data, method="multivariate", Nnull_samples=10_000, confounds=None,  
-    indices_blocks=None,  permute_within_blocks=False, permute_between_blocks=False, dict_family=None,   
-    FWER_correction=False, combine_tests=False, detect_categorical=False, category_limit=10, n_cca_components=1,  
-    predictor_names=[], outcome_names=[], return_base_statistics=True, verbose=True):
+    D_data, R_data, method="multivariate", Nnull_samples=10_000, confounds=None,
+    indices_blocks=None,  permute_within_blocks=False, permute_between_blocks=False, dict_family=None,
+    FWER_correction=False, combine_tests=False, detect_categorical=False, category_limit=10, n_cca_components=1,
+    predictor_names=[], outcome_names=[], return_base_statistics=True, verbose=True, n_jobs=1):
     """
     Perform permutation testing across subjects.
 
@@ -44,10 +399,12 @@ def test_across_subjects(
         Input data as a 2D array of shape `(n, p)`, where:
         - `n` is the number of subjects.
         - `p` is the number of predictor variables.
-    R_data (numpy.ndarray): 
+        Each subject has one value per predictor, e.g., a summary measure such as the fractional occupancy of each state.
+        There is no time dimension, so data with timepoints need to be summarised per subject first.
+    R_data (numpy.ndarray):
         Outcome data as a 2D array.
         - 2D: `(n, q)`, where `n` is the number of subjects and `q` is the number of outcome variables.
-    method (str, optional), default="multivariate": 
+    method (str, optional), default="multivariate":
         The statistical method to use for the permutation test. Valid options are:
         - `"multivariate"`: Examines whether multiple predictors (e.g., brain states) varies across individuals based on outcome measures (e.g., memory scores, clinical assessments).  
         - `"univariate"`: Tests each predictor individually to assess whether it differs across subjects (e.g., whether time spent in a brain state is linked to cognitive performance).  
@@ -99,6 +456,10 @@ def test_across_subjects(
         If `True`, stores test statistics from all permutations.  
     verbose (bool, optional):  
         If `True`, prints progress messages.      
+    n_jobs (int), default=1:
+        Number of parallel jobs (a positive integer). With `n_jobs > 1`, the permutations of each timepoint are
+        split into `n_jobs` blocks that are calculated in parallel with joblib. The permutation matrix is created
+        before this step, so the results are the same as with `n_jobs=1`.
         
     Returns:
     ----------  
@@ -187,7 +548,11 @@ def test_across_subjects(
         # Raise an exception and stop function execution
         raise ValueError("When providing 'indices_blocks' to define block/group boundaries, either 'permute_within_blocks' or 'permute_between_blocks' must be set to True.\n"
                         "If neither is set to True, do not provide 'indices_blocks' and perform permutation testing across subjects instead.")
-    
+
+    if np.ndim(D_data) > 2:
+        raise ValueError("'D_data' has more than 2 dimensions. The test across subjects uses one value per subject and predictor, so 'D_data' must have shape (n, p).\n"
+                         "If your data have timepoints, summarise them per subject first (e.g., the fractional occupancy of each state).")
+
     # Get indices for permutation
     idx_array = get_indices_array(indices_blocks) if indices_blocks is not None and indices_blocks.ndim == 2 else indices_blocks.copy() if indices_blocks is not None else None
 
@@ -252,34 +617,70 @@ def test_across_subjects(
             permutation_matrix = permutation_matrix_within_subject_across_sessions(Nnull_samples, R_data, idx_array)
     # handle NaN values in the dataset
     D_data, R_data, confounds, permutation_matrix_update =handle_nan_values(D_data, R_data, confounds, permutation_matrix, method)
-            
-    for t in tqdm(range(n_T)) if n_T > 1 and verbose else range(n_T):
-        # If confounds exist, perform confound regression on the dependent variables
-        D_t, R_t = deconfound_values(D_data[t, :],R_data, confounds)
 
-        # Create test_statistics based on method
-        test_statistics, reg_pinv = initialize_permutation_matrices(method, Nnull_samples, n_p, n_q, D_t, combine_tests, category_columns=category_columns, n_cca_components=n_cca_components)
-
-        for perm in tqdm(range(Nnull_samples)) if n_T == 1 and verbose else range(Nnull_samples):
-            # Perform permutation on R_t
-            Rin = R_t[permutation_matrix_update[:, perm]]
-            # Calculate the permutation distribution
-            stats_results = test_statistics_calculations(D_t, Rin, perm, test_statistics, reg_pinv, method, category_columns,combine_tests, Nnull_samples=Nnull_samples, n_cca_components=n_cca_components)
-            if perm == 0:
-                base_statistics[t, :] = stats_results["base_statistics"]
-                pval[t, :] = stats_results["pval_matrix"]
-                if R2_stat is not None:
-                    R2_stat[t, :] = stats_results["R2_stats"]
-            F_stats_list[t, perm, :] = stats_results["F_stats"] if stats_results["F_stats"] is not None else F_stats_list[t, perm, :]
-            t_stats_list[t, perm, :] = stats_results["t_stats"] if stats_results["t_stats"] is not None else t_stats_list[t, perm, :]
-        if FLAG_parametric==0:
-            # Calculate p-values
-            pval = get_pval(test_statistics, Nnull_samples, method, t, pval, FWER_correction)
-
-        # Output test statistics if it is set to True can be hard for memory otherwise
-        if return_base_statistics==True:
-            test_statistics_list[t,:] = stats_results["null_stat_distribution"]
-
+    if n_jobs == 1:
+        for t in tqdm(range(n_T)) if n_T > 1 and verbose else range(n_T):
+            # If confounds exist, perform confound regression on the dependent variables
+            D_t, R_t = deconfound_values(D_data[t, :], R_data, confounds)
+            # Create test_statistics based on method
+            test_statistics, reg_pinv = initialize_permutation_matrices(method, Nnull_samples, n_p, n_q, D_t, combine_tests, category_columns=category_columns, n_cca_components=n_cca_components)
+            for perm in tqdm(range(Nnull_samples)) if n_T == 1 and verbose else range(Nnull_samples):
+                # Perform permutation on R_t
+                Rin = R_t[permutation_matrix_update[:, perm]]
+                # Calculate the permutation distribution
+                stats_results = test_statistics_calculations(D_t, Rin, perm, test_statistics, reg_pinv, method, category_columns, combine_tests, Nnull_samples=Nnull_samples, n_cca_components=n_cca_components)
+                if perm == 0:
+                    base_statistics[t, :] = stats_results["base_statistics"]
+                    pval[t, :] = stats_results["pval_matrix"]
+                    if R2_stat is not None:
+                        R2_stat[t, :] = stats_results["R2_stats"]
+                F_stats_list[t, perm, :] = stats_results["F_stats"] if stats_results["F_stats"] is not None else F_stats_list[t, perm, :]
+                t_stats_list[t, perm, :] = stats_results["t_stats"] if stats_results["t_stats"] is not None else t_stats_list[t, perm, :]
+            if FLAG_parametric == 0:
+                # Calculate p-values
+                pval = get_pval(test_statistics, Nnull_samples, method, t, pval, FWER_correction)
+            # Output test statistics if it is set to True can be hard for memory otherwise
+            if return_base_statistics:
+                test_statistics_list[t, :] = stats_results["null_stat_distribution"]
+    else:
+        # The permutations of each timepoint are split into n_jobs blocks that are calculated in parallel
+        # (across-subjects tests usually have a single timepoint, so the permutations are the part to split)
+        for t in tqdm(range(n_T)) if n_T > 1 and verbose else range(n_T):
+            # If confounds exist, perform confound regression on the dependent variables
+            D_t, R_t = deconfound_values(D_data[t, :], R_data, confounds)
+            # Create test_statistics based on method
+            test_statistics, reg_pinv = initialize_permutation_matrices(method, Nnull_samples, n_p, n_q, D_t, combine_tests, category_columns=category_columns, n_cca_components=n_cca_components)
+            ts_row_shape = test_statistics.shape[1:]
+            F_shape = F_stats_list.shape[2:]
+            t_shape = t_stats_list.shape[2:]
+            # Consecutive blocks of permutation indices, one per job (no empty blocks when n_jobs > Nnull_samples)
+            perm_blocks = [b for b in np.array_split(np.arange(Nnull_samples), n_jobs) if len(b) > 0]
+            results_generator = Parallel(n_jobs=n_jobs, return_as="generator")(
+                delayed(compute_perm_chunk)(
+                    perm_block[0], permutation_matrix_update[:, perm_block],
+                    D_t, R_t, method, reg_pinv, ts_row_shape,
+                    category_columns, combine_tests, n_cca_components,
+                    F_shape, t_shape, R2_stat is not None)
+                for perm_block in perm_blocks
+            )
+            parallel_results = list(tqdm(results_generator, total=len(perm_blocks), desc="Permutation blocks") if verbose else results_generator)
+            # Put each block back in place; the block that starts at permutation 0 holds the unpermuted results
+            for perm_start, local_ts, base_stats, pval_row, R2_row, F_chunk, t_chunk in parallel_results:
+                end = perm_start + len(local_ts)
+                test_statistics[perm_start:end] = local_ts
+                if perm_start == 0:
+                    base_statistics[t, :] = base_stats
+                    pval[t, :] = pval_row
+                    if R2_stat is not None and R2_row is not None:
+                        R2_stat[t, :] = R2_row
+                F_stats_list[t, perm_start:end] = F_chunk
+                t_stats_list[t, perm_start:end] = t_chunk
+            if FLAG_parametric == 0:
+                # Calculate p-values
+                pval = get_pval(test_statistics, Nnull_samples, method, t, pval, FWER_correction)
+            # Output test statistics if it is set to True can be hard for memory otherwise
+            if return_base_statistics and test_statistics_list is not None:
+                test_statistics_list[t] = test_statistics
 
     if combine_tests is not False:
         # Set all values to empty lists (except for cases like "all_columns")
@@ -335,9 +736,9 @@ def test_across_subjects(
 
 
 
-def test_across_trials(D_data, R_data, indices_blocks, method="multivariate", Nnull_samples=10_000, confounds=None, 
+def test_across_trials(D_data, R_data, indices_blocks, method="multivariate", Nnull_samples=10_000, confounds=None,
                        FWER_correction=False, combine_tests=False, detect_categorical=False, category_limit=10, n_cca_components=1,
-                       predictor_names=[], outcome_names=[], return_base_statistics=True, verbose=True):
+                       predictor_names=[], outcome_names=[], return_base_statistics=True, verbose=True, n_jobs=1):
     """
     Perform permutation testing across different trials within a session.
 
@@ -397,6 +798,10 @@ def test_across_trials(D_data, R_data, indices_blocks, method="multivariate", Nn
         If `True`, stores test statistics from all permutations.  
     verbose (bool, optional):  
         If `True`, prints progress messages.      
+    n_jobs (int), default=1:
+        Number of parallel jobs. With `n_jobs > 1`, the timepoints are tested in parallel with joblib (one timepoint
+        per job), which helps when `D_data` has many timepoints. The permutation matrix is created before this step,
+        so the results are the same as with `n_jobs=1`.
 
     Returns:
     ----------  
@@ -517,33 +922,56 @@ def test_across_trials(D_data, R_data, indices_blocks, method="multivariate", Nn
     permutation_matrix = permutation_matrix_across_trials_within_session(Nnull_samples,R_data, idx_array)
     D_data, R_data, confounds, permutation_matrix_update =handle_nan_values(D_data, R_data, confounds, permutation_matrix, method)
 
-    for t in tqdm(range(n_T)) if n_T > 1 and verbose else range(n_T):
-        # If confounds exist, perform confound regression on the dependent variables
-        D_t, R_t = deconfound_values(D_data[t, :],R_data, confounds)
-        # Create test_statistics and the regularized pseudo-inverse of D_data
-        test_statistics, reg_pinv = initialize_permutation_matrices(method, Nnull_samples, n_p, n_q, D_t, combine_tests, category_columns=category_columns, n_cca_components=n_cca_components)
-       
-        for perm in range(Nnull_samples):
-            # Perform permutation on R_t
-            Rin = R_t[permutation_matrix_update[:, perm]]
-            # Calculate the permutation distribution
-            stats_results = test_statistics_calculations(D_t, Rin, perm, test_statistics, reg_pinv, method, category_columns,combine_tests, n_cca_components=n_cca_components)
-            if perm == 0:
-                base_statistics[t, :] = stats_results["base_statistics"]
-                pval[t, :] = stats_results["pval_matrix"]
-                if R2_stat is not None:
-                    R2_stat[t, :] = stats_results["R2_stats"]
-            F_stats_list[t, perm, :] = stats_results["F_stats"] if stats_results["F_stats"] is not None else F_stats_list[t, perm, :]
-            t_stats_list[t, perm, :] = stats_results["t_stats"] if stats_results["t_stats"] is not None else t_stats_list[t, perm, :]
-            
-
-        if FLAG_parametric==0:
-            # Calculate p-values
-            pval = get_pval(test_statistics, Nnull_samples, method, t, pval, FWER_correction)
-            
-            # Output test statistics if it is set to True can be hard for memory otherwise
-            if return_base_statistics==True:
-                test_statistics_list[t,:] = test_statistics
+    if n_jobs == 1:
+        for t in tqdm(range(n_T)) if n_T > 1 and verbose else range(n_T):
+            # If confounds exist, perform confound regression on the dependent variables
+            D_t, R_t = deconfound_values(D_data[t, :], R_data, confounds)
+            # Create test_statistics and the regularized pseudo-inverse of D_data
+            test_statistics, reg_pinv = initialize_permutation_matrices(method, Nnull_samples, n_p, n_q, D_t, combine_tests, category_columns=category_columns, n_cca_components=n_cca_components)
+            for perm in range(Nnull_samples):
+                # Perform permutation on R_t
+                Rin = R_t[permutation_matrix_update[:, perm]]
+                # Calculate the permutation distribution
+                stats_results = test_statistics_calculations(D_t, Rin, perm, test_statistics, reg_pinv, method, category_columns, combine_tests, n_cca_components=n_cca_components)
+                if perm == 0:
+                    base_statistics[t, :] = stats_results["base_statistics"]
+                    pval[t, :] = stats_results["pval_matrix"]
+                    if R2_stat is not None:
+                        R2_stat[t, :] = stats_results["R2_stats"]
+                F_stats_list[t, perm, :] = stats_results["F_stats"] if stats_results["F_stats"] is not None else F_stats_list[t, perm, :]
+                t_stats_list[t, perm, :] = stats_results["t_stats"] if stats_results["t_stats"] is not None else t_stats_list[t, perm, :]
+            if FLAG_parametric == 0:
+                # Calculate p-values
+                pval = get_pval(test_statistics, Nnull_samples, method, t, pval, FWER_correction)
+                # Output test statistics if it is set to True can be hard for memory otherwise
+                if return_base_statistics:
+                    test_statistics_list[t, :] = test_statistics
+    else:
+        # The timepoints are tested in parallel, one timepoint per job (see compute_timepoint)
+        F_shape = F_stats_list.shape[1:]
+        t_shape = t_stats_list.shape[1:]
+        results_generator = Parallel(n_jobs=n_jobs, return_as="generator")(
+            delayed(compute_timepoint)(
+                t, D_data, R_data, confounds, permutation_matrix_update,
+                method, Nnull_samples, n_p, n_q, combine_tests, category_columns,
+                n_cca_components, F_shape, t_shape, R2_stat is not None)
+            for t in range(n_T)
+        )
+        parallel_results = list(tqdm(results_generator, total=n_T, desc="Timepoints") if verbose else results_generator)
+        # Put the results of each timepoint back in place
+        for t, base_stats_t, pval_t, R2_t, F_t, t_t, test_stats_t, _ in parallel_results:
+            base_statistics[t, :] = base_stats_t
+            pval[t, :] = pval_t
+            if R2_stat is not None and R2_t is not None:
+                R2_stat[t, :] = R2_t
+            F_stats_list[t] = F_t
+            t_stats_list[t] = t_t
+            if FLAG_parametric == 0:
+                # Calculate p-values
+                pval = get_pval(test_stats_t, Nnull_samples, method, t, pval, FWER_correction)
+                # Output test statistics if it is set to True can be hard for memory otherwise
+                if return_base_statistics and test_statistics_list is not None:
+                    test_statistics_list[t] = test_stats_t
 
     if Nnull_samples >0 and combine_tests is not False:
         # Set all values to empty lists (except for cases like "all_columns")
@@ -584,9 +1012,9 @@ def test_across_trials(D_data, R_data, indices_blocks, method="multivariate", Nn
         result['pval_t_multivariate'] = f_t_stats['perm_p_values_t']
     return result
 
-def test_across_sessions_within_subject(D_data, R_data, indices_blocks, method="multivariate", Nnull_samples=10_000, confounds=None, 
+def test_across_sessions_within_subject(D_data, R_data, indices_blocks, method="multivariate", Nnull_samples=10_000, confounds=None,
                                         FWER_correction=False, combine_tests=False, detect_categorical=False, category_limit=10, n_cca_components=1,
-                                        predictor_names=[], outcome_names=[], return_base_statistics=True, verbose = True):
+                                        predictor_names=[], outcome_names=[], return_base_statistics=True, verbose=True, n_jobs=1):
     """
     Perform permutation testing across sessions while maintaining trial order.
 
@@ -645,6 +1073,10 @@ def test_across_sessions_within_subject(D_data, R_data, indices_blocks, method="
         If `True`, stores test statistics from all permutations.  
     verbose (bool, optional):  
         If `True`, prints progress messages.      
+    n_jobs (int), default=1:
+        Number of parallel jobs. With `n_jobs > 1`, the timepoints are tested in parallel with joblib (one timepoint
+        per job), which helps when `D_data` has many timepoints. The test statistics are calculated in the same way
+        as with `n_jobs=1`.
 
     Returns:
     ----------  
@@ -772,11 +1204,11 @@ def test_across_sessions_within_subject(D_data, R_data, indices_blocks, method="
     # Update test and train indices in accordance with NaN values
     for col in range(len(train_indices_list)):
         if FLAG_NAN and np.array_equal(nan_R[col], nan_mask)==False:
-            # Keep elements only that are True (i.e., remove False)
-            nan_mask =(nan_R[col] | nan_mask)
+            # Combine D NaN mask with this column's R NaN mask (do not mutate nan_mask)
+            col_nan = nan_R[col] | nan_mask
             # Get the indices corresponding to NaN values
-            indices = np.arange(len(nan_mask))
-            nan_indices = indices[nan_mask]
+            indices = np.arange(len(col_nan))
+            nan_indices = indices[col_nan]
             # Update indices due to NaN values in D_matrix
             train_indices_list_update[col], test_indices_list_update[col]= train_test_update_indices(train_indices_list[col], test_indices_list[col], nan_indices)
 
@@ -785,34 +1217,57 @@ def test_across_sessions_within_subject(D_data, R_data, indices_blocks, method="
             test_indices_list_update[col] = test_indices_list[col].copy()
             train_indices_list_update[col] = train_indices_list[col].copy()
 
-    for t in tqdm(range(n_T)) if n_T > 1 and verbose else range(n_T):
-        # If confounds exist, perform confound regression on the dependent variables
-        D_t, R_t = deconfound_values(D_data[t, :],R_data, confounds)
-
-        # Create test_statistics and pval_perms based on method
-        test_statistics, reg_pinv = initialize_permutation_matrices(method, Nnull_samples, n_p, n_q, D_t, combine_tests, permute_beta, category_columns, n_cca_components=n_cca_components)
-        
-        # Calculate the beta coefficient of each session
-        beta, _, _ = calculate_beta_session(reg_pinv, R_t, D_t, test_indices_list_update, train_indices_list_update)
-
-        for perm in range(Nnull_samples):
-            # Calculate the permutation distribution
-            stats_results = test_statistics_calculations(D_t, R_t, perm, test_statistics, reg_pinv, method, category_columns, combine_tests, None, permute_beta, beta, test_indices_list_update, Nnull_samples=Nnull_samples, n_cca_components=n_cca_components)
-            if perm == 0:
-                base_statistics[t, :] = stats_results["base_statistics"]
-                pval[t, :] = stats_results["pval_matrix"]
-                if R2_stat is not None:
-                    R2_stat[t, :] = stats_results["R2_stats"]
-            F_stats_list[t, perm, :] = stats_results["F_stats"] if stats_results["F_stats"] is not None else F_stats_list[t, perm, :]
-            t_stats_list[t, perm, :] = stats_results["t_stats"] if stats_results["t_stats"] is not None else t_stats_list[t, perm, :]
-        
-        if FLAG_parametric==0:
-            # Calculate p-values based on permutations
-            pval = get_pval(test_statistics, Nnull_samples, method, t, pval, FWER_correction)
-            
-            # Output test statistics if it is set to True can be hard for memory otherwise
-            if return_base_statistics==True:
-                test_statistics_list[t,:] = test_statistics
+    if n_jobs == 1:
+        for t in tqdm(range(n_T)) if n_T > 1 and verbose else range(n_T):
+            # If confounds exist, perform confound regression on the dependent variables
+            D_t, R_t = deconfound_values(D_data[t, :], R_data, confounds)
+            # Create test_statistics and pval_perms based on method
+            test_statistics, reg_pinv = initialize_permutation_matrices(method, Nnull_samples, n_p, n_q, D_t, combine_tests, permute_beta, category_columns, n_cca_components=n_cca_components)
+            # Calculate the beta coefficient of each session
+            beta, _, _ = calculate_beta_session(D_t, R_t, test_indices_list_update, train_indices_list_update)
+            for perm in range(Nnull_samples):
+                # Calculate the permutation distribution
+                stats_results = test_statistics_calculations(D_t, R_t, perm, test_statistics, reg_pinv, method, category_columns, combine_tests, None, permute_beta, beta, test_indices_list_update, Nnull_samples=Nnull_samples, n_cca_components=n_cca_components)
+                if perm == 0:
+                    base_statistics[t, :] = stats_results["base_statistics"]
+                    pval[t, :] = stats_results["pval_matrix"]
+                    if R2_stat is not None:
+                        R2_stat[t, :] = stats_results["R2_stats"]
+                F_stats_list[t, perm, :] = stats_results["F_stats"] if stats_results["F_stats"] is not None else F_stats_list[t, perm, :]
+                t_stats_list[t, perm, :] = stats_results["t_stats"] if stats_results["t_stats"] is not None else t_stats_list[t, perm, :]
+            if FLAG_parametric == 0:
+                # Calculate p-values based on permutations
+                pval = get_pval(test_statistics, Nnull_samples, method, t, pval, FWER_correction)
+                # Output test statistics if it is set to True can be hard for memory otherwise
+                if return_base_statistics:
+                    test_statistics_list[t, :] = test_statistics
+    else:
+        # The timepoints are tested in parallel, one timepoint per job (see compute_session_timepoint)
+        F_shape = F_stats_list.shape[1:]
+        t_shape = t_stats_list.shape[1:]
+        results_generator = Parallel(n_jobs=n_jobs, return_as="generator")(
+            delayed(compute_session_timepoint)(
+                t, D_data, R_data, confounds, method, Nnull_samples, n_p, n_q,
+                combine_tests, permute_beta, category_columns, n_cca_components,
+                test_indices_list_update, train_indices_list_update,
+                F_shape, t_shape, R2_stat is not None)
+            for t in range(n_T)
+        )
+        parallel_results = list(tqdm(results_generator, total=n_T, desc="Timepoints") if verbose else results_generator)
+        # Put the results of each timepoint back in place
+        for t, base_stats_t, pval_t, R2_t, F_t, t_t, test_stats_t in parallel_results:
+            base_statistics[t, :] = base_stats_t
+            pval[t, :] = pval_t
+            if R2_stat is not None and R2_t is not None:
+                R2_stat[t, :] = R2_t
+            F_stats_list[t] = F_t
+            t_stats_list[t] = t_t
+            if FLAG_parametric == 0:
+                # Calculate p-values based on permutations
+                pval = get_pval(test_stats_t, Nnull_samples, method, t, pval, FWER_correction)
+                # Output test statistics if it is set to True can be hard for memory otherwise
+                if return_base_statistics and test_statistics_list is not None:
+                    test_statistics_list[t] = test_stats_t
     
     if Nnull_samples >0 and combine_tests is not False:
         # Set all values to empty lists (except for cases like "all_columns")
@@ -856,10 +1311,10 @@ def test_across_sessions_within_subject(D_data, R_data, indices_blocks, method="
     return result
 
  
-def test_across_state_visits(D_data, R_data , method="multivariate", Nnull_samples=10_000, confounds=None, 
+def test_across_state_visits(D_data, R_data , method="multivariate", Nnull_samples=10_000, confounds=None,
                             comparison_statistic ="mean", state_comparison="larger",
                              FWER_correction=False, detect_categorical = False, category_limit=10,
-                             vpath_surrogates=None, predictor_names=[], outcome_names=[], return_base_statistics=True, verbose=True):
+                             vpath_surrogates=None, predictor_names=[], outcome_names=[], return_base_statistics=True, verbose=True, n_jobs=1):
     """
     Perform permutation testing across state visits.
 
@@ -922,6 +1377,12 @@ def test_across_state_visits(D_data, R_data , method="multivariate", Nnull_sampl
         If `True`, stores test statistics from all permutations.  
     verbose (bool, optional):  
         If `True`, prints progress messages.     
+    n_jobs (int), default=1:
+        Number of parallel jobs. With `n_jobs > 1`, the permutations are calculated in parallel with joblib (for
+        method "osa": the state pairs). If `vpath_surrogates` is not given, the surrogate Viterbi paths are generated
+        inside the parallel jobs, so setting `np.random.seed` beforehand does not make the results reproducible.
+        To get the same results as with `n_jobs=1`, create the surrogates with `surrogate_state_time_matrix` and
+        pass them as `vpath_surrogates`.
 
     Returns:
     ----------  
@@ -1039,59 +1500,10 @@ def test_across_state_visits(D_data, R_data , method="multivariate", Nnull_sampl
             ###################### Permutation testing for other tests beside state pairs #################################
             # Create test_statistics and pval_perms based on method
             test_statistics, reg_pinv = initialize_permutation_matrices(method, Nnull_samples, n_p, n_q, vpath_data[0,:,:], category_columns=category_columns)
-            # Perform permutation testing
-            for perm in tqdm(range(Nnull_samples)) if n_T == 1 and verbose else range(Nnull_samples):
-                # Redo vpath_surrogate calculation if the number of states are not the same (out of 1000 permutations it happens maybe 1-2 times with this demo dataset)
-                
-                if vpath_surrogates is None:
-                    while True:
-                        # Create vpath_surrogate
-                        vpath_surrogate = surrogate_state_time(perm, vpath_array, n_states)
-                        if len(np.unique(vpath_surrogate)) == n_states:
-                            break  # Exit the loop if the condition is satisfied
-                else:
-                    vpath_surrogate = vpath_surrogates[:,perm].astype(int)
-                if method =="osr":
-                    for state in range(1, n_states+1):
-                        test_statistics[perm,state -1,] =calculate_baseline_difference(vpath_surrogate, data_t, state, comparison_statistic.lower(), state_comparison)
-                    base_statistics = test_statistics[perm,:] if perm == 0 else base_statistics                 
-                elif method =="multivariate":
-                    # Make vpath to a binary matrix
-                    vpath_surrogate_binary = np.zeros((len(vpath_surrogate), len(np.unique(vpath_surrogate))))
-                    # Set the appropriate positions to 1
-                    vpath_surrogate_binary[np.arange(len(vpath_surrogate)), vpath_surrogate - 1] = 1
-                    stats_results = test_statistics_calculations(vpath_surrogate_binary,data_t, perm,test_statistics, reg_pinv, method, category_columns)
-                    if perm == 0:
-                        base_statistics[t, :] = stats_results["base_statistics"]
-                        pval[t, :] = stats_results["pval_matrix"]
-                        if R2_stat is not None:
-                            R2_stat[t, :] = stats_results["R2_stats"]
-                    if stats_results["t_stats"] is not None:
-                        t_stats_list[t,perm,:] = stats_results["t_stats"]
-                else:
-                    # Univariate test
-                    # Apply 1 hot encoding
-                    vpath_surrogate_onehot = viterbi_path_to_stc(vpath_surrogate,n_states)
-                    # Apply t-statistic on the vpath_surrogate
-                    stats_results = test_statistics_calculations(vpath_surrogate_onehot, data_t , perm, test_statistics, reg_pinv, method, category_columns)
-                    base_statistics[t, :] = stats_results["base_statistics"] if perm == 0 and stats_results["base_statistics"] is not None else base_statistics[t, :] 
-                    pval[t, :] = stats_results["pval_matrix"] if perm == 0 and stats_results["pval_matrix"] is not None else pval[t, :]
-            if FLAG_parametric==0: 
-                pval = get_pval(test_statistics, Nnull_samples, method, t, pval, FWER_correction)
-                pval = np.squeeze(pval, axis=0)
-        ###################### Permutation testing for state pairs #################################
-        elif method =="osa":
-            # Run this code if it is "osa"
-            # Generates all unique combinations of length 2 
-            pairwise_comparisons = list(combinations(range(1, n_states + 1), 2))
-            test_statistics = np.zeros((Nnull_samples, len(pairwise_comparisons), n_q))
-            pval = np.zeros((n_states, n_states, n_q))
-            # Iterate over pairwise state comparisons
-            
-            for idx, (state_1, state_2) in tqdm(enumerate(pairwise_comparisons), total=len(pairwise_comparisons), desc="Pairwise comparisons") if verbose ==True else enumerate(pairwise_comparisons):    
-                # Generate surrogate state-time data and calculate differences for each permutation
-                for perm in range(Nnull_samples):
-                    
+            if n_jobs == 1:
+                # Perform permutation testing
+                for perm in tqdm(range(Nnull_samples)) if n_T == 1 and verbose else range(Nnull_samples):
+                    # Redo vpath_surrogate calculation if the number of states are not the same (out of 1000 permutations it happens maybe 1-2 times with this demo dataset)
                     if vpath_surrogates is None:
                         while True:
                             # Create vpath_surrogate
@@ -1100,16 +1512,99 @@ def test_across_state_visits(D_data, R_data , method="multivariate", Nnull_sampl
                                 break  # Exit the loop if the condition is satisfied
                     else:
                         vpath_surrogate = vpath_surrogates[:,perm].astype(int)
-                    test_statistics[perm,idx] = calculate_statepair_difference(vpath_surrogate, data_t, state_1, 
-                                                                               state_2, comparison_statistic)
-                if FLAG_parametric==0:
-                    p_val= np.sum(test_statistics[:,idx] >= test_statistics[0,idx], axis=0) / (Nnull_samples+1)
-                    
-                    pval[state_1-1, state_2-1] = p_val
-                    pval[state_2-1, state_1-1] = 1 - p_val
-            # Fill numbers in base statistics
-            if  np.sum(base_statistics[t, :])==0:
-                base_statistics[t, :] =test_statistics[0,:]
+                    if method =="osr":
+                        for state in range(1, n_states+1):
+                            test_statistics[perm,state-1] = calculate_baseline_difference(vpath_surrogate, data_t, state, comparison_statistic.lower(), state_comparison)
+                        base_statistics = test_statistics[perm,:] if perm == 0 else base_statistics
+                    elif method =="multivariate":
+                        # Make vpath to a binary matrix
+                        vpath_surrogate_binary = np.zeros((len(vpath_surrogate), len(np.unique(vpath_surrogate))))
+                        # Set the appropriate positions to 1
+                        vpath_surrogate_binary[np.arange(len(vpath_surrogate)), vpath_surrogate - 1] = 1
+                        stats_results = test_statistics_calculations(vpath_surrogate_binary, data_t, perm, test_statistics, reg_pinv, method, category_columns)
+                        if perm == 0:
+                            base_statistics[t, :] = stats_results["base_statistics"]
+                            pval[t, :] = stats_results["pval_matrix"]
+                            if R2_stat is not None:
+                                R2_stat[t, :] = stats_results["R2_stats"]
+                        if stats_results["t_stats"] is not None:
+                            t_stats_list[t,perm,:] = stats_results["t_stats"]
+                    else:
+                        # Univariate test
+                        # Apply 1 hot encoding
+                        vpath_surrogate_onehot = viterbi_path_to_stc(vpath_surrogate, n_states)
+                        # Apply t-statistic on the vpath_surrogate
+                        stats_results = test_statistics_calculations(vpath_surrogate_onehot, data_t, perm, test_statistics, reg_pinv, method, category_columns)
+                        base_statistics[t, :] = stats_results["base_statistics"] if perm == 0 and stats_results["base_statistics"] is not None else base_statistics[t, :]
+                        pval[t, :] = stats_results["pval_matrix"] if perm == 0 and stats_results["pval_matrix"] is not None else pval[t, :]
+            else:
+                # The permutations are calculated in parallel, one permutation per job (see compute_state_visit_perm).
+                # Without vpath_surrogates, each job generates its own surrogate Viterbi path
+                ts_row_shape = test_statistics.shape[1:]
+                results_generator = Parallel(n_jobs=n_jobs, return_as="generator")(
+                    delayed(compute_state_visit_perm)(
+                        perm, vpath_array, vpath_surrogates, data_t, n_states,
+                        method, reg_pinv, category_columns, ts_row_shape,
+                        comparison_statistic, state_comparison)
+                    for perm in range(Nnull_samples)
+                )
+                parallel_results = list(tqdm(results_generator, total=Nnull_samples, desc="Permutations") if verbose else results_generator)
+                # Put the results of each permutation back in place; permutation 0 holds the unpermuted results
+                for perm, perm_test_statistics, stats_results in parallel_results:
+                    test_statistics[perm] = perm_test_statistics
+                    if perm == 0:
+                        if method == "osr":
+                            base_statistics = perm_test_statistics
+                        elif stats_results is not None:
+                            base_statistics[t, :] = stats_results["base_statistics"]
+                            pval[t, :] = stats_results["pval_matrix"]
+                            if R2_stat is not None and stats_results.get("R2_stats") is not None:
+                                R2_stat[t, :] = stats_results["R2_stats"]
+                    if method == "multivariate" and stats_results is not None and stats_results["t_stats"] is not None:
+                        t_stats_list[t, perm, :] = stats_results["t_stats"]
+            if FLAG_parametric == 0:
+                pval = get_pval(test_statistics, Nnull_samples, method, t, pval, FWER_correction)
+                pval = np.squeeze(pval, axis=0)
+        ###################### Permutation testing for state pairs #################################
+        elif method =="osa":
+            pairwise_comparisons = list(combinations(range(1, n_states + 1), 2))
+            test_statistics = np.zeros((Nnull_samples, len(pairwise_comparisons), n_q))
+            pval = np.zeros((n_states, n_states, n_q))
+            if n_jobs == 1:
+                for idx, (state_1, state_2) in tqdm(enumerate(pairwise_comparisons), total=len(pairwise_comparisons), desc="Pairwise comparisons") if verbose else enumerate(pairwise_comparisons):
+                    for perm in range(Nnull_samples):
+                        # Redo vpath_surrogate calculation if the number of states are not the same
+                        if vpath_surrogates is None:
+                            while True:
+                                # Create vpath_surrogate
+                                vpath_surrogate = surrogate_state_time(perm, vpath_array, n_states)
+                                if len(np.unique(vpath_surrogate)) == n_states:
+                                    break  # Exit the loop if the condition is satisfied
+                        else:
+                            vpath_surrogate = vpath_surrogates[:,perm].astype(int)
+                        test_statistics[perm,idx] = calculate_statepair_difference(vpath_surrogate, data_t, state_1, state_2, comparison_statistic)
+                    if FLAG_parametric == 0:
+                        p_val = np.sum(test_statistics[:,idx] >= test_statistics[0,idx], axis=0) / (Nnull_samples+1)
+                        pval[state_1-1, state_2-1] = p_val
+                        pval[state_2-1, state_1-1] = 1 - p_val
+            else:
+                # The state pairs are tested in parallel, one pair per job (see compute_osa_pair)
+                results_generator = Parallel(n_jobs=n_jobs, return_as="generator")(
+                    delayed(compute_osa_pair)(
+                        idx, state_1, state_2, vpath_array, vpath_surrogates,
+                        data_t, n_states, n_q, Nnull_samples, comparison_statistic)
+                    for idx, (state_1, state_2) in enumerate(pairwise_comparisons)
+                )
+                parallel_results = list(tqdm(results_generator, total=len(pairwise_comparisons), desc="Pairwise comparisons") if verbose else results_generator)
+                # Put the results of each pair back in place
+                for idx, state_1, state_2, pair_stats in parallel_results:
+                    test_statistics[:, idx] = pair_stats
+                    if FLAG_parametric == 0:
+                        p_val = np.sum(pair_stats >= pair_stats[0], axis=0) / (Nnull_samples+1)
+                        pval[state_1-1, state_2-1] = p_val
+                        pval[state_2-1, state_1-1] = 1 - p_val
+            if np.sum(base_statistics[t, :]) == 0:
+                base_statistics[t, :] = test_statistics[0,:]
                 
         if return_base_statistics:
             test_statistics_list[t, :] = test_statistics
@@ -3324,7 +3819,9 @@ def pval_correction(result_dic=None, pval=None, method='fdr_bh', alpha=0.05, inc
 
 def pval_FWER_correction(result_dic=None, test_statistics=None, Nnull_samples=None, method=None):
     """
-    Compute Family-Wise Error Rate (FWER) corrected p-values for multivariate or univariate methods.
+    Compute Family-Wise Error Rate (FWER) corrected p-values for multivariate or univariate methods using the MaxT method.
+    For data with timepoints, the maximum is taken across tests within each timepoint, so the correction is not across timepoints.
+    With a single test per timepoint (e.g., a multivariate test with one outcome), the corrected p-values equal the uncorrected ones.
 
     Parameters:
     --------------
@@ -3521,7 +4018,7 @@ def pval_cluster_based_correction(result_dic = None, test_statistics=[], pval=No
                 cluster_thresh = np.percentile(max_cluster_sums, 100 - (100 * alpha))
 
                 # Standardize the observed map in the same way.
-                obs_map = test_statistics[:, 0, p_i]
+                obs_map = np.array(test_statistics[:, 0, p_i], copy=True)
                 obs_map[obs_map < stat_thresh] = 0
                 obs_map = np.squeeze(obs_map)
 
@@ -4947,89 +5444,84 @@ def calculate_manova_f_test(Din, Rin, nan_values, no_t_stats=False):
 
     return f_statistics, t_stats, p_values
 
-def calculate_beta_session(reg_pinv, Rin, Din, test_indices_list, train_indices_list):
+def calculate_beta_session(Din, Rin, test_indices_list, train_indices_list):
     """
-    Calculate beta coefficients for each session. 
-    If there are NaN values the procedure will be done per column.
+    Calculate beta coefficients for each session using a shared ridge-regularized
+    inverse Gram matrix, applying only training-R values per session.
+
+    Using a shared Gram (D_full^T D_full + λI) ensures all session betas are in the
+    same coordinate system so cross-session comparisons in the F-statistic are valid.
+    Only R[train_s] enters each beta, preventing test-R leakage into the estimates.
 
     Parameters:
     --------------
-    reg_pinv (numpy.ndarray): 
-        The regularized pseudo-inverse of D_data.
-    Rin (numpy.ndarray): 
+    Din (numpy.ndarray):
+        Input data matrix for the independent variables.
+    Rin (numpy.ndarray):
         Input data matrix for the dependent variables.
-    indices_blocks (numpy.ndarray): 
-        Marks the indices for each trial within the session.
-        It is a 2D array where each row represents the start and end index for a session.    
-    permute_beta (bool, optional), default=False: 
-        A flag indicating whether to permute beta coefficients.
-    category_limit : int or None, optional, default=10
-        Maximum allowed number of categories for F-test. Acts as a safety measure for columns 
-        with integer values, like age, which may be mistakenly identified as multiple categories.  
+    test_indices_list : list
+        Indices for data points that belong to the test-set for each session.
+    train_indices_list : list
+        Indices for data points that belong to the train-set for each session.
     """
 
-    # detect nan values
+    p = Din.shape[-1]
+    reg_matrix = 0.001 * np.eye(p)
+
     nan_values = np.any(np.isnan(Rin)) or np.any(np.isnan(Din))
 
-    # Do it columnwise if NaN values are detected
     if nan_values:
-        Rin = np.expand_dims(Rin, axis=1) if Rin.ndim==1 else Rin
+        Rin = np.expand_dims(Rin, axis=1) if Rin.ndim == 1 else Rin
         q = Rin.shape[-1]
-        p = Din.shape[-1]
         beta = []
-        if len(train_indices_list)!=Rin.shape[-1]:
-            # Calculate beta coefficients for each session
-            beta_hat = np.zeros((len(train_indices_list[0]),p,q))
-            for q_i in range(q):
-                # Go through each column of R
-                for p_i in range(p):
-                    # Indentify columns with NaN values
-                    R_column = np.expand_dims(Rin[:, q_i],axis=1)
-                    nan_mask = np.isnan(np.expand_dims(Din,axis=1)).any(axis=1) if Din.ndim==1 else np.isnan(Din).any(axis=1)
-                    valid_indices = np.all(~np.isnan(R_column), axis=1) & ~nan_mask
-                    
-                    for session, indices in enumerate(train_indices_list[0]):
-                        #session_beta[idx,p_i] = np.expand_dims(reg_pinv[p_i,indices][valid_indices[indices]] @ Rin[indices, q_i][valid_indices[indices]],axis=1)
-                        beta_hat[session,p_i, q_i] = reg_pinv[p_i,indices][valid_indices[indices]] @ Rin[indices, q_i][valid_indices[indices]]
-            beta.append(np.array(beta_hat))
-        else:
-            # Precompute NaN masks
-            D_expanded = np.expand_dims(Din, axis=1) if Din.ndim == 1 else Din
-            nan_mask = np.isnan(D_expanded).any(axis=1)
-            indices_range = np.arange(len(nan_mask))
-            # Calculate beta coefficients for each session for every predictor
-            for col in range(Rin.shape[-1]):
-                beta_hat = []
-                
-                R_column = Rin[:, col, np.newaxis]  # Avoid redundant expand_dims calls
-                valid_indices = ~np.isnan(R_column).any(axis=1) & ~nan_mask
-                nan_indices = indices_range[~valid_indices]
+        # Shared inverse Gram computed from all valid (non-NaN) rows of Din
+        nan_mask_D = np.isnan(Din).any(axis=1)
+        Din_valid = Din[~nan_mask_D, :]
+        inv_gram = np.linalg.inv(Din_valid.T @ Din_valid + reg_matrix)
+        indices_range = np.arange(Din.shape[0])
 
+        if len(train_indices_list) != q:
+            beta_hat = np.zeros((len(train_indices_list[0]), p, q))
+            for q_i in range(q):
+                nan_mask_R = np.isnan(Rin[:, q_i])
+                valid_mask = ~nan_mask_D & ~nan_mask_R
+                for session, indices in enumerate(train_indices_list[0]):
+                    valid_ses = indices[valid_mask[indices]]
+                    beta_hat[session, :, q_i] = inv_gram @ Din[valid_ses, :].T @ Rin[valid_ses, q_i]
+            beta.append(beta_hat)
+        else:
+            for col in range(q):
+                beta_hat = []
+                nan_mask_R = np.isnan(Rin[:, col])
+                nan_indices = indices_range[nan_mask_D | nan_mask_R]
                 for indices in train_indices_list[col]:
                     idx_ses = indices_range[indices]
-                    valid_ses = idx_ses[~np.isin(idx_ses, nan_indices)]  # Filter out NaN indices
-                    session_beta = reg_pinv[:, valid_ses] @ Rin[valid_ses, col, np.newaxis]
+                    valid_ses = idx_ses[~np.isin(idx_ses, nan_indices)]
+                    session_beta = np.expand_dims(
+                        inv_gram @ Din[valid_ses, :].T @ Rin[valid_ses, col], axis=1)
                     beta_hat.append(session_beta)
-
                 beta.append(np.array(beta_hat))
 
     else:
-        # permute beta and calulate predicted values
-        #beta, test_indices_list, train_indices_list = calculate_ols_beta(reg_pinv, Rin, indices_blocks, category_limit, test_indices_list, train_indices_list)
         beta = []
-        if len(train_indices_list)!=Rin.shape[-1]:
+        # Shared inverse Gram from all trials — same coordinate system for all sessions
+        inv_gram = np.linalg.inv(Din.T @ Din + reg_matrix)
+
+        if len(train_indices_list) != Rin.shape[-1]:
             beta_hat = []
             for indices in train_indices_list[0]:
-                session_beta = reg_pinv[:,indices] @ Rin[indices, :]
+                session_beta = inv_gram @ Din[indices, :].T @ Rin[indices, :]
                 beta_hat.append(session_beta)
             beta.append(np.array(beta_hat))
         else:
             for col in range(Rin.shape[-1]):
                 beta_hat = []
                 for indices in train_indices_list[col]:
-                    session_beta = np.expand_dims(reg_pinv[:,indices] @ Rin[indices, col],axis=1)
+                    session_beta = np.expand_dims(
+                        inv_gram @ Din[indices, :].T @ Rin[indices, col], axis=1)
                     beta_hat.append(session_beta)
                 beta.append(np.array(beta_hat))
+
     return beta, test_indices_list, train_indices_list
         
 def train_test_indices(Rin, Din, indices_blocks, method, category_limit= 10):
@@ -5232,7 +5724,7 @@ def train_test_indices(Rin, Din, indices_blocks, method, category_limit= 10):
                     shared_train_indices = np.array(train_indices)
                     shared_test_indices = np.array(test_indices)
             FLAG_CONTINUOUS = False
-            Flag_shared == 0
+            Flag_shared = 0
 
     for col in range(Rin.shape[-1]):
         indices_list.append(~(~np.isnan(Rin[:,col])))
