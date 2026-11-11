@@ -415,12 +415,52 @@ def get_summ_features(hmm, Y, indices, metrics):
         features_tmp = np.append(features_tmp, SR, axis=1)
     if 'lifetimes' in metrics:
         LT,_,_ = utils.get_life_times(vpath, indices)
+        LT = np.nan_to_num(LT, nan=0.0)   # unvisited states as 0, as a feature
         features_tmp = np.append(features_tmp, LT, axis=1)
 
     features = features_tmp[:,1:]
 
     return features
     
+def get_static_FC_features(Y, indices, kind='covariance', regularization=1e-5):
+    """Static functional connectivity of each session, as features for predict_phenotype.
+
+    Parameters:
+    -----------
+    Y : array-like of shape (n_samples, n_channels)
+        The timeseries of all sessions.
+    indices : array-like of shape (n_sessions, 2)
+        The start and end indices of each session in Y.
+    kind : str, optional, default='covariance'
+        'covariance', 'precision' (inverse of the covariance plus regularization times the
+        identity) or 'partial_correlation' (from that precision; diagonal left out).
+    regularization : float, optional, default=1e-5
+        Added to the diagonal of the covariance before it is inverted.
+
+    Returns:
+    --------
+    features : array of shape (n_sessions, n_features)
+        Upper triangle of each session's matrix (with the diagonal, except for partial
+        correlations).
+    """
+    q = Y.shape[1]
+    iu = np.triu_indices(q, k=1 if kind == 'partial_correlation' else 0)
+    features = np.zeros((indices.shape[0], len(iu[0])))
+    for j in range(indices.shape[0]):
+        C = np.cov(Y[indices[j,0]:indices[j,1],:].T)
+        if kind == 'covariance':
+            M = C
+        else:
+            M = np.linalg.inv(C + regularization * np.eye(q))
+            if kind == 'partial_correlation':
+                d = np.sqrt(np.abs(np.diag(M)))
+                M = -M / np.outer(d, d)
+            elif kind != 'precision':
+                raise ValueError("kind must be 'covariance', 'precision' or 'partial_correlation'")
+        features[j,:] = M[iu]
+    return features
+
+
 def get_groups(group_structure):
     """Util function to get groups from group structure matrix such as family structure. 
     Output can be used to make sure groups/families are not split across folds during 
@@ -508,7 +548,9 @@ def predict_phenotype(hmm, Y, behav, indices, predictor='Fisherkernel', estimato
         The start and end indices of each trial/session in the input data. 
         Note that this function does not work if indices=None  
     predictor : char (optional, default to 'Fisherkernel')
-        What to predict from, either 'Fisherkernel' or 'summary_metrics' (default='Fisherkernel')
+        What to predict from, either 'Fisherkernel', 'summary_metrics' or 'features' (default='Fisherkernel').
+        'features' uses a feature matrix computed beforehand (e.g. static or state-specific connectivity),
+        given as options['features'], with Ridge regression
     estimator : char (optional, default to 'KernelRidge')
         Model to be used for prediction (default='KernelRidge')
         This should be the name of a sklearn base estimator
@@ -523,6 +565,18 @@ def predict_phenotype(hmm, Y, behav, indices, predictor='Fisherkernel', estimato
             'return_models': bool, whether to return also the trained models of each fold
             'return_hyperparams': bool, whether to return also the optimised hyperparameters of each fold
             possible hyperparameters for model, e.g. 'alpha' for (kernel) ridge regression
+        for Ridge regression, also:
+            'n_repeats': int, number of times the cross-validation is repeated with differently shuffled folds
+                (default 1); predictions are averaged over the repeats. With a group structure, each repeat
+                reassigns whole groups to folds, so related sessions always stay in the same fold
+            'ridge_cv': char, how the ridge penalty is chosen within each training set: 'grid' (default,
+                grid search with an inner k-fold CV) or 'gcv' (efficient leave-one-out CV, sklearn's RidgeCV;
+                default penalties then np.logspace(-4, 8, 30))
+            'feature_weights': array-like of shape (n_features,), a weight for each feature, applied after the
+                features are standardised. E.g. to give blocks of features of different size the same weight,
+                use 1/sqrt(n_features_in_block) for each block (default None)
+        for 'features', relevant options are:
+            'features': array-like of shape (n_sessions, n_features), one row per session
         for Fisher kernel, relevant options are: 
             'shape': char, either 'linear' or 'Gaussian' (TO DO)
             'incl_Pi': bool, whether to include the gradient w.r.t. the initial state probabilities when computing the Fisher kernel
@@ -538,6 +592,10 @@ def predict_phenotype(hmm, Y, behav, indices, predictor='Fisherkernel', estimato
         containing
         'behav_pred': predicted phenotype on test sets
         'corr': correlation coefficient between predicted and actual values
+        'behavD': (with confounds) the test scores with the training-fold confound fit removed, i.e. what
+            'behav_pred' is compared with
+        'behav_pred_rep', 'behavD_rep': (Ridge with n_repeats > 1) the same for each repeat separately,
+            arrays of shape (n_repeats, n_sessions)
         (if requested):
         'scores': the model scores of each fold
         'models': the trained models from each fold
@@ -596,7 +654,22 @@ def predict_phenotype(hmm, Y, behav, indices, predictor='Fisherkernel', estimato
         else:
             metrics = options['metrics']
         estimator='Ridge'
+    # necessary options for precomputed features
+    if predictor=='features':
+        if not 'features' in options:
+            raise Exception("predictor='features' needs the feature matrix in options['features']")
+        estimator='Ridge'
     # other necessary options
+    n_repeats = options.get('n_repeats', 1)
+    ridge_cv = options.get('ridge_cv', 'grid')
+    # optional weight for each column of the features, applied after standardising them (Ridge only)
+    feature_weights = options.get('feature_weights', None)
+    if feature_weights is not None:
+        feature_weights = np.asarray(feature_weights, dtype=float).ravel()
+        if estimator != 'Ridge':
+            raise ValueError("feature_weights is only implemented for estimator='Ridge'")
+    if ridge_cv not in ('grid', 'gcv'):
+        raise Exception("options['ridge_cv'] must be 'grid' or 'gcv'")
     if not 'CVscheme' in options:
         CVscheme = 'KFold'
     else:
@@ -645,6 +718,14 @@ def predict_phenotype(hmm, Y, behav, indices, predictor='Fisherkernel', estimato
     elif predictor=='summary_metrics':
         Xin = get_summ_features(hmm, Y, indices, metrics)  
             
+    # alternative: predict from features computed beforehand (one row per session)
+    elif predictor=='features':
+        Xin = np.asarray(options['features'])
+        if Xin.shape[0] == ind.shape[0]:
+            Xin = Xin[ind] # remove the sessions whose phenotype is missing, as for behav
+        elif Xin.shape[0] != N:
+            raise Exception("options['features'] must have one row per session")
+
     # create CV folds
     if do_groupKFold: # when using family/group structure - use GroupKFold
         cs = get_groups(allcs)
@@ -654,6 +735,22 @@ def predict_phenotype(hmm, Y, behav, indices, predictor='Fisherkernel', estimato
     elif CVscheme=='KFold': # when not using family/group structure
         cvfolds = model_selection.KFold(n_splits=nfolds)
         cvfolds.get_n_splits(Y, behav)
+
+    # repeated cross-validation (Ridge only): n_repeats differently shuffled splits, yielded repeat by repeat
+    if n_repeats > 1:
+        if do_groupKFold:
+            # each repeat randomly reassigns whole groups to folds, so related sessions stay together
+            unique_groups = np.unique(cs)
+            dummy = np.zeros(len(cs))
+            rep_splits = []
+            for rep in range(n_repeats):
+                perm = np.random.RandomState(seed=rep).permutation(len(unique_groups))
+                group_map = {unique_groups[i]: int(perm[i]) for i in range(len(unique_groups))}
+                cs_rep = np.array([group_map[g] for g in cs])
+                rep_splits.extend(model_selection.GroupKFold(n_splits=nfolds).split(dummy, dummy, groups=cs_rep))
+        else:
+            rep_splits = list(model_selection.RepeatedKFold(
+                n_splits=nfolds, n_repeats=n_repeats, random_state=42).split(np.zeros(N)))
 
     # create empty return structures
     behav_pred = np.zeros(shape=N)  
@@ -792,109 +889,97 @@ def predict_phenotype(hmm, Y, behav, indices, predictor='Fisherkernel', estimato
     # RR (default for summary metrics):
     elif estimator=='Ridge':
         if not 'alpha' in options:
-            alphas = np.logspace(-4, -1, 6)
+            alphas = np.logspace(-4, 8, 30) if ridge_cv=='gcv' else np.logspace(-4, -1, 6)
         else:
             alphas = options['alpha']
 
         model = linear_model.Ridge()
 
-        if do_groupKFold:
-            for train, test in cvfolds.split(Xin, behav, groups=cs):
-                behav_train = behav[train]
-                behav_mean[test] = np.mean(behav_train)
-                behav_train_scaled = np.zeros(shape=behav_train.shape)
-                if not deconfounding:
-                    scaler_y = preprocessing.StandardScaler().fit(behav_train.reshape(-1,1))
-                    behav_train_scaled = scaler_y.transform(behav_train.reshape(-1,1))
-                    behav_train_scaled = behav_train_scaled.reshape(-1,1)
-                # deconfounding:
-                elif deconfounding:
-                    confounds_train = confounds[train,:]
-                    CbetaY, CinterceptY, behav_train_scaled = deconfound(behav_train, confounds_train)
-                # train model and make predictions:
-                Xin_train = Xin[train,:]
-                scaler_x = preprocessing.StandardScaler().fit(Xin_train)
-                Xin_train_scaled = scaler_x.transform(Xin_train)
-                model_tuned = model_selection.GridSearchCV(estimator=model, param_grid=dict(alpha=alphas), cv=cvfolds)
-                model_tuned.fit(Xin_train_scaled, behav_train_scaled, groups=cs[train])
-                Xin_test = Xin[test,:]
-                Xin_test_scaled = scaler_x.transform(Xin_test)
-                behav_pred_scaled_tmp = model_tuned.predict(Xin_test_scaled)
-                behav_pred_scaled[test] = behav_pred_scaled_tmp.flatten()
-                if not deconfounding:
-                    behav_pred_tmp = scaler_y.inverse_transform(behav_pred_scaled_tmp.reshape(-1,1))
-                    behav_pred[test] = behav_pred_tmp.flatten()
-                elif deconfounding:
-                    # in deconfounded space
-                    behav_pred[test] = behav_pred_scaled[test]
-                    behav_predD[test] = behav_pred[test]
-                    behavD[test] = behav[test]
-                    behav_meanD[test] = 0.0  # deconfounded training scores have mean 0; reconfound adds the confound part
-                    _,_,behavD[test] = deconfound(behavD[test], confounds[test,:], CbetaY, CinterceptY)
-                    behav_predD[test] = reconfound(behav_predD[test], confounds[test,:], CbetaY, CinterceptY)
-                    behav_meanD[test] = reconfound(behav_meanD[test], confounds[test,:], CbetaY, CinterceptY)
-                # get additional output
-                if return_scores:
-                    behav_test = behav[test]
-                    if not deconfounding:
-                        behav_test_scaled = scaler_y.transform(behav_test.reshape(-1,1))
-                        scores.append(model_tuned.score(Xin_test_scaled, behav_test_scaled))
-                    elif deconfounding:
-                        scores.append(ms.r2_score(behav_test, behav_predD[test]))  # original space: reconfounded predictions vs raw scores
-                        scores_deconf.append(model_tuned.score(Xin_test_scaled, behavD[test]))
-                if return_models:
-                    models.append(model_tuned)
-                if return_hyperparams:
-                    hyperparams.append(model_tuned.best_estimator_.alpha)
-        else: # KFold CV not using family structure
-            for train, test in cvfolds.split(Xin, behav):
-                behav_train = behav[train]
-                behav_mean[test] = np.mean(behav_train)
-                behav_train_scaled = np.zeros(shape=behav_train.shape)
-                if not deconfounding:
-                    scaler_y = preprocessing.StandardScaler().fit(behav_train.reshape(-1,1))
-                    behav_train_scaled = scaler_y.transform(behav_train.reshape(-1,1))
-                    behav_train_scaled = behav_train_scaled.reshape(-1,1)
-                # deconfounding:
-                elif deconfounding:
-                    confounds_train = confounds[train,:]
-                    CbetaY, CinterceptY, behav_train_scaled = deconfound(behav_train, confounds_train)
-                # train model and make predictions:
-                Xin_train = Xin[train,:]
-                scaler_x = preprocessing.StandardScaler().fit(Xin_train)
-                Xin_train_scaled = scaler_x.transform(Xin_train)
-                model_tuned = model_selection.GridSearchCV(estimator=model, param_grid=dict(alpha=alphas), cv=cvfolds)
+        if n_repeats > 1:
+            splits = rep_splits
+            # inner CV for the grid search: plain k-fold within each training set
+            inner_cv = model_selection.GroupKFold(n_splits=nfolds) if do_groupKFold else model_selection.KFold(n_splits=nfolds)
+        elif do_groupKFold:
+            splits = cvfolds.split(Xin, behav, groups=cs)
+            inner_cv = cvfolds
+        else:
+            splits = cvfolds.split(Xin, behav)
+            inner_cv = cvfolds
+        pred_count = np.zeros(shape=N)
+        if n_repeats > 1:
+            behav_pred_rep = np.full((n_repeats, N), np.nan)
+            behavD_rep = np.full((n_repeats, N), np.nan)
+
+        for split_i, (train, test) in enumerate(splits):
+            rep_i = split_i // nfolds # splits come repeat by repeat
+            behav_train = behav[train]
+            behav_mean[test] = np.mean(behav_train)
+            behav_train_scaled = np.zeros(shape=behav_train.shape)
+            if not deconfounding:
+                scaler_y = preprocessing.StandardScaler().fit(behav_train.reshape(-1,1))
+                behav_train_scaled = scaler_y.transform(behav_train.reshape(-1,1))
+                behav_train_scaled = behav_train_scaled.reshape(-1,1)
+            # deconfounding:
+            elif deconfounding:
+                confounds_train = confounds[train,:]
+                CbetaY, CinterceptY, behav_train_scaled = deconfound(behav_train, confounds_train)
+            # train model and make predictions:
+            Xin_train = Xin[train,:]
+            scaler_x = preprocessing.StandardScaler().fit(Xin_train)
+            Xin_train_scaled = scaler_x.transform(Xin_train)
+            if feature_weights is not None:
+                Xin_train_scaled = Xin_train_scaled * feature_weights
+            if ridge_cv=='gcv':
+                model_tuned = linear_model.RidgeCV(alphas=alphas)
                 model_tuned.fit(Xin_train_scaled, behav_train_scaled)
-                Xin_test = Xin[test,:]
-                Xin_test_scaled = scaler_x.transform(Xin_test)
-                behav_pred_scaled_tmp = model_tuned.predict(Xin_test_scaled)
-                behav_pred_scaled[test] = behav_pred_scaled_tmp.flatten()
+            else:
+                model_tuned = model_selection.GridSearchCV(estimator=model, param_grid=dict(alpha=alphas), cv=inner_cv)
+                if do_groupKFold:
+                    model_tuned.fit(Xin_train_scaled, behav_train_scaled, groups=cs[train])
+                else:
+                    model_tuned.fit(Xin_train_scaled, behav_train_scaled)
+            Xin_test = Xin[test,:]
+            Xin_test_scaled = scaler_x.transform(Xin_test)
+            if feature_weights is not None:
+                Xin_test_scaled = Xin_test_scaled * feature_weights
+            behav_pred_scaled_tmp = model_tuned.predict(Xin_test_scaled).flatten()
+            behav_pred_scaled[test] = behav_pred_scaled_tmp
+            pred_count[test] += 1
+            if not deconfounding:
+                behav_pred_tmp = scaler_y.inverse_transform(behav_pred_scaled_tmp.reshape(-1,1)).flatten()
+                behav_pred[test] += behav_pred_tmp
+            elif deconfounding:
+                # in deconfounded space
+                behav_pred[test] += behav_pred_scaled_tmp
+                _,_,behavD_fold = deconfound(behav[test], confounds[test,:], CbetaY, CinterceptY)
+                behavD[test] += behavD_fold
+                # deconfounded training scores have mean 0; reconfound adds the confound part
+                behav_predD[test] += reconfound(behav_pred_scaled_tmp, confounds[test,:], CbetaY, CinterceptY)
+                behav_meanD[test] = reconfound(np.zeros(len(test)), confounds[test,:], CbetaY, CinterceptY)
+            if n_repeats > 1:
+                behav_pred_rep[rep_i, test] = behav_pred_scaled_tmp if deconfounding else behav_pred_tmp
+                if deconfounding:
+                    behavD_rep[rep_i, test] = behavD_fold
+            # get additional output
+            if return_scores:
+                behav_test = behav[test]
                 if not deconfounding:
-                    behav_pred_tmp = scaler_y.inverse_transform(behav_pred_scaled_tmp.reshape(-1,1))
-                    behav_pred[test] = behav_pred_tmp.flatten()
+                    behav_test_scaled = scaler_y.transform(behav_test.reshape(-1,1))
+                    scores.append(model_tuned.score(Xin_test_scaled, behav_test_scaled))
                 elif deconfounding:
-                    # in deconfounded space
-                    behav_pred[test] = behav_pred_scaled[test]
-                    behav_predD[test] = behav_pred[test]
-                    behavD[test] = behav[test]
-                    behav_meanD[test] = 0.0  # deconfounded training scores have mean 0; reconfound adds the confound part
-                    _,_,behavD[test] = deconfound(behavD[test], confounds[test,:], CbetaY, CinterceptY)
-                    behav_predD[test] = reconfound(behav_predD[test], confounds[test,:], CbetaY, CinterceptY)
-                    behav_meanD[test] = reconfound(behav_meanD[test], confounds[test,:], CbetaY, CinterceptY)
-                # get additional output
-                if return_scores:
-                    behav_test = behav[test]
-                    if not deconfounding:
-                        behav_test_scaled = scaler_y.transform(behav_test.reshape(-1,1))
-                        scores.append(model_tuned.score(Xin_test_scaled, behav_test_scaled))
-                    elif deconfounding:
-                        scores.append(ms.r2_score(behav_test, behav_predD[test]))  # original space: reconfounded predictions vs raw scores
-                        scores_deconf.append(model_tuned.score(Xin_test_scaled, behavD[test]))
-                if return_models:
-                    models.append(model_tuned)
-                if return_hyperparams:
-                    hyperparams.append(model_tuned.best_estimator_.alpha)
-    
+                    # original space: reconfounded predictions vs raw scores
+                    scores.append(ms.r2_score(behav_test, reconfound(behav_pred_scaled_tmp, confounds[test,:], CbetaY, CinterceptY)))
+                    scores_deconf.append(model_tuned.score(Xin_test_scaled, behavD_fold))
+            if return_models:
+                models.append(model_tuned)
+            if return_hyperparams:
+                hyperparams.append(model_tuned.alpha_ if ridge_cv=='gcv' else model_tuned.best_estimator_.alpha)
+        # average over the repeats (each session is tested once per repeat)
+        behav_pred /= pred_count
+        if deconfounding:
+            behav_predD /= pred_count
+            behavD /= pred_count
+
     # get correlation coefficient between model-predicted and actual values
     if deconfounding:
         # both in deconfounded space: predictions vs test scores with the training-fold confound fit removed
@@ -910,8 +995,13 @@ def predict_phenotype(hmm, Y, behav, indices, predictor='Fisherkernel', estimato
     results['corr'] = corr
     if deconfounding:
         results['behav_predD'] = behav_predD
+        results['behavD'] = behavD
         results['corr_deconf'] = corr  # kept for backward compatibility; now identical to 'corr'
         results['corr_reconf'] = corr_reconf
+    if estimator=='Ridge' and n_repeats > 1:
+        results['behav_pred_rep'] = behav_pred_rep
+        if deconfounding:
+            results['behavD_rep'] = behavD_rep
     if return_scores:
         results['scores'] = scores
         if deconfounding:
