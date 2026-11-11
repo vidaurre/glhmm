@@ -389,22 +389,25 @@ def compute_qstar_parallel(L,Pi,P,indices_individual):
     delta[0,:,:] = Pi * L[0,:,:]
     delta[0,:,:] = delta[0,:,:] / np.expand_dims(np.sum(delta[0,:,:],axis=1),axis=1)
 
-    for t in range(1,T):
-        v = np.expand_dims(delta[t-1,:,:],axis=1) * P.T
-        psi[t,:,:] = np.argmax(v,axis=2)
-        delta[t,:,:] = v[np.expand_dims(range(N),axis=1),np.expand_dims(range(K),axis=0),psi[t,:,:]] * L[t,:,:]
-        delta[t,:,:] = delta[t,:,:] / np.expand_dims(np.sum(delta[t,:,:],axis=1),axis=1)
+    # sessions shorter than T are zero-padded at the end; delta is not defined there
+    with np.errstate(divide='ignore', invalid='ignore'):
+        for t in range(1,T):
+            v = np.expand_dims(delta[t-1,:,:],axis=1) * P.T
+            psi[t,:,:] = np.argmax(v,axis=2)
+            delta[t,:,:] = v[np.expand_dims(range(N),axis=1),np.expand_dims(range(K),axis=0),psi[t,:,:]] * L[t,:,:]
+            delta[t,:,:] = delta[t,:,:] / np.expand_dims(np.sum(delta[t,:,:],axis=1),axis=1)
 
-    delta_ = roll_by_vector(delta,T-indices_individual[:,1],axis=0)
-
-    id = np.argmax(delta_[-1,:,:],axis=1)
-
-    qstar[T-1,range(N),id] = 1
-
-    for t in range(T-2,-1,-1):
-        id0 = np.argmax(qstar[t+1,:,:]==1,axis=1)
-        id = psi[t+1,range(N),id0]
-        qstar[t,range(N),id] = 1
+    # backtracking starts at the last sample of each session, not at the end of the padding
+    t_last = np.asarray(indices_individual[:,1]).astype(int) - 1
+    id = np.zeros(N,dtype=np.int64)
+    for t in range(T-1,-1,-1):
+        start = (t_last == t)
+        if np.any(start):
+            id[start] = np.argmax(delta[t,start,:],axis=1)
+        active = (t_last >= t)
+        qstar[t,np.where(active)[0],id[active]] = 1
+        if t > 0:
+            id[active] = psi[t,np.where(active)[0],id[active]]
 
     return qstar
 

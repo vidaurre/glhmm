@@ -711,7 +711,7 @@ def plot_p_value_matrix(pval, alpha = 0.05, normalize_vals=True, figsize=(9, 5),
         if np.all(x_tick_labels == x_tick_labels.astype(int)):
             x_tick_labels = x_tick_labels.astype(int) 
     else:
-        x_tick_labels = x_tick_positions
+        x_tick_labels = x_tick_positions + 1
 
     # Set the x-axis ticks and labels
     if xticklabels is not None:
@@ -727,7 +727,7 @@ def plot_p_value_matrix(pval, alpha = 0.05, normalize_vals=True, figsize=(9, 5),
 
     elif pval_in.shape[1] > 1:
         axes.set_xticks(x_tick_positions + 0.5)
-        axes.set_xticklabels(x_tick_labels+1, rotation=0, fontsize=10, ha=ha)
+        axes.set_xticklabels(x_tick_labels, rotation=0, fontsize=10, ha=ha)
 
     else:
         axes.set_xticklabels([])
@@ -3792,7 +3792,7 @@ def plot_connectivity_maps(connectivity_map, parcellation_file, filename=None, f
         plt.show()
 
 def plot_model_selection(results, n_total_timepoints, save_path=None,
-                         similarity_threshold=0.8, figsize=(20, 6),
+                         similarity_threshold=0.8, n_last=1, figsize=(20, 6),
                          fontsize_title=16, fontsize_labels=14, fontsize_ticks=12,
                          return_fig=False):
     """
@@ -3821,6 +3821,11 @@ def plot_model_selection(results, n_total_timepoints, save_path=None,
         If provided, saves the figure to that path.
     similarity_threshold (float, optional), default=0.8:
         Horizontal dashed threshold line drawn on the stability panel.
+    n_last (int, optional), default=1:
+        Number of last cycles averaged to get the final free energy of a run. Use 1 for standard
+        training. For stochastic training, where the free energy goes up and down from cycle to cycle,
+        use e.g. 10. With n_last > 1, the 'Converged?' column shows how many runs of each K were still
+        decreasing at the end (see ``utils.fe_still_decreasing``).
     figsize (tuple, optional), default=(20, 6):
         Figure size.
     fontsize_title (int, optional), default=16:
@@ -3850,8 +3855,10 @@ def plot_model_selection(results, n_total_timepoints, save_path=None,
     df_sim = pd.DataFrame(sim_rows)
 
     avg_similarity = {K: np.mean(results[K]['similarity_scores']) for K in ks}
+    def final_fe(fe):
+        return np.mean(fe[-n_last:])
     min_fe = {
-        K: np.min([fe[-1] for fe in results[K]['FE']]) / n_total_timepoints
+        K: np.min([final_fe(fe) for fe in results[K]['FE']]) / n_total_timepoints
         for K in ks
     }
 
@@ -3904,7 +3911,7 @@ def plot_model_selection(results, n_total_timepoints, save_path=None,
     ax = axes[2]
     cmap = plt.get_cmap('coolwarm', len(ks))
     for i, K in enumerate(ks):
-        best_rep = int(np.argmin([fe[-1] for fe in results[K]['FE']]))
+        best_rep = int(np.argmin([final_fe(fe) for fe in results[K]['FE']]))
         ax.plot(results[K]['FE'][best_rep], color=cmap(i), linewidth=1.5, label=f'K={K}')
     ax.set_title('FE convergence (best rep per K)  should plateau smoothly',
                  fontsize=fontsize_title)
@@ -3930,14 +3937,228 @@ def plot_model_selection(results, n_total_timepoints, save_path=None,
     print('-' * 52)
     for K in ks:
         sims = results[K]['similarity_scores']
-        best_fe = results[K]['FE'][int(np.argmin([fe[-1] for fe in results[K]['FE']]))]
-        last_change = abs(best_fe[-1] - best_fe[-2]) / (abs(best_fe[-1] - best_fe[0]) + 1e-10)
-        converged = 'yes' if last_change < 1e-3 else 'CHECK'
+        if n_last == 1:
+            best_fe = results[K]['FE'][int(np.argmin([fe[-1] for fe in results[K]['FE']]))]
+            last_change = abs(best_fe[-1] - best_fe[-2]) / (abs(best_fe[-1] - best_fe[0]) + 1e-10)
+            converged = 'yes' if last_change < 1e-3 else 'CHECK'
+        else:
+            n_dec = sum(utils.fe_still_decreasing(fe, n_last) for fe in results[K]['FE'])
+            converged = 'yes' if n_dec == 0 else f"CHECK {n_dec}/{len(results[K]['FE'])}"
         print(f'{K:>4} | {np.mean(sims):>9.4f} | {np.std(sims):>8.4f} | {min_fe[K]:>10.2f} | {converged:>10}')
 
     return avg_similarity, min_fe
 
-    
+
+def plot_free_energy(results, skip=20, W=10, n_cols=3, same_scale=True, print_table=True,
+                     save_path=None, figsize=None, fontsize_title=14, fontsize_labels=12,
+                     fontsize_ticks=10, return_fig=False):
+    """
+    Plot the free energy over the training cycles of every run, one panel per K, to check
+    whether the training converged.
+
+    Each curve should be flat at the end. If it is still going down, the model has not converged
+    yet, and ``cyc`` should be increased. Under the figure, a table shows for each K how many runs
+    were still decreasing at the end (see ``utils.fe_still_decreasing``).
+
+    Parameters:
+    --------------
+    results (dict or array-like):
+        Either the output of ``utils.run_stability_training()`` or ``utils.load_stability_results()``,
+        with format ``{K: {'FE': [list of arrays], ...}}``, or the free energy of a single run
+        (third output of ``hmm.train()``).
+    skip (int, optional), default=20:
+        Number of first cycles that are not plotted. The big drop at the start would otherwise
+        make the rest of the curve look flat.
+    W (int, optional), default=10:
+        Number of cycles in each window of the convergence check. For stochastic training this
+        is the same as ``cyc_to_go_under_th`` (default 10).
+    n_cols (int, optional), default=3:
+        Number of panels per row.
+    same_scale (bool, optional), default=True:
+        If ``True``, all panels show the same range on the y-axis, so the gaps between runs can be
+        compared across K. Otherwise each panel is scaled to its own curves, which can make small
+        gaps look big.
+    print_table (bool, optional), default=True:
+        If ``True``, prints the table with the number of runs that were still decreasing at the end.
+        The check is meant for stochastic training. With standard training, a run that stops before
+        ``cyc`` has already converged by glhmm's own stopping rule, so set this to ``False``.
+    save_path (str, optional), default=None:
+        If provided, saves the figure to that path.
+    figsize (tuple, optional), default=None:
+        Figure size. If None, it is set from the number of panels.
+    fontsize_title (int, optional), default=14:
+        Font size for panel titles.
+    fontsize_labels (int, optional), default=12:
+        Font size for axis labels.
+    fontsize_ticks (int, optional), default=10:
+        Font size for tick labels.
+    return_fig (bool, optional), default=False:
+        If ``True``, returns the figure object instead of calling ``plt.show()``.
+
+    Returns:
+    ----------
+    n_still_decreasing (dict):
+        Number of runs per K that were still decreasing at the end, ``{K: int}``.
+    fig (matplotlib.figure.Figure):
+        Only returned when ``return_fig=True``.
+    """
+    if not isinstance(results, dict):
+        results = {None: {'FE': [np.asarray(results)]}}
+    ks = list(results.keys())
+    n_cols = min(len(ks), n_cols)
+    n_rows = int(np.ceil(len(ks) / n_cols))
+    if figsize is None:
+        figsize = (5 * n_cols, 3.5 * n_rows)
+
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=figsize, squeeze=False)
+    n_still_decreasing = {}
+    ylims = []
+    for ax, K in zip(axes.flat, ks):
+        fe_runs = [np.asarray(fe) for fe in results[K]['FE']]
+        for i, fe in enumerate(fe_runs):
+            ax.plot(np.arange(skip + 1, len(fe) + 1), fe[skip:], linewidth=1, label=f'run {i + 1}')
+        ylims.append((min(np.min(fe[skip:]) for fe in fe_runs), max(np.max(fe[skip:]) for fe in fe_runs)))
+        n_still_decreasing[K] = sum(utils.fe_still_decreasing(fe, W) for fe in fe_runs)
+        if K is not None:
+            ax.set_title(f'K = {K}', fontsize=fontsize_title)
+        ax.set_xlabel('Cycle', fontsize=fontsize_labels)
+        ax.set_ylabel('Free energy', fontsize=fontsize_labels)
+        ax.tick_params(axis='both', labelsize=fontsize_ticks)
+    if same_scale and len(ks) > 1:
+        span = max(hi - lo for lo, hi in ylims)
+        for ax, (lo, hi) in zip(axes.flat, ylims):
+            ax.set_ylim(lo - 0.05 * span, lo + 1.05 * span)
+    if len(results[ks[0]]['FE']) > 1:
+        axes.flat[0].legend(fontsize=fontsize_ticks)
+    for ax in list(axes.flat)[len(ks):]:
+        ax.axis('off')
+    plt.tight_layout()
+    if save_path is not None:
+        plt.savefig(save_path, bbox_inches='tight')
+    if return_fig:
+        return n_still_decreasing, fig
+    else:
+        plt.show()
+
+    if print_table and ks != [None]:
+        print(f"{'K':>4} | {'runs':>4} | still decreasing at the end")
+        for K in ks:
+            print(f"{K:>4} | {len(results[K]['FE']):>4} | {n_still_decreasing[K]}")
+    elif print_table:
+        print('Still decreasing at the end' if n_still_decreasing[None] else 'Not decreasing at the end')
+    return n_still_decreasing
+
+
+def plot_similarity_matrix(results, n_cols=3, vmin=0, vmax=1, same_scale=True, annotate=True,
+                           cmap='Blues', save_path=None, figsize=None, fontsize_title=14,
+                           fontsize_labels=12, fontsize_ticks=10, return_fig=False):
+    """
+    Plot the Gamma similarity between every pair of runs, one panel per K.
+
+    This shows which runs agree with each other, e.g. whether one run found a different solution
+    than all the others (a row and column with low values), or whether the runs fall into
+    two or more groups.
+
+    Parameters:
+    --------------
+    results (dict):
+        Output of ``utils.run_stability_training()`` or ``utils.load_stability_results()``,
+        with format ``{K: {'similarity_scores': [list of floats], ...}}``. The similarities must be
+        ordered as run 1 vs 2, 1 vs 3, ..., 2 vs 3, ..., which is how these functions store them.
+    n_cols (int, optional), default=3:
+        Number of panels per row.
+    vmin, vmax (float or None, optional), default=0 and 1:
+        Range of the colour scale, used for all panels. With the default 0 to 1, the colours mean
+        the same in every figure. Set both to None to use the range of the data instead (see ``same_scale``).
+    same_scale (bool, optional), default=True:
+        Only used when ``vmin`` and ``vmax`` are None. If ``True``, all panels use the same colour
+        scale, from the lowest to the highest similarity over all K. Otherwise each panel gets its
+        own colour scale.
+    annotate (bool, optional), default=True:
+        If ``True``, writes the similarity value in each cell.
+    cmap (str, optional), default='Blues':
+        Colormap. With 'Blues', dark cells are pairs of runs that agree.
+    save_path (str, optional), default=None:
+        If provided, saves the figure to that path.
+    figsize (tuple, optional), default=None:
+        Figure size. If None, it is set from the number of panels.
+    fontsize_title (int, optional), default=14:
+        Font size for panel titles.
+    fontsize_labels (int, optional), default=12:
+        Font size for axis labels.
+    fontsize_ticks (int, optional), default=10:
+        Font size for tick labels and values in the cells.
+    return_fig (bool, optional), default=False:
+        If ``True``, returns the figure object instead of calling ``plt.show()``.
+
+    Returns:
+    ----------
+    fig (matplotlib.figure.Figure):
+        Only returned when ``return_fig=True``.
+    """
+    ks = list(results.keys())
+    mats = {}
+    for K in ks:
+        sims = np.asarray(results[K]['similarity_scores'], dtype=float)
+        n = int(round((1 + np.sqrt(1 + 8 * len(sims))) / 2))
+        if n * (n - 1) // 2 != len(sims):
+            raise ValueError(f'K={K}: {len(sims)} similarity values do not match a number of runs')
+        mat = np.full((n, n), np.nan)
+        c = 0
+        for i in range(n):
+            for j in range(i + 1, n):
+                mat[j, i] = sims[c]
+                c += 1
+        mats[K] = mat
+
+    fixed_scale = vmin is not None and vmax is not None
+    if not fixed_scale and same_scale:
+        all_vals = np.concatenate([m[~np.isnan(m)] for m in mats.values()])
+        vmin, vmax = np.min(all_vals), np.max(all_vals)
+    one_colorbar = fixed_scale or same_scale
+
+    n_cols = min(len(ks), n_cols)
+    n_rows = int(np.ceil(len(ks) / n_cols))
+    if figsize is None:
+        figsize = (4.5 * n_cols, 4 * n_rows)
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=figsize, squeeze=False)
+    colormap = plt.get_cmap(cmap).copy()
+    colormap.set_bad('lightgrey')
+
+    for ax, K in zip(axes.flat, ks):
+        # leave out the first row and the last column, which are always empty
+        mat = mats[K][1:, :-1]
+        n = mat.shape[0]
+        im = ax.imshow(mat, cmap=colormap, vmin=vmin, vmax=vmax)
+        if annotate:
+            for j in range(n):
+                for i in range(j + 1):
+                    # white text on dark cells, black text on light cells
+                    r, g, b = im.cmap(im.norm(mat[j, i]))[:3]
+                    dark = 0.299 * r + 0.587 * g + 0.114 * b < 0.5
+                    ax.text(i, j, f'{mat[j, i]:.2f}', ha='center', va='center',
+                            fontsize=fontsize_ticks, color='white' if dark else 'black')
+        ax.set_xticks(range(n))
+        ax.set_xticklabels(range(1, n + 1), fontsize=fontsize_ticks)
+        ax.set_yticks(range(n))
+        ax.set_yticklabels(range(2, n + 2), fontsize=fontsize_ticks)
+        ax.set_xlabel('Run', fontsize=fontsize_labels)
+        ax.set_ylabel('Run', fontsize=fontsize_labels)
+        ax.set_title(f'K = {K}', fontsize=fontsize_title)
+        if not one_colorbar:
+            fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+    for ax in list(axes.flat)[len(ks):]:
+        ax.axis('off')
+    plt.tight_layout()
+    if one_colorbar:
+        fig.colorbar(im, ax=axes.ravel().tolist(), fraction=0.02, pad=0.02, label='Gamma similarity')
+    if save_path is not None:
+        plt.savefig(save_path, bbox_inches='tight')
+    if return_fig:
+        return fig
+    plt.show()
+
+
 def __resolve_figure_directory(save_figures, filename, default_folder):
     return resolve_figure_directory(save_figures, filename, default_folder)      
 def __generate_filename(base, index, extension):
