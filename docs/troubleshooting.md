@@ -24,7 +24,7 @@ Free energy has not reached a stable value within the maximum number of training
 **What to try:**
 - Increase `cyc` (the default is 500): `options = {'cyc': 1000}`.
 - Loosen the stopping criterion: `options = {'tol': 1e-3}` (the default is `1e-4`). This stops training earlier, when free energy changes by less than `tol` between cycles.
-- For stochastic training, free energy fluctuates more between cycles by design because each cycle only sees a subset of the data. This is normal and not a sign that something is wrong.
+- For stochastic training, free energy fluctuates more between cycles because each cycle only sees a subset of the data. That's expected.
 
 ---
 

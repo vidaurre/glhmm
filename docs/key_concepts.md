@@ -1,6 +1,6 @@
 # How it works
 
-This page explains the main ideas and settings behind GLHMM. If something is unclear when you first run the model, this is a good place to start.
+This page explains the main ideas behind glhmm and the settings you choose when you set up a model.
 
 ---
 
@@ -25,15 +25,13 @@ There is no single correct answer. A practical approach is to fit the model seve
 
 ## covtype -- what does each state look like?
 
-`covtype` controls the mathematical shape of each state. In practice, it determines whether the model captures relationships *between* brain regions (not just activity in each region separately).
+`covtype` decides what the covariance of each state looks like, i.e. whether a state also captures how regions co-vary, or only how much each region varies.
 
 | Value | What it does | When to use |
 |---|---|---|
 | `'full'` | Each state has its own covariance matrix, capturing how brain regions co-activate | Recommended for fMRI and most uses. Not the default, so set it yourself. |
 | `'diag'` | Each state only captures activity levels, not region-to-region relationships | Very high-dimensional data |
 | `'sharedfull'` | All states share the same covariance structure | Rarely used |
-
-For most neuroimaging work, use `covtype='full'`.
 
 ---
 
@@ -70,7 +68,7 @@ Standardising removes each session's overall mean, but states can still differ i
 - High δ: the model expects long, stable states (slow switching).
 - Low δ: the model expects rapid switching between states.
 
-This is a starting preference, not a fixed rule. The model can update it based on what the data actually shows.
+This is only a prior. The model still learns the transition probabilities from the data.
 
 You set δ when creating the model using the `dirichlet_diag` parameter (default: 10):
 

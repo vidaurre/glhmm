@@ -1,6 +1,6 @@
 # Getting Started
 
-This page walks you through installing GLHMM, explains what data format the toolbox expects, and shows a minimal working example so you can see the model in action.
+How to install glhmm, what format your data should be in, and a small example to train your first model.
 
 ---
 
@@ -12,7 +12,7 @@ Install GLHMM from PyPI:
 pip install glhmm
 ```
 
-That is all you need to get started. GPU support is optional. See [Training Options](training_options.md) if you want to speed things up on a GPU.
+GPU support is optional, see [Training options](training_options.md).
 
 ---
 
@@ -48,7 +48,7 @@ This fits a 6-state model to a single session of simulated data:
 import numpy as np
 from glhmm import glhmm
 
-# Simulated data — replace with your own
+# Random data, replace it with your own
 Y = np.random.randn(5000, 80)  # 5000 timepoints, 80 brain regions
 
 # Set up the model (the settings are explained in How it works)

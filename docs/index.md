@@ -2,7 +2,7 @@
 html_theme.sidebar_secondary.remove: true
 ---
 
-# GLHMM — Gaussian-Linear Hidden Markov Models
+# GLHMM: Gaussian-Linear Hidden Markov Models
 
 ```{image} ../logo2_full.png
 :alt: GLHMM logo
