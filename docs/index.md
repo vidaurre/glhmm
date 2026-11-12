@@ -30,25 +30,39 @@ GLHMM is a Python toolbox for fitting Hidden Markov Models (HMMs) to time series
 Install the toolbox, understand the data format, and train your first model in a few lines of code.
 :::
 
+:::{grid-item-card} Tutorial
+:link: notebooks/tutorial
+:link-type: doc
+
+Train a model on a small simulated dataset, check that it converged, and look at the states.
+:::
+
+:::{grid-item-card} From data to results
+:link: workflow
+:link-type: doc
+
+The steps of a full analysis, from preparing the data to testing and prediction, with the right page or notebook for each.
+:::
+
 :::{grid-item-card} How it works
 :link: key_concepts
 :link-type: doc
 
-Understand the main parameters — K, covtype, δ, γ, and free energy — before diving into the code.
+What K, covtype, δ, γ and the free energy mean, and which settings to use.
 :::
 
-:::{grid-item-card} Examples
-:link: notebooks/tutorial
+:::{grid-item-card} Large datasets
+:link: large_datasets
 :link-type: doc
 
-Worked examples for Gaussian HMMs, GLHMMs, TDE-HMMs, and more.
+Data that don't fit in memory: preprocess, train and decode file by file.
 :::
 
-:::{grid-item-card} Large datasets and GPU
+:::{grid-item-card} Training options and GPU
 :link: training_options
 :link-type: doc
 
-Stochastic training for datasets that do not fit in memory, and GPU acceleration to speed up training.
+The options that control the training, and how to speed it up on a GPU.
 :::
 
 ::::
@@ -60,7 +74,7 @@ Stochastic training for datasets that do not fit in memory, and GPU acceleration
 - **Identify brain states**: find recurring patterns of activity or connectivity that the brain cycles through over time
 - **Work with multiple data modalities**: fMRI, MEG, EEG, ECoG, and more
 - **Relate brain dynamics to behaviour**: predict cognitive scores, classify clinical groups, or test for statistical relationships
-- **Scale to large datasets**: stochastic training processes data file by file without loading everything into memory
+- **Scale to large datasets**: preprocessing, training and decoding can run file by file, without loading everything into memory (see [Large datasets](large_datasets.md))
 - **GUI available**: a code-free interface is available at [github.com/Nick7900/glhmm_protocols](https://github.com/Nick7900/glhmm_protocols)
 
 ---
@@ -85,22 +99,32 @@ The protocols and a code-free GUI for the statistical tests are available at [gi
 :hidden:
 
 getting_started
+notebooks/tutorial
+workflow
 key_concepts
 notebooks/Preprocessing
-notebooks/HMM_state_selection_standard
 training_options
+large_datasets
 troubleshooting
 ```
 
 ```{toctree}
-:caption: Examples
+:caption: Model types
 :maxdepth: 1
 :hidden:
 
-notebooks/tutorial
 notebooks/GaussianHMM_example
 notebooks/GLHMM_example
 notebooks/HMM-TDE_vs_HMM-MAR_example
+```
+
+```{toctree}
+:caption: Choosing the number of states
+:maxdepth: 1
+:hidden:
+
+notebooks/HMM_state_selection_standard
+notebooks/HMM_state_selection_stochastic
 ```
 
 ```{toctree}

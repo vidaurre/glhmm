@@ -1,3 +1,6 @@
+Glossary
+========
+
 .. glossary::
    :sorted:
 
@@ -11,7 +14,7 @@
       The proportion of time the model assigns to each state. A common summary measure derived from γ, averaged across a recording or across subjects.
 
    free energy
-      A measure of how well a trained model fits the data. Higher is better. A model with more states will always have a higher free energy, so free energy alone cannot be used to choose K. See the state number selection notebook for how to compare models properly.
+      A measure of how well a trained model fits the data, with a penalty for model complexity. Lower is better. With a lot of data it often keeps going down as you add states, so it can't be used on its own to choose K. See the state number selection notebook for how to choose K.
 
    γ (Gamma)
       The state time course. The main output of training: a matrix of shape ``(n_timepoints, K)`` where each row gives the probability of being in each state at that moment. Rows sum to 1. Called ``Gamma`` in the code.
@@ -29,7 +32,7 @@
       Multivariate autoregressive HMM. States are defined by autoregressive coefficients, making them sensitive to specific oscillatory frequencies and amplitudes. Requires preprocessing with ``build_data_autoregressive()``.
 
    model_mean
-      Controls whether each state has its own mean activation level (``'state'``) or only its own covariance structure (``'no'``). Use ``'no'`` for demeaned or standardised data.
+      Controls whether each state has its own mean activation level (``'state'``) or only its own covariance structure (``'no'``). See How it works for when to use which.
 
    n_parcels
       The number of brain parcels, regions, or channels in the data.
@@ -44,7 +47,7 @@
       The number of hidden states in the model. Set by the parameter K.
 
    state lifetime
-      The average duration a state persists before the model switches to another state. Derived from γ using ``utils.get_life_times(Gamma, indices)``.
+      How long a visit to a state lasts before the model switches to another state. Computed from the Viterbi path with ``utils.get_life_times(vpath, indices)``, where ``vpath = hmm.decode(None, Y, indices, viterbi=True)``.
 
    state mixing
       Whether the model captures within-session state transitions, rather than assigning most of a session to a single state. For more information, see Ahrends et al. (2022) `here <https://pubmed.ncbi.nlm.nih.gov/35217207/>`_.

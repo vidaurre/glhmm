@@ -22,19 +22,19 @@ Some states capture almost all the data and others go empty. Their fractional oc
 Free energy has not reached a stable value within the maximum number of training cycles.
 
 **What to try:**
-- Increase `cyc`: `options = {'cyc': 200}`.
+- Increase `cyc` (the default is 500): `options = {'cyc': 1000}`.
 - Loosen the stopping criterion: `options = {'tol': 1e-3}` (the default is `1e-4`). This stops training earlier, when free energy changes by less than `tol` between cycles.
 - For stochastic training, free energy fluctuates more between cycles by design because each cycle only sees a subset of the data. This is normal and not a sign that something is wrong.
 
 ---
 
-## `indices` shape error
+## `indices` given as session lengths
 
 ```
-ValueError: indices must have shape (n_sessions, 2)
+ValueError: negative dimensions are not allowed
 ```
 
-`indices` must be a 2D array of start/end pairs, not a list of lengths. Use one of the helper functions to build it:
+You get this error if `indices` is a list of session lengths, e.g. `[1000, 800]`. It must be a 2D array with the start and end of each session. Use one of the helper functions to build it:
 
 ```python
 from glhmm.auxiliary import make_indices_from_T
@@ -49,28 +49,23 @@ See [Getting Started](getting_started.md) for all three helper functions.
 
 The full data matrix does not fit in RAM.
 
-Switch to stochastic training, which reads one mini-batch of files at a time:
+glhmm can preprocess, train and decode file by file, so the data never have to fit in memory. See [Large datasets](large_datasets.md).
 
-```python
-options = {'stochastic': True, 'Nbatch': 10}
-Gamma, Xi, fe = hmm.train(files=files, options=options)
+---
+
+## Training on files fails
+
+```
+UnboundLocalError: local variable 'dat' referenced before assignment
 ```
 
-Your data must be saved as individual files (one per subject). See [Training Options](training_options.md) for the full setup.
+`train()` and `decode()` read `.npz` or `.mat` files, not `.npy`. Run the files through `preproc.preprocess_data(files=..., combine_outputs=False)` first, which saves them as `.npz`. See [Large datasets](large_datasets.md).
 
 ---
 
 ## GPU is not available
 
-Before installing anything, check whether your machine has an NVIDIA GPU by running this in your terminal:
-
-```bash
-nvidia-smi
-```
-
-If the command is not recognised, your machine does not have an NVIDIA GPU or the driver is not installed. GPU acceleration will not work on this machine. This is common on laptops — GPU training is typically done on a compute cluster.
-
-If `nvidia-smi` runs, note the CUDA version shown in the top-right corner (for example `CUDA Version: 12.4`). You need this to install the right CuPy version.
+If `nvidia-smi` isn't recognised in the terminal, your machine has no NVIDIA GPU or its driver isn't installed, so glhmm can't use a GPU there. This is common on laptops. GPU training is usually done on a compute cluster.
 
 ---
 
@@ -80,14 +75,7 @@ If `nvidia-smi` runs, note the CUDA version shown in the top-right corner (for e
 ModuleNotFoundError: No module named 'cupy'
 ```
 
-Install CuPy matching the CUDA version shown by `nvidia-smi`:
-
-```bash
-pip install cupy-cuda12x   # CUDA 12.x
-pip install cupy-cuda11x   # CUDA 11.x
-```
-
-See the [CuPy installation guide](https://docs.cupy.dev/en/stable/install.html) for other versions.
+glhmm needs CuPy to use the GPU. [Training options](training_options.md) shows how to install the right version for your CUDA.
 
 ---
 
@@ -124,7 +112,7 @@ Training produces `nan` values.
 
 ```python
 from glhmm import preproc
-Y_proc = preproc.preprocess_data(data=Y, indices=indices, standardise=True)
+Y_proc, indices, log = preproc.preprocess_data(data=Y, indices=indices, standardise=True)
 ```
 
 A second cause is near-perfectly correlated channels. When two channels carry almost identical signals, the model cannot estimate a valid covariance matrix. Try reducing dimensionality (for example with PCA) before training.
