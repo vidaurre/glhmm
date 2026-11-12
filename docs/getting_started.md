@@ -1,6 +1,6 @@
 # Getting Started
 
-This page walks you through installing GLHMM, explains what data format the toolbox expects, and shows a minimal working example so you can see the model in action.
+How to install glhmm, what format your data should be in, and a small example to train your first model.
 
 ---
 
@@ -12,7 +12,7 @@ Install GLHMM from PyPI:
 pip install glhmm
 ```
 
-That is all you need to get started. GPU support is optional. See [Training Options](training_options.md) if you want to speed things up on a GPU.
+GPU support is optional, see [Training options](training_options.md).
 
 ---
 
@@ -48,31 +48,34 @@ This fits a 6-state model to a single session of simulated data:
 import numpy as np
 from glhmm import glhmm
 
-# Simulated data — replace with your own
+# Random data, replace it with your own
 Y = np.random.randn(5000, 80)  # 5000 timepoints, 80 brain regions
 
-# Set up the model
-hmm = glhmm.glhmm(K=6, covtype='full', model_mean='no')
+# Set up the model (the settings are explained in How it works)
+hmm = glhmm.glhmm(K=6, covtype='full', model_mean='no', model_beta='no')
 
 # Train
 Gamma, Xi, fe = hmm.train(Y=Y)
 
 print(Gamma.shape)
 print(f"Free energy: {fe[-1]:.2f}")
-print(f"Most likely state at t=0: {Gamma[0].argmax()}")
 ```
 
-Expected output:
+While it trains, glhmm prints the free energy of each cycle. It should go down over the cycles. The output looks something like this (your numbers will differ):
 
 ```
-Cycle 1, free energy: -1.23e+07
-Cycle 2, free energy: -1.18e+07
+Init repetition 1 free energy = 748234.89
 ...
-Converged.
+Best repetition: 5
+Cycle 1 free energy = 747651.23 at [02:58:50] (0.2s)
+Cycle 2 free energy = 747321.25 at [02:58:51] (0.2s)
+...
+Finished training in 50.29s : active states = 6
 (5000, 6)
-Free energy: -1.15e+07
-Most likely state at t=0: 3
+Free energy: 732731.92
 ```
+
+Since this is random noise, the model has no real states to find, so it may run all 500 cycles and give a warning that it hasn't converged. With real data it usually stops earlier.
 
 γ is a `(n_timepoints, K)` array. Each row gives the probability of being in each state at that timepoint. The rows sum to 1.
 
@@ -125,50 +128,7 @@ print(indices)
 
 ---
 
-## What to do after training
+## Next steps
 
-Once the model has finished training, typical next steps are:
-
-- **Look at the states**: `hmm.get_covariance_matrices()` or `hmm.get_means()` shows what each state captures.
-- **Get a hard state assignment**: `np.argmax(Gamma, axis=1)` gives the most likely state at each timepoint.
-- **Relate states to behaviour**: see the [Prediction tutorial](notebooks/Prediction_tutorial.ipynb) notebook.
-- **Run statistical tests**: see the [Statistical testing](statistical_testing.md) page.
-- **Compare models with different K**: see the [State number selection](notebooks/HMM_state_selection_standard.ipynb) notebook.
-
----
-
-## Tutorials and examples
-
-### Getting started with different model types
-
-| Notebook | What it covers |
-|---|---|
-| [Tutorial](notebooks/tutorial.ipynb) | Overview of GLHMM and the different model types |
-| [Gaussian HMM](notebooks/GaussianHMM_example.ipynb) | Standard HMM on a single set of time series |
-| [GLHMM example](notebooks/GLHMM_example.ipynb) | HMM with two sets of time series (brain + behaviour) |
-| [TDE-HMM vs MAR-HMM](notebooks/HMM-TDE_vs_HMM-MAR_example.ipynb) | TDE-HMM (lagged covariance, scales to whole-brain MEG) vs MAR-HMM (explicit autoregressive model, better for lower-dimensional recordings where AR dynamics are the scientific focus) |
-| [Preprocessing](notebooks/Preprocessing.ipynb) | How to prepare your data before training |
-
-### Choosing the number of states
-
-| Notebook | What it covers |
-|---|---|
-| [State number selection](notebooks/HMM_state_selection_standard.ipynb) | How to compare models with different K values |
-
-### Relating states to behaviour
-
-| Notebook | What it covers |
-|---|---|
-| [Prediction tutorial](notebooks/Prediction_tutorial.ipynb) | Predicting behavioural variables from HMM outputs |
-| [Prediction split](notebooks/Prediction_split.ipynb) | Prediction with cross-validation splits |
-
-### Statistical testing
-
-| Notebook | What it covers |
-|---|---|
-| [Testing across subjects](notebooks/Testing_across_subjects.ipynb) | Permutation testing between subjects |
-| [Testing across sessions](notebooks/Testing_across_sessions_within_subject.ipynb) | Within-subject testing across sessions |
-| [Testing across trials](notebooks/Testing_across_trials_within_session.ipynb) | Testing across trials within a session |
-| [Testing across visits](notebooks/Testing_across_visits.ipynb) | Testing brain state measures against simultaneous physiological signals (e.g. heart rate, pupil size, skin conductance) |
-| [HCP: testing across subjects](notebooks/HCP_Testing_across_subjects.ipynb) | Testing example with HCP dataset |
-| [HCP: multi-level permutation](notebooks/HCP_multi_level_block_permutation.ipynb) | Block permutation for structured HCP data |
+- The [Tutorial](notebooks/tutorial.ipynb) trains a model on a small simulated dataset and shows how to check it and look at the states.
+- [From data to results](workflow.md) goes through all steps of an analysis and links to the right page or notebook for each.

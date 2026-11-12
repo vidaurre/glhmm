@@ -1,161 +1,84 @@
-# Large datasets and GPU
+# Training options
 
-How to train GLHMM on datasets that do not fit in memory, and how to speed up training with a GPU.
-
----
-
-## Standard training
-
-Pass `Y` and `indices` directly for full-batch training:
-
-```python
-hmm = glhmm.glhmm(K=6, covtype='full', model_mean='no')
-Gamma, Xi, fe = hmm.train(Y=Y, indices=indices)
-```
-
-This works well for most fMRI datasets. For large MEG or EEG datasets that do not fit in RAM, use stochastic training instead.
+This page is about how the training runs: the options you can set, and how to run it on a GPU. If your data are too big to fit in memory, see [Large datasets](large_datasets.md), which trains file by file with stochastic training.
 
 ---
 
-## Stochastic training
+## Training
 
-Stochastic training reads your data one small batch of files at a time. The full dataset never needs to be in memory at once. This is the recommended approach when you have many subjects or long recordings.
-
-### What you need
-
-- Your data saved as individual files, one per subject or session (for example `.npy` files).
-- Pass a list of file paths to `train()` using the `files` argument instead of `Y` and `indices`.
-
-### Step 1: preprocess your files
-
-Before training, preprocess each file separately and save the results. Pass `files` to `preproc.preprocess_data()` and point it at an output directory:
-
-```python
-from glhmm import preproc
-import glob
-
-files = sorted(glob.glob('/data/subjects/*/data.npy'))
-
-preproc.preprocess_data(
-    files=files,
-    standardise=True,
-    onpower=False,
-    output_dir='/data/preprocessed/'
-)
-
-preprocessed_files = sorted(glob.glob('/data/preprocessed/*.npy'))
-```
-
-### Step 2: train the model
-
-Pass the preprocessed file list to `train()`:
+Pass the data `Y` and the start and end of each session (`indices`) to `train()`:
 
 ```python
 from glhmm import glhmm
 
-hmm = glhmm.glhmm(K=6, covtype='full', model_mean='no')
-
-options = {'stochastic': True, 'Nbatch': 10}
-
-Gamma, Xi, fe = hmm.train(files=preprocessed_files, options=options)
+hmm = glhmm.glhmm(K=6, covtype='full', model_mean='no', model_beta='no')
+Gamma, Xi, fe = hmm.train(Y=Y, indices=indices)
 ```
 
-After training, γ is not automatically computed for the full dataset. Call `hmm.decode` afterwards to get the complete state time courses:
+The settings in `glhmm.glhmm()` define the model and are explained in [How it works](key_concepts.md).
 
-```python
-Gamma, Xi, _ = hmm.decode(None, None, files=preprocessed_files)
-```
-
-### Key options
+You can change how the training runs with an `options` dictionary, e.g. `hmm.train(Y=Y, indices=indices, options={'cyc': 1000})`. The main options are:
 
 | Option | Default | What it does |
 |---|---|---|
-| `stochastic` | `False` | Set to `True` to enable stochastic training |
-| `Nbatch` | 10 | Number of files per mini-batch. Use at least 10 if you can; larger batches give more stable updates but use more memory. What matters is the number of files in a batch, not what fraction of the dataset it is. |
-| `initNbatch` | Same as `Nbatch` | Files used during initialisation |
-| `cyc` | `250` | Maximum number of training cycles. Each file is used about `cyc` × `Nbatch` / (number of files) times on average; with `verbose=True` this is printed before training starts. If the free energy is still going down at the end, glhmm gives a warning; then increase `cyc` (or `Nbatch` if memory allows). |
-| `initcyc` | `25` | Training cycles during initialisation |
-| `forget_rate` | `0.75` | How much earlier batches influence the model. Lower values make the model adapt more quickly to recent data; higher values give earlier batches more lasting influence. |
-| `base_weights` | `0.25` | Minimum weight given to any batch |
+| `cyc` | `500` | Maximum number of training cycles. Training stops earlier once the free energy has converged. If it reaches `cyc` first, glhmm gives a warning. |
+| `tol` | `1e-4` | Training stops when the free energy changes by less than this |
+| `initrep` | `5` | Number of random initialisations to try. The best one is kept. |
+| `deactivate_states` | `True` | Removes states that are hardly used during training. When you compare different K, set it to `False`, so every run keeps all K states. |
+| `serial` | `False` | Process the sessions one at a time. Uses less memory, but is slower. |
+| `verbose` | `True` | Print progress during training |
+
+These options also apply to stochastic training. The [State number selection](notebooks/HMM_state_selection_standard.ipynb) notebook shows a full example.
 
 ---
 
-## GPU acceleration
+## Training on a GPU
 
-GLHMM can use a GPU to speed up training. This is useful when training is slow because K is large, the dataset is large, or both.
+glhmm can run part of the training on an NVIDIA GPU, which helps when training is slow because K is large, the dataset is large, or both. It works the same way with stochastic training.
 
-### Do you have a compatible GPU?
+### 1. Check that you have a GPU
 
-Run this in your terminal before installing anything:
+Run this in a terminal:
 
 ```bash
 nvidia-smi
 ```
 
-If the command is not found, you do not have an NVIDIA GPU or the driver is not installed. GPU acceleration will not work.
+If the command isn't found, you either don't have an NVIDIA GPU or its driver isn't installed, and GPU training won't work. If it runs, it prints your GPU and a CUDA version, e.g. `CUDA Version: 12.4`. You'll need that number in the next step.
 
-If it runs, it prints the GPU model and a CUDA version number (for example `CUDA Version: 12.4`). Note that version number — you need it to install the right CuPy build.
+### 2. Install CuPy
 
-### Installing CuPy
-
-GPU support requires [CuPy](https://cupy.dev/), the GPU-accelerated equivalent of NumPy. Install the version that matches the CUDA version shown by `nvidia-smi`:
+glhmm uses [CuPy](https://cupy.dev/) to run on the GPU. Install the version that matches your CUDA version:
 
 ```bash
 pip install cupy-cuda12x   # for CUDA 12.x
 pip install cupy-cuda11x   # for CUDA 11.x
 ```
 
-See the [CuPy installation guide](https://docs.cupy.dev/en/stable/install.html) for other versions.
-
-After installing, confirm CuPy can see your GPU by running this in Python:
+For other versions, see the [CuPy installation guide](https://docs.cupy.dev/en/stable/install.html). To check that CuPy can see your GPU, run this in Python:
 
 ```python
 import cupy as cp
 print(cp.cuda.runtime.getDeviceCount())  # should print 1 or more
 ```
 
-If you get `ModuleNotFoundError: No module named 'cupy'`, CuPy is not installed yet. Run the `pip install` command above first.
+### 3. Turn it on
 
-### How to enable it
-
-Add `gpu_acceleration` to your options:
+Add `gpu_acceleration` to the options:
 
 ```python
-options = {
-    'gpu_acceleration': 1,
-    'gpuChunks': 1,       # increase this if you run out of GPU memory
-    'verbose': True,
-}
-
+options = {'gpu_acceleration': 1}
 Gamma, Xi, fe = hmm.train(Y=Y, indices=indices, options=options)
 ```
 
-| Value | What it does |
+With stochastic training, add it to the stochastic options.
+
+| `gpu_acceleration` | What it does |
 |---|---|
 | `0` | No GPU (default) |
-| `1` | GPU-accelerated forward-backward pass |
-| `2` | Full GPU computation -- faster, but uses more GPU memory |
+| `1` | The forward-backward pass runs on the GPU |
+| `2` | More of the computation runs on the GPU. Faster, but uses more GPU memory. |
 
-If you run out of GPU memory, increase `gpuChunks` to split the computation into smaller pieces:
+If you run out of GPU memory, set `gpuChunks` to split the sessions into smaller chunks, e.g. `{'gpu_acceleration': 2, 'gpuChunks': 4}`.
 
-```python
-options = {
-    'gpu_acceleration': 2,
-    'gpuChunks': 4,
-}
-```
-
-Note: GPU acceleration does not work together with `serial=True`. If you enable both, GPU acceleration is automatically disabled.
-
----
-
-## Other options
-
-| Option | Default | What it does |
-|---|---|---|
-| `cyc` | `500` | Maximum number of training cycles. Training stops earlier once the free energy has converged; if it reaches `cyc` first, glhmm gives a warning. |
-| `tol` | `1e-4` | Stop training when free energy changes by less than this |
-| `verbose` | `True` | Print progress during training |
-| `initrep` | `5` | Number of random initialisations to try. The best one is kept. |
-| `deactivate_states` | `True` | Automatically remove states that go empty during training. When comparing different K (see the state selection notebooks), set it to `False`, so every run keeps all K states. |
-| `serial` | `False` | Process sessions one at a time (uses less memory, but slower) |
+The GPU isn't used together with `serial=True`. If you set both, glhmm turns the GPU off.
