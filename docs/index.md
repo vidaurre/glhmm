@@ -2,7 +2,7 @@
 html_theme.sidebar_secondary.remove: true
 ---
 
-# GLHMM — Gaussian-Linear Hidden Markov Models
+# GLHMM: Gaussian-Linear Hidden Markov Models
 
 ```{image} ../logo2_full.png
 :alt: GLHMM logo
@@ -83,7 +83,7 @@ The options that control the training, and how to speed it up on a GPU.
 
 If you use GLHMM in your research, please cite the toolbox paper:
 
-> Vidaurre et al. (2023). *GLHMM: A Python toolbox for Generalised Linear Hidden Markov Modelling.* Imaging Neuroscience. [https://doi.org/10.1162/imag_a_00460](https://direct.mit.edu/imag/article/doi/10.1162/imag_a_00460/127499)
+> Vidaurre, D., Masaracchia, L., Larsen, N.Y., Ruijters, L.R.P.T., Alonso, S., Ahrends, C. & Woolrich, M.W. (2025). *The Gaussian-linear hidden Markov model: a Python package.* Imaging Neuroscience, 3, imag_a_00460. [https://doi.org/10.1162/imag_a_00460](https://doi.org/10.1162/imag_a_00460)
 
 If you use the statistical testing protocols, please also cite:
 
