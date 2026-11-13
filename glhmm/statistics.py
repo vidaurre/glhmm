@@ -321,11 +321,15 @@ def compute_state_visit_perm(perm, vpath_array, vpath_surrogates, data_t, n_stat
         # Make vpath to a binary matrix
         vpath_binary = np.zeros((len(vpath_surrogate), len(np.unique(vpath_surrogate))))
         vpath_binary[np.arange(len(vpath_surrogate)), vpath_surrogate - 1] = 1
+        # Fit the regression to this Viterbi path, in the same way as for the observed path
+        reg_pinv = ridge_pinv(vpath_binary, 0.001)
         stats_results = test_statistics_calculations(vpath_binary, data_t, 0, local_ts, reg_pinv, method, cat_cols)
         return perm, local_ts[0], stats_results
     else:
         # Univariate test: apply one-hot encoding
         vpath_onehot = viterbi_path_to_stc(vpath_surrogate, n_states)
+        # Fit the regression to this Viterbi path, if one is used
+        reg_pinv = ridge_pinv(vpath_onehot.astype(float), 0.001) if reg_pinv.ndim == 2 else reg_pinv
         stats_results = test_statistics_calculations(vpath_onehot, data_t, 0, local_ts, reg_pinv, method, cat_cols)
         return perm, local_ts[0], stats_results
 
@@ -555,10 +559,15 @@ def test_across_subjects(
 
     # Get indices for permutation
     idx_array = get_indices_array(indices_blocks) if indices_blocks is not None and indices_blocks.ndim == 2 else indices_blocks.copy() if indices_blocks is not None else None
+    if idx_array is not None:
+        # Sort the rows by block, which the block permutations assume
+        idx_array, row_order = get_block_order(idx_array)
+        D_data, R_data = np.take(D_data, row_order, axis=0), np.take(R_data, row_order, axis=0)
+        confounds = np.take(confounds, row_order, axis=0) if confounds is not None else None
 
     # Calculate possible permutations
     if FLAG_parametric==0 and dict_family is None:
-        compute_max_permutations(idx_array, permute_within_blocks, permute_between_blocks, Nnull_samples=Nnull_samples, verbose=verbose)
+        compute_max_permutations(idx_array, permute_within_blocks, permute_between_blocks, Nnull_samples=Nnull_samples, verbose=verbose, n_samples=D_data.shape[0])
 
     # Get the shapes of the data
     n_T, n_N, n_p, n_q, D_data, R_data = get_input_shape(D_data, R_data, verbose)
@@ -617,6 +626,8 @@ def test_across_subjects(
             permutation_matrix = permutation_matrix_within_subject_across_sessions(Nnull_samples, R_data, idx_array)
     # handle NaN values in the dataset
     D_data, R_data, confounds, permutation_matrix_update =handle_nan_values(D_data, R_data, confounds, permutation_matrix, method)
+    # Warn if the chosen shuffling cannot change R_data
+    check_permutations_change_R(R_data, permutation_matrix_update, "e.g. a value per subject (like age) with permute_within_blocks=True, a value that changes in the same way within every block (like session 1, 2, 3) with permute_between_blocks=True, or permute_between_blocks=True when no two blocks have the same size")
 
     if n_jobs == 1:
         for t in tqdm(range(n_T)) if n_T > 1 and verbose else range(n_T):
@@ -900,7 +911,11 @@ def test_across_trials(D_data, R_data, indices_blocks, method="multivariate", Nn
     if len(indices_blocks.shape)==2:
         idx_array = get_indices_array(indices_blocks)
     else:
-        idx_array =indices_blocks.copy()        
+        idx_array =indices_blocks.copy()
+        # Sort the trials by block, which the block permutations assume (trials are on the second-to-last axis of D_data)
+        idx_array, row_order = get_block_order(idx_array)
+        D_data, R_data = np.take(D_data, row_order, axis=np.ndim(D_data)-2), np.take(R_data, row_order, axis=0)
+        confounds = np.take(confounds, row_order, axis=0) if confounds is not None else None
 
     # Calculate possible permutations
     if FLAG_parametric==0:
@@ -921,6 +936,8 @@ def test_across_trials(D_data, R_data, indices_blocks, method="multivariate", Nn
     
     permutation_matrix = permutation_matrix_across_trials_within_session(Nnull_samples,R_data, idx_array)
     D_data, R_data, confounds, permutation_matrix_update =handle_nan_values(D_data, R_data, confounds, permutation_matrix, method)
+    # Warn if the shuffling of trials within sessions cannot change R_data
+    check_permutations_change_R(R_data, permutation_matrix_update, "e.g. a value that is the same for all trials of a session")
 
     if n_jobs == 1:
         for t in tqdm(range(n_T)) if n_T > 1 and verbose else range(n_T):
@@ -1464,6 +1481,13 @@ def test_across_state_visits(D_data, R_data , method="multivariate", Nnull_sampl
     
     # Number of states
     n_states = len(np.unique(vpath_array))
+    # With 2 states, the only surrogate paths are the observed path and the same path with the two states swapped
+    if n_states < 3:
+        raise ValueError(
+            f"The test across state visits needs at least 3 states, but the Viterbi path has {n_states}. "
+            "With 2 states, the only surrogate Viterbi paths are the observed path and the same path with the two states swapped, "
+            "so the p-values can never be significant."
+        )
     
     # Get input shape information
     n_T, n_N, n_p, n_q, vpath_data, R_data= get_input_shape(D_data, R_data , verbose)  
@@ -1478,7 +1502,7 @@ def test_across_state_visits(D_data, R_data , method="multivariate", Nnull_sampl
             raise ValueError("Cannot perform FWER_correction")  
 
     # Initialize arrays based on shape of data shape and defined options
-    pval, base_statistics, test_statistics_list, F_stats_list, t_stats_list, R2_stat = initialize_arrays(n_p, n_q,n_T, method, Nnull_samples, return_base_statistics)
+    pval, base_statistics, test_statistics_list, F_stats_list, t_stats_list, R2_stat = initialize_arrays(n_p, n_q,n_T, method, Nnull_samples, return_base_statistics, n_cca_components=1)
 
     # Custom variable names
     predictor_names = [f"Predictor {i+1}" for i in range(n_states)] if predictor_names==[] or len(predictor_names)!=n_states else predictor_names
@@ -1521,6 +1545,8 @@ def test_across_state_visits(D_data, R_data , method="multivariate", Nnull_sampl
                         vpath_surrogate_binary = np.zeros((len(vpath_surrogate), len(np.unique(vpath_surrogate))))
                         # Set the appropriate positions to 1
                         vpath_surrogate_binary[np.arange(len(vpath_surrogate)), vpath_surrogate - 1] = 1
+                        # Fit the regression to this Viterbi path, in the same way as for the observed path
+                        reg_pinv = ridge_pinv(vpath_surrogate_binary, 0.001)
                         stats_results = test_statistics_calculations(vpath_surrogate_binary, data_t, perm, test_statistics, reg_pinv, method, category_columns)
                         if perm == 0:
                             base_statistics[t, :] = stats_results["base_statistics"]
@@ -1533,6 +1559,8 @@ def test_across_state_visits(D_data, R_data , method="multivariate", Nnull_sampl
                         # Univariate test
                         # Apply 1 hot encoding
                         vpath_surrogate_onehot = viterbi_path_to_stc(vpath_surrogate, n_states)
+                        # Fit the regression to this Viterbi path, if one is used
+                        reg_pinv = ridge_pinv(vpath_surrogate_onehot.astype(float), 0.001) if reg_pinv.ndim == 2 else reg_pinv
                         # Apply t-statistic on the vpath_surrogate
                         stats_results = test_statistics_calculations(vpath_surrogate_onehot, data_t, perm, test_statistics, reg_pinv, method, category_columns)
                         base_statistics[t, :] = stats_results["base_statistics"] if perm == 0 and stats_results["base_statistics"] is not None else base_statistics[t, :]
@@ -1719,6 +1747,64 @@ def validate_condition(condition, error_message):
     # Check if a condition is False and raise a ValueError with the given error message
     if not condition:
         raise ValueError(error_message)
+
+
+def get_block_order(idx_array):
+    """
+    Relabels the blocks as 0, 1, 2, ... and gives the row order that sorts the rows by block.
+
+    The block permutations assume that the rows of each block are next to each other, in
+    increasing order of the block label. Sorting the rows with `row_order` first means the
+    rows can be given in any order and the blocks can have any labels (e.g. subject IDs).
+    The test results do not depend on the order of the rows.
+
+    Parameters:
+    --------------
+    idx_array (numpy.ndarray): 
+        The block label of each row.
+
+    Returns:
+    ----------  
+    idx_sorted (numpy.ndarray): 
+        The block label of each row after sorting, as 0, 1, 2, ...
+    row_order (numpy.ndarray): 
+        The order that sorts the rows by block.
+    """
+    # Labels as 0, 1, 2, ... in the order of the sorted original labels
+    _, idx_codes = np.unique(idx_array, return_inverse=True)
+    # Stable sort, so rows within a block keep their order
+    row_order = np.argsort(idx_codes, kind="stable")
+    return idx_codes[row_order], row_order
+
+
+def check_permutations_change_R(R_data, permutation_matrix, example):
+    """
+    Warns if none of the permutations change a column of R_data.
+    This happens when R_data does not vary at the level that is shuffled, e.g. a value per subject
+    (like age) that is shuffled within subjects. All permutations are then the same as the observed data,
+    and the p-values of that column are always 1.
+
+    Parameters:
+    --------------
+    R_data (numpy.ndarray): 
+        The dependent variable, with shape (n, q).
+    permutation_matrix (numpy.ndarray): 
+        The permutation matrix, with shape (n, Nnull_samples). The first column is the unpermuted data.
+    example (str): 
+        An example of when this happens, used in the warning.
+    """
+    R_2d = R_data.reshape(R_data.shape[0], -1)
+    # One permutation that changes a column is enough, so it is sufficient to check the first 100
+    perms = permutation_matrix[:, 1:101]
+    if perms.shape[1] == 0:
+        return
+    unchanged_cols = [col for col in range(R_2d.shape[1])
+                      if all(np.array_equal(R_2d[perms[:, i], col], R_2d[:, col], equal_nan=True) for i in range(perms.shape[1]))]
+    if unchanged_cols:
+        warnings.warn(
+            f"None of the permutations change column(s) {unchanged_cols} of R_data, so the p-values of these columns will all be 1. "
+            f"This happens when the shuffling cannot move the values of R_data, {example}."
+        )
 
 
 def get_input_shape(D_data, R_data, verbose):
@@ -2641,27 +2727,6 @@ def permutation_matrix_within_subject_across_sessions(Nnull_samples, R_data, idx
     # Get unique values and their counts
     unique_values, value_counts = np.unique(idx_array_update, return_counts=True)
 
-    # Identify unique groups per count category
-    count_to_values = {}
-    for unique_val, count in zip(unique_values, value_counts):
-        count_to_values.setdefault(count, []).append(unique_val)
-
-    # Compute log factorial sum safely without computing factorial directly
-    log_total_permutations = sum(sum(math.log(i) for i in range(1, len(values) + 1)) for values in count_to_values.values())
-
-    # Extract the exponent
-    exponent = int(log_total_permutations)
-
-    # Compute the coefficient (mantissa) for better readability
-    coefficient = 10 ** (log_total_permutations - exponent)
-
-    # Format output professionally
-    exp_notation = f"{coefficient:.2f} × 10^{exponent}"
-
-    # Print the result in a clean, professional format
-    print(f"Total possible permutations: {exp_notation}")
-
-
     for perm in range(Nnull_samples):
         if perm == 0:
             permutation_matrix[:,perm] = np.arange(max_length)
@@ -2970,7 +3035,7 @@ def calculate_statepair_difference(vpath_array, R_data, state_1, state_2, stat):
     difference = state_1_R_data - state_2_R_data
     return difference
 
-def compute_max_permutations(indices_blocks= None, permute_within_blocks = False, permute_between_blocks = False, Nnull_samples = None, permute_beta = False, verbose=True):
+def compute_max_permutations(indices_blocks= None, permute_within_blocks = False, permute_between_blocks = False, Nnull_samples = None, permute_beta = False, verbose=True, n_samples=None):
     """
     Compute the maximum number of possible permutations based on the selected permutation strategy.
 
@@ -2984,13 +3049,16 @@ def compute_max_permutations(indices_blocks= None, permute_within_blocks = False
     permute_between_blocks (bool), default=False:
         If `True`, blocks of the same size can swap positions.
     Nnull_samples (int), default=None:
-        The total number of independent samples for raw permutation.
-        Required when `permute_within_blocks=False` and `permute_between_blocks=False`.
+        The number of permutations to run.
+        If it is larger than the number of possible permutations, only the possible permutations are counted.
     permute_beta (bool), default=False:
         If True, permutations are performed at the beta level (e.g., shuffling session-level betas).
         Assumes one beta per unique block label.
     verbose (bool), default=True:
         If True, prints the total number of possible permutations and how many will be used.
+    n_samples (int), default=None:
+        The number of samples (e.g. subjects) that are permuted.
+        Required when `permute_within_blocks=False`, `permute_between_blocks=False` and `permute_beta=False`.
 
 
     Returns:
@@ -3003,7 +3071,7 @@ def compute_max_permutations(indices_blocks= None, permute_within_blocks = False
     
     Notes:
     --------------
-    - If all permutation flags are False, the function assumes raw permutation across `Nnull_samples`.
+    - If all permutation flags are False, the function assumes raw permutation across `n_samples`.
     - If `permute_within_blocks` is True, it computes the number of permutations possible within each block.
     - If `permute_between_blocks` is True, it computes permutations between blocks of equal size.
     - If both `permute_within_blocks` and `permute_between_blocks` are True, both effects are combined.
@@ -3013,11 +3081,11 @@ def compute_max_permutations(indices_blocks= None, permute_within_blocks = False
 
     # Raw Permutation (Independent Samples)
     if not permute_within_blocks and not permute_between_blocks and not permute_beta:
-        if Nnull_samples is None:
-            raise ValueError("Nnull_samples must be provided for raw permutation.")
+        if n_samples is None:
+            raise ValueError("n_samples must be provided for raw permutation.")
 
         # Compute log(N!) to prevent overflow
-        log_permutations = sum(math.log(k) for k in range(1, Nnull_samples + 1))
+        log_permutations = sum(math.log(k) for k in range(1, n_samples + 1))
 
     elif indices_blocks is not None:
 
@@ -3037,9 +3105,9 @@ def compute_max_permutations(indices_blocks= None, permute_within_blocks = False
 
             # Permutation Between Blocks
             if permute_between_blocks:
+                # Blocks are only swapped with blocks of the same size
                 size_counts = Counter(block_sizes.values())  # Count of blocks per size
-                num_sessions =sum(size_counts.values())
-                log_permutations += math.log(math.factorial(num_sessions))
+                log_permutations += sum(math.log(math.factorial(count)) for count in size_counts.values())
 
     else:
         raise ValueError("indices_blocks must be provided when using block-based permutations.")
@@ -3048,7 +3116,7 @@ def compute_max_permutations(indices_blocks= None, permute_within_blocks = False
     try:
         possible_permutations = math.exp(log_permutations)
         if possible_permutations < 1e6:
-            formatted_possible = f"{int(possible_permutations):,}"
+            formatted_possible = f"{round(possible_permutations):,}"
         else:
             log10_perm = math.log10(possible_permutations)
             mantissa = 10 ** (log10_perm - int(log10_perm))
@@ -3075,7 +3143,7 @@ def compute_max_permutations(indices_blocks= None, permute_within_blocks = False
             print("Warning: Only using the unpermuted data.")
 
         print(f"Total possible permutations: {formatted_possible}")
-        print(f"Running number of permutations: {int(final_permutations) if final_permutations < float('inf') else formatted_possible}")
+        print(f"Running number of permutations: {round(final_permutations) if final_permutations < float('inf') else formatted_possible}")
 
     return
 
@@ -3586,7 +3654,8 @@ def compute_cca_statistics(Din, Rin, test_statistics, perm, permute_beta=False,
         R_pred = ols_regression_sessions(Rin[test_indices_con], Din[test_indices_con], indices_blocks, beta[0], perm, permute_beta)
         D_residual, R_residual = Din[test_indices_con].copy(), R_pred.copy()
     else:
-        D_residual, R_residual = Din.copy(), Rin.copy()
+        # As float, since a one-hot Viterbi path can be stored as integers
+        D_residual, R_residual = Din.astype(float), Rin.astype(float)
 
     base_statistics = np.zeros(n_cca_components)
 
