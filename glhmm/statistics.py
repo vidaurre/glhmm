@@ -3727,8 +3727,9 @@ def compute_correlation_tstats(Din, Rin, pval_parametric=False):
             # Find non-NaN indices
             valid_indices = ~np.isnan(D_column) & ~np.isnan(R_column)
             if np.any(valid_indices):  # Ensure at least one valid pair
-                correlation_matrix[p_i, q_j], t_statistics[p_i, q_j], pval_matrix[p_i, q_j] = \
-                    calculate_correlation_and_tstats(D_column[valid_indices], R_column[valid_indices], pval_parametric)
+                corr, t_stat, pval = calculate_correlation_and_tstats(D_column[valid_indices], R_column[valid_indices], pval_parametric)
+                # Each output is a 1-by-1 matrix here, so take the single value
+                correlation_matrix[p_i, q_j], t_statistics[p_i, q_j], pval_matrix[p_i, q_j] = corr.item(), t_stat.item(), pval.item()
 
     return correlation_matrix, t_statistics, pval_matrix
 
@@ -5055,9 +5056,10 @@ def calculate_regression_statistics(Din, Rin, reg_pinv, nan_values=False, no_t_s
             df2 = n_valid - p  # Compute df2 for the current regression
             df2_list.append(df2)  # Store df2 
             # Calculate the total sum of squares (tss)
-            tss = np.sum((R_column[valid_indices] - np.mean(R_column[valid_indices], axis=0))**2, axis=0)
+            # Sum over all values (one column), so tss and rss are single numbers
+            tss = np.sum((R_column[valid_indices] - np.mean(R_column[valid_indices], axis=0))**2)
             # Calculate the residual sum of squares (rss)
-            rss = np.sum((R_column[valid_indices]-R_pred)**2, axis=0)
+            rss = np.sum((R_column[valid_indices]-R_pred)**2)
             # Calculate R^2 for the current dependent variable
             R2_stats[q_i] = 1 - (rss / tss)
             # Calculate F_stats
