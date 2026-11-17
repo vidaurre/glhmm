@@ -674,10 +674,7 @@ def padGamma(Gamma, T, options):
     if not do_chop:
         return Gamma  # If no chopping is needed, return the original Gamma
 
-    if isinstance(T, list):
-        if len(T) == 1:
-            T = np.transpose(T)  # Transpose T if it is a single-row list
-        T = np.array(T)  # Convert T to a numpy array if it is a list
+    T = np.asarray(T, dtype=int).ravel()  # Convert T to a numpy array if it is a list
 
     K = Gamma.shape[1]  # Number of columns in Gamma
     offset = sum(d)  # Calculate the offset based on d
